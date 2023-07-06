@@ -41,10 +41,32 @@ bool parse_command_line(FILE *err_fp, int argc, const char **argv, command_line_
     return true;
 }
 
+void print_version(FILE *fp) {
+    const char *PRODUCT_NAME = "Qwertillion";
+    const char *PRODUCT_VERSION = "0.0.0.epsilon";
+    fprintf(fp, "%s %s\n", PRODUCT_NAME, PRODUCT_VERSION);
+}
+
+void print_help(FILE *fp) {
+    print_version(fp);
+    fprintf(fp, "Usage: --help | --version | [files...] [-- files..]\n");
+}
+
 int main(int argc, const char **argv) {
     command_line_args args;
     if (!parse_command_line(stderr, argc, argv, &args)) {
         return 2;
+    }
+
+    FILE *help_fp = stdout;
+    if (args.help) {
+        print_help(help_fp);
+        return 0;
+    }
+
+    if (args.version) {
+        print_version(help_fp);
+        return 0;
     }
 
     printf("Hello, world!\n");
