@@ -98,13 +98,16 @@ int run_program(const command_line_args& args) {
     runtime_check(term.fd != -1, "could not open tty: %s", runtime_check_strerror);
 
     {
+        // TODO: We might have other needs to restore the terminal... like if we get Ctrl+Z'd...(?)
         terminal_restore term_restore(&term);
 
         display_tcattr(*term_restore.tcattr);
 
+        set_raw_mode(term.fd);
+
         printf("testing\n");
         fflush(stdout);
-        usleep(500'000);
+        usleep(5'000'000);
 
         term_restore.restore();
     }

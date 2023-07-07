@@ -10,6 +10,8 @@ struct termios;
 
 void display_tcattr(const struct termios& tcattr);
 
+void set_raw_mode(int fd);
+
 // TODO: Move to own file.
 struct file_descriptor {
     int fd = -1;

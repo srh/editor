@@ -8,10 +8,14 @@
 
 #include "error.hpp"
 
-terminal_restore::terminal_restore(file_descriptor *term) : tcattr(new termios), fd(term->fd) {
-    runtime_check(fd != -1, "expecting an open terminal");
-    int res = tcgetattr(fd, tcattr.get());
+void get_and_check_tcattr(int fd, struct termios *out) {
+    int res = tcgetattr(fd, out);
     runtime_check(res != -1, "could not get tcattr for tty: %s", runtime_check_strerror);
+}
+
+terminal_restore::terminal_restore(file_descriptor *term) : tcattr(new struct termios), fd(term->fd) {
+    runtime_check(fd != -1, "expecting an open terminal");
+    get_and_check_tcattr(fd, tcattr.get());
 }
 
 void terminal_restore::restore() {
@@ -112,4 +116,15 @@ void display_tcattr(const struct termios& tcattr) {
     printf("}\n");
 
 #undef p
+}
+
+void set_raw_mode(int fd) {
+    struct termios tcattr;
+    get_and_check_tcattr(fd, &tcattr);
+    // TODO: Consider enabling echoing (often) so that the user experiences instant
+    // feedback on laggy ssh connections.  (And of course, that means designing the UI
+    // code around this...)
+    tcattr.c_lflag &= ~(ICANON|ECHO);
+    int res = tcsetattr(fd, TCSAFLUSH, &tcattr);
+    runtime_check(res != -1, "could not set tcattr (to raw mode) for tty: %s", runtime_check_strerror);
 }
