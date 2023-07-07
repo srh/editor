@@ -1,12 +1,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <termios.h>  // TODO: Remove outside of terminal.cpp
+#include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 // TODO: Remove unused includes^
 
-#include <cstdio>
-#include <cstring>
 #include <string>
 #include <vector>
 
@@ -89,26 +88,6 @@ int main(int argc, const char **argv) {
     }
 }
 
-struct file_descriptor {
-    int fd = -1;
-
-    ~file_descriptor() {
-        if (fd != -1) {
-            int discard = ::close(fd);
-            (void)discard;
-            fd = -1;
-        }
-    }
-    int close() {
-        int ret = ::close(fd);
-        fd = -1;
-        return ret;
-    }
-
-    file_descriptor() = default;
-    explicit file_descriptor(int _fd) : fd(_fd) { }
-};
-
 int run_program(const command_line_args& args) {
     if (args.files.size() > 0) {
         fprintf(stderr, "File opening (on command line) not supported yet!\n");  // TODO
@@ -118,17 +97,19 @@ int run_program(const command_line_args& args) {
     file_descriptor term{open("/dev/tty", O_RDWR)};
     runtime_check(term.fd != -1, "could not open tty: %s", runtime_check_strerror);
 
-    struct termios tcattr;
-    int res = tcgetattr(term.fd, &tcattr);
-    runtime_check(res != -1, "could not get tcattr for tty: %s", runtime_check_strerror);
+    {
+        terminal_restore term_restore(&term);
 
-    display_tcattr(tcattr);
+        display_tcattr(*term_restore.tcattr);
 
-    printf("testing\n");
-    fflush(stdout);
-    usleep(500'000);
+        printf("testing\n");
+        fflush(stdout);
+        usleep(500'000);
 
-    res = term.close();  // TODO: EINTR, EAGAIN
+        term_restore.restore();
+    }
+
+    int res = term.close();  // TODO: EINTR, EAGAIN
     runtime_check(res != -1, "could not close tty: %s", runtime_check_strerror);
 
     return 0;

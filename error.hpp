@@ -1,6 +1,8 @@
 #ifndef QWERTILLION_ERROR_HPP_
 #define QWERTILLION_ERROR_HPP_
 
+#define NO_COPY(typ) typ(const typ&) = delete; void operator=(const typ&) = delete
+
 struct runtime_check_failure { };
 
 // TODO: we are assuming _GNU_SOURCE, which returns const char * and sometimes doesn't use

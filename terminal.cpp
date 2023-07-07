@@ -1,11 +1,35 @@
 #include "terminal.hpp"
 
+#include <string.h>
 #include <stdio.h>
 #include <termios.h>
 
 #include <utility>
 
 #include "error.hpp"
+
+terminal_restore::terminal_restore(file_descriptor *term) : tcattr(new termios), fd(term->fd) {
+    runtime_check(fd != -1, "expecting an open terminal");
+    int res = tcgetattr(fd, tcattr.get());
+    runtime_check(res != -1, "could not get tcattr for tty: %s", runtime_check_strerror);
+}
+
+void terminal_restore::restore() {
+    runtime_check(fd != -1, "terminal_restore::restore called without file descriptor");
+    int res = tcsetattr(fd, TCSAFLUSH, tcattr.get());
+    fd = -1;
+    runtime_check(res != -1, "could not set tcattr for tty: %s", runtime_check_strerror);
+}
+
+terminal_restore::~terminal_restore() {
+    if (fd != -1) {
+        try {
+            restore();
+        } catch (const runtime_check_failure&) {
+            // Ignore
+        }
+    }
+}
 
 void display_tcattr(const struct termios& tcattr) {
     using ull = unsigned long long;
