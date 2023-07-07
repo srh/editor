@@ -88,6 +88,17 @@ int main(int argc, const char **argv) {
     }
 }
 
+void draw_frame() {
+    for (size_t i = 0; i < 10; ++i) {
+        printf("a"); fflush(stdout);
+        usleep(200'000);
+        printf("b"); fflush(stdout);
+        usleep(200'000);
+        printf("c\r\n"); fflush(stdout);
+        usleep(200'000);
+    }
+}
+
 int run_program(const command_line_args& args) {
     if (args.files.size() > 0) {
         fprintf(stderr, "File opening (on command line) not supported yet!\n");  // TODO
@@ -109,7 +120,13 @@ int run_program(const command_line_args& args) {
         fflush(stdout);
         printf("testing (crlf)\r\n");
         fflush(stdout);
-        usleep(2'000'000);
+
+        clear_screen();
+        printf("%s", TESC(H));
+        fflush(stdout);
+        usleep(1'000'000);
+
+        draw_frame();
 
         term_restore.restore();
     }

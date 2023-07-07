@@ -133,3 +133,8 @@ void set_raw_mode(int fd) {
     int res = tcsetattr(fd, TCSAFLUSH, &tcattr);
     runtime_check(res != -1, "could not set tcattr (to raw mode) for tty: %s", runtime_check_strerror);
 }
+
+void clear_screen() {
+    printf("%s", TESC(2J));
+    fflush(stdout);
+}

@@ -8,9 +8,12 @@
 // We _don't_ include <termios.h> in this header, to avoid all the macro pollution.
 struct termios;
 
+#define TESC(x) "\x1b[" #x
+
 void display_tcattr(const struct termios& tcattr);
 
 void set_raw_mode(int fd);
+void clear_screen();
 
 // TODO: Move to own file.
 struct file_descriptor {
