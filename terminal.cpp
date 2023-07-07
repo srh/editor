@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "error.hpp"
+#include "io.hpp"
 
 void get_and_check_tcattr(int fd, struct termios *out) {
     int res = tcgetattr(fd, out);
@@ -132,14 +133,6 @@ void set_raw_mode(int fd) {
     tcattr.c_cc[VTIME] = 0;
     int res = tcsetattr(fd, TCSAFLUSH, &tcattr);
     runtime_check(res != -1, "could not set tcattr (to raw mode) for tty: %s", runtime_check_strerror);
-}
-
-// TODO: Move to file...
-void write_cstring(int fd, const char *s) {
-    size_t count = strlen(s);
-    ssize_t res = write(fd, s, count);
-    // TODO: EAGAIN, EINTR
-    runtime_check(res != -1, "write failed, error handling incomplete: %s", runtime_check_strerror);
 }
 
 void clear_screen(int fd) {

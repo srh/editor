@@ -8,36 +8,14 @@
 // We _don't_ include <termios.h> in this header, to avoid all the macro pollution.
 struct termios;
 
+struct file_descriptor;
+
 #define TESC(x) "\x1b[" #x
 
 void display_tcattr(const struct termios& tcattr);
 
 void set_raw_mode(int fd);
 void clear_screen(int fd);
-
-// TODO: Move to own file.
-struct file_descriptor {
-    int fd = -1;
-
-    ~file_descriptor() {
-        if (fd != -1) {
-            int discard = ::close(fd);
-            (void)discard;
-            fd = -1;
-        }
-    }
-    int close() {
-        int ret = ::close(fd);
-        fd = -1;
-        return ret;
-    }
-
-    file_descriptor() = default;
-    explicit file_descriptor(int _fd) : fd(_fd) { }
-
-    NO_COPY(file_descriptor);
-};
-void write_cstring(int fd, const char *s);
 
 struct terminal_restore {
     // Unchanged -- original value of termios.

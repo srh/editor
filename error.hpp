@@ -1,6 +1,9 @@
 #ifndef QWERTILLION_ERROR_HPP_
 #define QWERTILLION_ERROR_HPP_
 
+#include <errno.h>
+#include <stdio.h>
+
 #define NO_COPY(typ) typ(const typ&) = delete; void operator=(const typ&) = delete
 
 struct runtime_check_failure { };

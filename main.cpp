@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "error.hpp"
+#include "io.hpp"
 #include "terminal.hpp"
 
 struct command_line_args {
