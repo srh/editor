@@ -129,16 +129,41 @@ void display_tcattr(const struct termios& tcattr) {
         }
     }
 
-    // TODO: CBAUD and CBAUDEX is a 4+1-bit mask, use cfgetispeed instead.
-    // TODO: CSIZE is a 2-bit(?) character size mask
     // c_cflag
-    printf(", control: %llu=0", (ull)tcattr.c_cflag);
-    // LOBLK in man pages but not in POSIX or Linux
-    for (std::pair<int, const char *> flag : { std::pair<int, const char *> p(CBAUD), p(CBAUDEX), p(CSIZE), p(CSTOPB), p(CREAD), p(PARENB), p(PARODD), p(HUPCL), p(CLOCAL) /*, p(LOBLK)*/, p(CIBAUD), p(CMSPAR), p(CRTSCTS) }) {
+    printf(", control: %llu=baud|size", (ull)tcattr.c_cflag);
+    // LOBLK in man pages but not in POSIX or Linux.  CBAUD, CBAUDEX, CSIZE, are masks
+    // used below, and CIBAUD seems to be zero on Linux; I _guess_ cfgetispeed is
+    // identical to cfgetospeed.
+    for (std::pair<int, const char *> flag : { std::pair<int, const char *> /*p(CBAUD), p(CBAUDEX), p(CSIZE), */p(CSTOPB), p(CREAD), p(PARENB), p(PARODD), p(HUPCL), p(CLOCAL) /*, p(LOBLK)*/, p(CIBAUD), p(CMSPAR), p(CRTSCTS) }) {
         if (tcattr.c_cflag & flag.first) {
             printf("|%s", flag.second);
         }
     }
+    // input, output
+    speed_t speeds[2] = { cfgetispeed(&tcattr), cfgetospeed(&tcattr) };
+    int bauds[2] = { -1, -1 };
+    for (size_t i = 0; i < 2; ++i) {
+        speed_t speed = speeds[i];
+        bauds[i] = speed;
+#define bp(x) { x, B##x }
+        for (std::pair<int, speed_t> pair : { std::pair<int, speed_t> bp(0), bp(50), bp(75), bp(110), bp(134), bp(150), bp(200), bp(300), bp(600), bp(1200), bp(1800), bp(2400), bp(4800), bp(9600), bp(19200), bp(38400), bp(57600), bp(115200), bp(230400) }) {
+            if (pair.second == speed) {
+                bauds[i] = pair.first;
+            }
+        }
+#undef bp
+    };
+    int csize;
+    switch (tcattr.c_cflag & CSIZE) {
+    case CS5: csize = 5; break;
+    case CS6: csize = 6; break;
+    case CS7: csize = 7; break;
+    case CS8: csize = 8; break;
+    default:
+        runtime_fail("tcattr.c_cflag unrecognized: %llu", (ull)(tcattr.c_cflag & CSIZE));
+    }
+
+    printf("(input baud=%d(#%llu), output baud=%d(#%llu), csize=%d)", bauds[0], (ull)speeds[0], bauds[1], (ull)speeds[1], csize);
 
     // c_lflag
     printf(", local: %llu=0", (ull)tcattr.c_lflag);
