@@ -107,7 +107,9 @@ int run_program(const command_line_args& args) {
 
         printf("testing\n");
         fflush(stdout);
-        usleep(5'000'000);
+        printf("testing (crlf)\r\n");
+        fflush(stdout);
+        usleep(2'000'000);
 
         term_restore.restore();
     }
