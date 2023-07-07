@@ -108,6 +108,17 @@ struct file_descriptor {
     explicit file_descriptor(int _fd) : fd(_fd) { }
 };
 
+void display_tcattr(const struct termios& tcattr) {
+    using ull = unsigned long long;
+    printf("input: %llu, output: %llu, control: %llu, local: %llu, c_cc: ",
+           (ull)tcattr.c_iflag, (ull)tcattr.c_oflag, (ull)tcattr.c_cflag, (ull)tcattr.c_lflag);
+
+    for (size_t i = 0; i < NCCS; ++i) {
+        printf("%c %llu", i == 0 ? '{' : ',', (ull)tcattr.c_cc[i]);
+    }
+    printf(" }\n");
+}
+
 int run_program(const command_line_args& args) {
     if (args.files.size() > 0) {
         fprintf(stderr, "File opening (on command line) not supported yet!\n");  // TODO
@@ -120,6 +131,8 @@ int run_program(const command_line_args& args) {
     struct termios tcattr;
     int res = tcgetattr(term.fd, &tcattr);
     runtime_check(res != -1, "could not get tcattr for tty: %s", runtime_check_strerror);
+
+    display_tcattr(tcattr);
 
     printf("testing\n");
     fflush(stdout);
