@@ -110,13 +110,60 @@ struct file_descriptor {
 
 void display_tcattr(const struct termios& tcattr) {
     using ull = unsigned long long;
-    printf("input: %llu, output: %llu, control: %llu, local: %llu, c_cc: ",
-           (ull)tcattr.c_iflag, (ull)tcattr.c_oflag, (ull)tcattr.c_cflag, (ull)tcattr.c_lflag);
 
+#define p(x) { x, #x }
+
+    // c_iflag
+    printf("input: %llu=0", (ull)tcattr.c_iflag);
+    for (std::pair<int, const char *> flag : { std::pair<int, const char *> p(IGNBRK), p(BRKINT), p(IGNPAR), p(PARMRK), p(INPCK), p(ISTRIP), p(INLCR), p(IGNCR), p(ICRNL), p(IUCLC), p(IXON), p(IXANY), p(IXOFF), p(IMAXBEL), p(IUTF8) }) {
+        if (tcattr.c_iflag & flag.first) {
+            printf("|%s", flag.second);
+        }
+    }
+
+    // c_oflag
+    printf(", output: %llu=0", (ull)tcattr.c_oflag);
+    for (std::pair<int, const char *> flag : { std::pair<int, const char *> p(OPOST), p(OLCUC), p(ONLCR), p(OCRNL), p(ONOCR), p(ONLRET), p(OFILL), p(OFDEL), p(NLDLY), p(CRDLY), p(TABDLY), p(BSDLY), p(VTDLY), p(FFDLY) }) {
+        if (tcattr.c_oflag & flag.first) {
+            printf("|%s", flag.second);
+        }
+    }
+
+    // TODO: CBAUD and CBAUDEX is a 4+1-bit mask, use cfgetispeed instead.
+    // TODO: CSIZE is a 2-bit(?) character size mask
+    // c_cflag
+    printf(", control: %llu=0", (ull)tcattr.c_cflag);
+    // LOBLK in man pages but not in POSIX or Linux
+    for (std::pair<int, const char *> flag : { std::pair<int, const char *> p(CBAUD), p(CBAUDEX), p(CSIZE), p(CSTOPB), p(CREAD), p(PARENB), p(PARODD), p(HUPCL), p(CLOCAL) /*, p(LOBLK)*/, p(CIBAUD), p(CMSPAR), p(CRTSCTS) }) {
+        if (tcattr.c_cflag & flag.first) {
+            printf("|%s", flag.second);
+        }
+    }
+
+    // c_lflag
+    printf(", local: %llu=0", (ull)tcattr.c_lflag);
+    // DEFECHO in manpages but not in POSIX or Linux
+    for (std::pair<int, const char *> flag : { std::pair<int, const char *> p(ISIG), p(ICANON), p(XCASE), p(ECHO), p(ECHOE), p(ECHOK), p(ECHONL), p(ECHOCTL), p(ECHOPRT), p(ECHOKE) /*, p(DEFECHO)*/, p(FLUSHO), p(NOFLSH), p(TOSTOP), p(PENDIN), p(IEXTEN) }) {
+        if (tcattr.c_lflag & flag.first) {
+            printf("|%s", flag.second);
+        }
+    }
+
+    printf(", c_cc: ");
     for (size_t i = 0; i < NCCS; ++i) {
         printf("%c %llu", i == 0 ? '{' : ',', (ull)tcattr.c_cc[i]);
     }
     printf(" }\n");
+
+    printf("c_cc again: ");
+    int count = 0;
+    // VDSUSP, VSTATUS, VSWTCH not in POSIX or Linux
+    for (std::pair<int, const char *> pair : { std::pair<int, const char *> p(VDISCARD)/*, p(VDSUSP)*/, p(VEOF), p(VEOL), p(VEOL2), p(VERASE), p(VINTR), p(VKILL), p(VLNEXT), p(VMIN), p(VQUIT), p(VREPRINT), p(VSTART)/*, p(VSTATUS)*/, p(VSTOP), p(VSUSP)/*, p(VSWTCH)*/, p(VTIME), p(VWERASE) }) {
+        printf("%c [%s (%d)]=%llu", count++ == 0 ? '{' : ',', pair.second, pair.first, (ull)tcattr.c_cc[pair.first]);
+    }
+    printf("}\n");
+
+#undef p
 }
 
 int run_program(const command_line_args& args) {
