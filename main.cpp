@@ -88,13 +88,13 @@ int main(int argc, const char **argv) {
     }
 }
 
-void draw_frame() {
+void draw_frame(int fd) {
     for (size_t i = 0; i < 10; ++i) {
-        printf("a"); fflush(stdout);
+        write_cstring(fd, "a");
         usleep(200'000);
-        printf("b"); fflush(stdout);
+        write_cstring(fd, "b");
         usleep(200'000);
-        printf("c\r\n"); fflush(stdout);
+        write_cstring(fd, "c\r\n");
         usleep(200'000);
     }
 }
@@ -117,16 +117,14 @@ int run_program(const command_line_args& args) {
         set_raw_mode(term.fd);
 
         printf("testing\n");
-        fflush(stdout);
         printf("testing (crlf)\r\n");
         fflush(stdout);
 
-        clear_screen();
-        printf("%s", TESC(H));
-        fflush(stdout);
+        clear_screen(term.fd);
+        write_cstring(term.fd, TESC(H));
         usleep(1'000'000);
 
-        draw_frame();
+        draw_frame(term.fd);
 
         term_restore.restore();
     }

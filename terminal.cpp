@@ -134,7 +134,14 @@ void set_raw_mode(int fd) {
     runtime_check(res != -1, "could not set tcattr (to raw mode) for tty: %s", runtime_check_strerror);
 }
 
-void clear_screen() {
-    printf("%s", TESC(2J));
-    fflush(stdout);
+// TODO: Move to file...
+void write_cstring(int fd, const char *s) {
+    size_t count = strlen(s);
+    ssize_t res = write(fd, s, count);
+    // TODO: EAGAIN, EINTR
+    runtime_check(res != -1, "write failed, error handling incomplete: %s", runtime_check_strerror);
+}
+
+void clear_screen(int fd) {
+    write_cstring(fd, TESC(2J));
 }

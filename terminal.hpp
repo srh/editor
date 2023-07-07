@@ -13,7 +13,7 @@ struct termios;
 void display_tcattr(const struct termios& tcattr);
 
 void set_raw_mode(int fd);
-void clear_screen();
+void clear_screen(int fd);
 
 // TODO: Move to own file.
 struct file_descriptor {
@@ -37,6 +37,7 @@ struct file_descriptor {
 
     NO_COPY(file_descriptor);
 };
+void write_cstring(int fd, const char *s);
 
 struct terminal_restore {
     // Unchanged -- original value of termios.
