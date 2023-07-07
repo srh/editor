@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include "error.hpp"
+
 struct command_line_args {
     bool version = false;
     bool help = false;
@@ -78,7 +80,12 @@ int main(int argc, const char **argv) {
         return 0;
     }
 
-    return run_program(args);
+    try {
+        return run_program(args);
+    } catch (const runtime_check_failure& exc) {
+        (void)exc;  // No info in exc.
+        return 1;
+    }
 }
 
 struct file_descriptor {
@@ -108,29 +115,18 @@ int run_program(const command_line_args& args) {
     }
 
     file_descriptor term{open("/dev/tty", O_RDWR)};
-    if (term.fd == -1) {
-        // TODO: Errno
-        fprintf(stderr, "Could not open tty\n");
-        return 1;
-    }
+    runtime_check(term.fd != -1, "could not open tty: %s", runtime_check_strerror);
 
     struct termios tcattr;
     int res = tcgetattr(term.fd, &tcattr);
-    if (res == -1) {
-        // TODO: Errno
-        fprintf(stderr, "Could not get tcattr for tty\n");
-        return 1;
-    }
+    runtime_check(res != -1, "could not get tcattr for tty: %s", runtime_check_strerror);
 
     printf("testing\n");
     fflush(stdout);
     usleep(500'000);
 
-    res = term.close();
-    if (res == -1) {
-        fprintf(stderr, "Could not close tty\n");
-        return 1;
-    }
+    res = term.close();  // TODO: EINTR, EAGAIN
+    runtime_check(res != -1, "could not close tty: %s", runtime_check_strerror);
 
     return 0;
 }
