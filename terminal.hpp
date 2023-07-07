@@ -17,6 +17,9 @@ void display_tcattr(const struct termios& tcattr);
 void set_raw_mode(int fd);
 void clear_screen(int fd);
 
+struct terminal_size { unsigned short rows = 0, cols = 0; };
+terminal_size get_terminal_size(int fd);
+
 struct terminal_restore {
     // Unchanged -- original value of termios.
     std::unique_ptr<struct termios> tcattr;

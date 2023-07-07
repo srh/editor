@@ -89,14 +89,13 @@ int main(int argc, const char **argv) {
     }
 }
 
-void draw_frame(int fd) {
-    for (size_t i = 0; i < 10; ++i) {
-        write_cstring(fd, "a");
-        usleep(200'000);
-        write_cstring(fd, "b");
-        usleep(200'000);
-        write_cstring(fd, "c\r\n");
-        usleep(200'000);
+void draw_frame(int fd, const terminal_size& window) {
+    for (size_t i = 0; i < window.rows; ++i) {
+        size_t num = i % 52;
+        char buf[] = "0\r\n";
+        buf[0] = (num < 26 ? 'a' : 'A') + (num % 26);
+        write_cstring(fd, buf);
+        usleep(30'000);
     }
 }
 
@@ -117,6 +116,8 @@ int run_program(const command_line_args& args) {
 
         set_raw_mode(term.fd);
 
+        struct terminal_size size = get_terminal_size(term.fd);
+
         printf("testing\n");
         printf("testing (crlf)\r\n");
         fflush(stdout);
@@ -125,7 +126,8 @@ int run_program(const command_line_args& args) {
         write_cstring(term.fd, TESC(H));
         usleep(1'000'000);
 
-        draw_frame(term.fd);
+        draw_frame(term.fd, size);
+        usleep(1'000'000);
 
         term_restore.restore();
     }

@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <sys/ioctl.h>
 #include <termios.h>
 
 #include <utility>
@@ -137,4 +138,16 @@ void set_raw_mode(int fd) {
 
 void clear_screen(int fd) {
     write_cstring(fd, TESC(2J));
+}
+
+terminal_size get_terminal_size(int fd) {
+    // TODO: Handle SIGWINCH and update & redraw.
+
+    struct winsize term_size;
+    int res = ioctl(fd, TIOCGWINSZ, &term_size);
+    runtime_check(res != -1, "could not get window size for tty: %s", runtime_check_strerror);
+
+    runtime_check(term_size.ws_row > 0 && term_size.ws_col > 0, "terminal window size is zero");
+
+    return terminal_size{term_size.ws_row, term_size.ws_col};
 }
