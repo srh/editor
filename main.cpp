@@ -99,21 +99,46 @@ size_t size_mul(size_t x, size_t y) {
     return x * y;
 }
 
-void draw_frame(int fd, const terminal_size& window, size_t step) {
+struct terminal_frame {
+    // Carries the presumed window size that the frame was rendered for.
+    terminal_size window;
+    // data.size() = u32_mul(window.rows, window.cols).
     std::vector<char> data;
-    data.resize(u32_mul(window.rows, window.cols));
-    for (size_t i = 0; i < data.size(); ++i) {
+};
+
+terminal_frame init_frame(const terminal_size& window) {
+    terminal_frame ret;
+    ret.data.resize(u32_mul(window.rows, window.cols));
+    ret.window = window;
+    return ret;
+}
+
+terminal_frame render_frame(const terminal_size& window, size_t step) {
+    terminal_frame ret = init_frame(window);
+
+    for (size_t i = 0; i < ret.data.size(); ++i) {
         char num = size_mul(i, step) % 61;
-        data[i] = (num < 10 ? '0' : num < 36 ? 'a' - 10 : 'A' - 36) + num;
+        ret.data[i] = (num < 10 ? '0' : num < 36 ? 'a' - 10 : 'A' - 36) + num;
     }
 
+    return ret;
+}
 
-    for (size_t i = 0; i < window.rows; ++i) {
-        write_data(fd, &data[i * window.cols], window.cols);
-        if (i < window.rows - 1) {
+void write_frame(int fd, const terminal_frame& frame) {
+    // TODO: Either single buffered write or some minimal diff write.
+    write_cstring(fd, TESC(H));
+    for (size_t i = 0; i < frame.window.rows; ++i) {
+        write_data(fd, &frame.data[i * frame.window.cols], frame.window.cols);
+        if (i < frame.window.rows - 1) {
             write_cstring(fd, "\r\n");
         }
     }
+}
+
+void draw_frame(int fd, const terminal_size& window, size_t step) {
+    terminal_frame frame = render_frame(window, step);
+
+    write_frame(fd, frame);
 }
 
 int run_program(const command_line_args& args) {
@@ -142,8 +167,6 @@ int run_program(const command_line_args& args) {
         clear_screen(term.fd);
 
         for (size_t step = 0; step < 8; ++step) {
-            write_cstring(term.fd, TESC(H));
-            usleep(2'000'000);
             draw_frame(term.fd, size, step);
             usleep(4'000'000);
         }
