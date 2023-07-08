@@ -180,10 +180,6 @@ int run_program(const command_line_args& args) {
 
         struct terminal_size window = get_terminal_size(term.fd);
 
-        printf("testing\n");
-        printf("testing (crlf)\r\n");
-        fflush(stdout);
-
         clear_screen(term.fd);
 
         for (size_t step = 0; step < 3; ++step) {
@@ -198,8 +194,7 @@ int run_program(const command_line_args& args) {
         term_restore.restore();
     }
 
-    int res = term.close();  // TODO: EINTR, EAGAIN
-    runtime_check(res != -1, "could not close tty: %s", runtime_check_strerror);
+    term.close();
 
     return 0;
 }

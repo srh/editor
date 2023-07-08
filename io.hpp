@@ -5,6 +5,10 @@
 
 #include "error.hpp"
 
+void write_data(int fd, const char *s, size_t count);
+void write_cstring(int fd, const char *s);
+void close_fd(int fd);
+
 struct file_descriptor {
     int fd = -1;
 
@@ -15,10 +19,9 @@ struct file_descriptor {
             fd = -1;
         }
     }
-    int close() {
-        int ret = ::close(fd);
+    void close() noexcept(false) {
+        close_fd(fd);
         fd = -1;
-        return ret;
     }
 
     file_descriptor() = default;
@@ -26,8 +29,5 @@ struct file_descriptor {
 
     NO_COPY(file_descriptor);
 };
-
-void write_data(int fd, const char *s, size_t count);
-void write_cstring(int fd, const char *s);
 
 #endif  // QWERTILLION_IO_HPP_
