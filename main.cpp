@@ -108,8 +108,11 @@ struct terminal_frame {
     // Carries the presumed window size that the frame was rendered for.
     terminal_size window;
     // Cursor pos (0..<window.*)
-    uint32_t cursor_y = 0;
-    uint32_t cursor_x = 0;
+
+    // nullopt means it's invisible.
+    struct cursor_pos { uint32_t row = 0, col = 0; };
+    std::optional<cursor_pos> cursor;
+
     // data.size() = u32_mul(window.rows, window.cols).
     std::vector<char> data;
 };
@@ -123,8 +126,10 @@ terminal_frame init_frame(const terminal_size& window) {
 
 terminal_frame render_frame(const terminal_size& window, size_t step) {
     terminal_frame ret = init_frame(window);
-    ret.cursor_y = step % window.rows;
-    ret.cursor_x = (step * 3) % window.cols;
+    ret.cursor = terminal_frame::cursor_pos{
+        .row = uint32_t(step % window.rows),
+        .col = uint32_t((step * 3) % window.cols),
+    };
 
     for (size_t i = 0; i < ret.data.size(); ++i) {
         char num = size_mul(i, step) % 61;
@@ -144,11 +149,14 @@ void write_frame(int fd, const terminal_frame& frame) {
             write_cstring(fd, "\r\n");
         }
     }
-    std::string cursor_string = TERMINAL_ESCAPE_SEQUENCE + std::to_string(frame.cursor_y + 1) + ';';
-    cursor_string += std::to_string(frame.cursor_x + 1);
-    cursor_string += 'H';
-    write_data(fd, cursor_string.data(), cursor_string.size());
-    write_cstring(fd, TESC(?25h));
+    if (frame.cursor.has_value()) {
+        std::string cursor_string = TERMINAL_ESCAPE_SEQUENCE + std::to_string(frame.cursor->row + 1) + ';';
+        cursor_string += std::to_string(frame.cursor->col + 1);
+        cursor_string += 'H';
+        write_data(fd, cursor_string.data(), cursor_string.size());
+        // TODO: Make cursor visible when exiting program.
+        write_cstring(fd, TESC(?25h));
+    }
 }
 
 void draw_frame(int fd, const terminal_size& window, size_t step) {
@@ -157,11 +165,13 @@ void draw_frame(int fd, const terminal_size& window, size_t step) {
     write_frame(fd, frame);
 }
 
-void draw_empty_frame(int fd, const terminal_size& window) {
+void draw_empty_frame_for_exit(int fd, const terminal_size& window) {
     terminal_frame frame = init_frame(window);
     for (size_t i = 0; i < frame.data.size(); ++i) {
         frame.data[i] = ' ';
     }
+    // TODO: Ensure cursor is restored on non-happy-paths.
+    frame.cursor = {0, 0};
 
     write_frame(fd, frame);
 }
@@ -209,6 +219,9 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
     size_t row = 0;
     size_t col = 0;
     while (row < window.rows && i < state.buf.size()) {
+        if (i == state.buf.cursor()) {
+            frame.cursor = { .row = uint32_t(row), .col = uint32_t(col) };
+        }
         char ch = state.buf[i];
         // TODO: Restrict to non-control characters.
         if (ch == '\n') {
@@ -236,6 +249,11 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
             }
         }
         ++i;
+    }
+
+    // Case where cursor is at the end of the buf.
+    if (row < window.rows && i == state.buf.cursor()) {
+        frame.cursor = { .row = uint32_t(row), .col = uint32_t(col) };
     }
 
     // We have to fill the rest of the screen.
@@ -318,7 +336,7 @@ int run_program(const command_line_args& args) {
 
         // TODO: Clear screen on exception exit too.
         struct terminal_size window = get_terminal_size(term.fd);
-        draw_empty_frame(term.fd, window);
+        draw_empty_frame_for_exit(term.fd, window);
         clear_screen(term.fd);
         write_cstring(term.fd, TESC(H));
         term_restore.restore();

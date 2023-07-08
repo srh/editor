@@ -25,6 +25,7 @@ struct buffer {
     // 0 <= first_visible_offset <= size().
     size_t first_visible_offset = 0;
 
+    size_t cursor() const { return bef.size(); }
     size_t size() const { return bef.size() + aft.size(); }
     // TODO: Make wrapper type for char.
     char at(size_t i) const {
