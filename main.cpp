@@ -161,6 +161,17 @@ void draw_empty_frame(int fd, const terminal_size& window) {
     write_frame(fd, frame);
 }
 
+void main_loop(int term) {
+    // TODO: Use SIGWINCH to get terminal size changes.
+
+    for (size_t step = 0; step < 3; ++step) {
+        struct terminal_size window = get_terminal_size(term);
+        draw_frame(term, window, step);
+        usleep(2'000'000);
+    }
+
+}
+
 int run_program(const command_line_args& args) {
     if (args.files.size() > 0) {
         fprintf(stderr, "File opening (on command line) not supported yet!\n");  // TODO
@@ -174,20 +185,17 @@ int run_program(const command_line_args& args) {
         // TODO: We might have other needs to restore the terminal... like if we get Ctrl+Z'd...(?)
         terminal_restore term_restore(&term);
 
+        // TODO: Log this in some debug log.
         display_tcattr(*term_restore.tcattr);
 
         set_raw_mode(term.fd);
 
-        struct terminal_size window = get_terminal_size(term.fd);
-
         clear_screen(term.fd);
 
-        for (size_t step = 0; step < 3; ++step) {
-            draw_frame(term.fd, window, step);
-            usleep(2'000'000);
-        }
+        main_loop(term.fd);
 
         // TODO: Clear screen on exception exit too.
+        struct terminal_size window = get_terminal_size(term.fd);
         draw_empty_frame(term.fd, window);
         clear_screen(term.fd);
         write_cstring(term.fd, TESC(H));
