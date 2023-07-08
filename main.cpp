@@ -11,6 +11,7 @@
 
 #include "error.hpp"
 #include "io.hpp"
+#include "state.hpp"
 #include "terminal.hpp"
 
 struct command_line_args {
@@ -161,8 +162,14 @@ void draw_empty_frame(int fd, const terminal_size& window) {
     write_frame(fd, frame);
 }
 
-void main_loop(int term) {
-    // TODO: Use SIGWINCH to get terminal size changes.
+void main_loop(int term, const std::vector<std::string>& arg_files) {
+    runtime_check(arg_files.size() == 0,
+                  "file opening (on command line) not supported (yet!)");  // TODO
+
+    qwertillion::state state;
+
+    state.bufs.push_back(qwertillion::buffer{});
+    state.bufs.back().name = "*scratch*";
 
     for (size_t step = 0; step < 3; ++step) {
         struct terminal_size window = get_terminal_size(term);
@@ -173,11 +180,6 @@ void main_loop(int term) {
 }
 
 int run_program(const command_line_args& args) {
-    if (args.files.size() > 0) {
-        fprintf(stderr, "File opening (on command line) not supported yet!\n");  // TODO
-        return 1;
-    }
-
     file_descriptor term{open("/dev/tty", O_RDWR)};
     runtime_check(term.fd != -1, "could not open tty: %s", runtime_check_strerror);
 
@@ -192,7 +194,7 @@ int run_program(const command_line_args& args) {
 
         clear_screen(term.fd);
 
-        main_loop(term.fd);
+        main_loop(term.fd, args.files);
 
         // TODO: Clear screen on exception exit too.
         struct terminal_size window = get_terminal_size(term.fd);
