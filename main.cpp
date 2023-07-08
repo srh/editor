@@ -162,19 +162,48 @@ void draw_empty_frame(int fd, const terminal_size& window) {
     write_frame(fd, frame);
 }
 
-void main_loop(int term, const std::vector<std::string>& arg_files) {
-    runtime_check(arg_files.size() == 0,
+qwi::state initial_state(const command_line_args& args) {
+    runtime_check(args.files.size() == 0,
                   "file opening (on command line) not supported (yet!)");  // TODO
-
     qwi::state state;
-
     state.bufs.push_back(qwi::buffer{});
     state.bufs.back().name = "*scratch*";
+    return state;
+}
 
-    for (size_t step = 0; step < 3; ++step) {
-        struct terminal_size window = get_terminal_size(term);
-        draw_frame(term, window, step);
-        usleep(2'000'000);
+void redraw_state(int term, const terminal_size& window, const qwi::state& state) {
+    terminal_frame frame = init_frame(window);
+
+    for (size_t i = 0, e = std::min<size_t>(frame.data.size(), state.buf.size()); i < e; ++i) {
+        // TODO: Restrict to non-control characters.
+        frame.data[i] = state.buf.at(i);
+    }
+
+    write_frame(term, frame);
+}
+
+void main_loop(int term, const command_line_args& args) {
+    qwi::state state = initial_state(args);
+
+    bool exit = false;
+    int loops_remaining = 10;
+    for (; !exit && loops_remaining > 0; --loops_remaining) {
+        char readbuf[1];
+        ssize_t res;
+        do {
+            // TODO: We aren't even non-blocking yet.
+            res = read(term, readbuf, 1);
+        } while (res == -1 && errno == EINTR);
+
+        runtime_check(res != -1 || errno == EAGAIN, "unexpected error on terminal read: %s", runtime_check_strerror);
+
+        if (res != 0) {
+            state.buf.bef.push_back(readbuf[0]);
+
+            terminal_size window = get_terminal_size(term);
+            redraw_state(term, window, state);
+        }
+        usleep(1'000'000);
     }
 
 }
@@ -194,7 +223,7 @@ int run_program(const command_line_args& args) {
 
         clear_screen(term.fd);
 
-        main_loop(term.fd, args.files);
+        main_loop(term.fd, args);
 
         // TODO: Clear screen on exception exit too.
         struct terminal_size window = get_terminal_size(term.fd);

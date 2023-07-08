@@ -26,11 +26,16 @@ struct buffer {
     size_t first_visible_offset = 0;
 
     size_t size() const { return bef.size() + aft.size(); }
+    // TODO: Make wrapper type for char.
+    char at(size_t i) const {
+        return i < bef.size() ? bef[i] : aft.at(i - bef.size());
+    }
 };
 
 struct state {
-    // Sorted in order from least-recently-used -- 0 is the active buffer.
-    // Is never empty (after initialization with *scratch* by the program).
+    // Sorted in order from least-recently-used -- `buf` is the active buffer and should
+    // get pushed onto the end of bufs after some other buf takes its place.
+    buffer buf;
     std::vector<buffer> bufs;
 };
 
