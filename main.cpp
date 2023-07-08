@@ -182,12 +182,14 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
     write_frame(term, frame);
 }
 
-void push_printable_repr(std::string *str, char ch) {
+void push_printable_repr(std::string *str, char sch) {
+    uint8_t ch = uint8_t(sch);
     if (ch < 32 || ch > 126) {
         str->push_back('\\');
         str->push_back('x');
-        str->push_back('0' + (ch / 16));
-        str->push_back('0' + (ch % 16));
+        const char *hex = "0123456789abcdef";
+        str->push_back(hex[ch / 16]);
+        str->push_back(hex[ch % 16]);
     } else {
         str->push_back(ch);
     }
@@ -201,7 +203,6 @@ void main_loop(int term, const command_line_args& args) {
         char readbuf[1];
         ssize_t res;
         do {
-            // TODO: We aren't even non-blocking yet.
             res = read(term, readbuf, 1);
         } while (res == -1 && errno == EINTR);
 

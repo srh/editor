@@ -132,8 +132,8 @@ void set_raw_mode(int fd) {
     tcattr.c_iflag &= ~IXON;
     tcattr.c_oflag &= ~OPOST;
     tcattr.c_lflag &= ~(ICANON|ECHO|ISIG);
-    // TODO: Consider VMIN set to 1.
-    tcattr.c_cc[VMIN] = 0;
+    // TODO: Consider VMIN set to 0.
+    tcattr.c_cc[VMIN] = 1;
     tcattr.c_cc[VTIME] = 0;
     int res = tcsetattr(fd, TCSAFLUSH, &tcattr);
     runtime_check(res != -1, "could not set tcattr (to raw mode) for tty: %s", runtime_check_strerror);
