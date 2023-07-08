@@ -177,11 +177,13 @@ int run_program(const command_line_args& args) {
 
         clear_screen(term.fd);
 
-        for (size_t step = 0; step < 8; ++step) {
+        for (size_t step = 0; step < 3; ++step) {
             draw_frame(term.fd, size, step);
-            usleep(4'000'000);
+            usleep(2'000'000);
         }
 
+        // TODO: Clear screen on exception exit too.
+        clear_screen(term.fd);
         term_restore.restore();
     }
 
