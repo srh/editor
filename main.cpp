@@ -166,9 +166,9 @@ void main_loop(int term, const std::vector<std::string>& arg_files) {
     runtime_check(arg_files.size() == 0,
                   "file opening (on command line) not supported (yet!)");  // TODO
 
-    qwertillion::state state;
+    qwi::state state;
 
-    state.bufs.push_back(qwertillion::buffer{});
+    state.bufs.push_back(qwi::buffer{});
     state.bufs.back().name = "*scratch*";
 
     for (size_t step = 0; step < 3; ++step) {

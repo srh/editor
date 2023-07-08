@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace qwertillion {
+namespace qwi {
 
 struct buffer {
     // Used to choose in the list of buffers, unique to the buffer.  Program logic should
@@ -34,6 +34,6 @@ struct state {
     std::vector<buffer> bufs;
 };
 
-}  // namespace qwertillion
+}  // namespace qwi
 
 #endif  // QWERTILLION_STATE_HPP_
