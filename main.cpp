@@ -152,6 +152,15 @@ void draw_frame(int fd, const terminal_size& window, size_t step) {
     write_frame(fd, frame);
 }
 
+void draw_empty_frame(int fd, const terminal_size& window) {
+    terminal_frame frame = init_frame(window);
+    for (size_t i = 0; i < frame.data.size(); ++i) {
+        frame.data[i] = ' ';
+    }
+
+    write_frame(fd, frame);
+}
+
 int run_program(const command_line_args& args) {
     if (args.files.size() > 0) {
         fprintf(stderr, "File opening (on command line) not supported yet!\n");  // TODO
@@ -169,7 +178,7 @@ int run_program(const command_line_args& args) {
 
         set_raw_mode(term.fd);
 
-        struct terminal_size size = get_terminal_size(term.fd);
+        struct terminal_size window = get_terminal_size(term.fd);
 
         printf("testing\n");
         printf("testing (crlf)\r\n");
@@ -178,12 +187,14 @@ int run_program(const command_line_args& args) {
         clear_screen(term.fd);
 
         for (size_t step = 0; step < 3; ++step) {
-            draw_frame(term.fd, size, step);
+            draw_frame(term.fd, window, step);
             usleep(2'000'000);
         }
 
         // TODO: Clear screen on exception exit too.
+        draw_empty_frame(term.fd, window);
         clear_screen(term.fd);
+        write_cstring(term.fd, TESC(H));
         term_restore.restore();
     }
 
