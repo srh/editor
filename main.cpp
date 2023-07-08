@@ -182,12 +182,22 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
     write_frame(term, frame);
 }
 
+void push_printable_repr(std::string *str, char ch) {
+    if (ch < 32 || ch > 126) {
+        str->push_back('\\');
+        str->push_back('x');
+        str->push_back('0' + (ch / 16));
+        str->push_back('0' + (ch % 16));
+    } else {
+        str->push_back(ch);
+    }
+}
+
 void main_loop(int term, const command_line_args& args) {
     qwi::state state = initial_state(args);
 
     bool exit = false;
-    int loops_remaining = 10;
-    for (; !exit && loops_remaining > 0; --loops_remaining) {
+    for (; !exit; ) {
         char readbuf[1];
         ssize_t res;
         do {
@@ -199,12 +209,18 @@ void main_loop(int term, const command_line_args& args) {
         runtime_check(res != -1 || errno == EAGAIN, "unexpected error on terminal read: %s", runtime_check_strerror);
 
         if (res != 0) {
-            state.buf.bef.push_back(readbuf[0]);
+            char ch = readbuf[0];
+            if (ch == 28) {
+                // Ctrl+backslash
+                exit = true;
+                // Some kind of exit mode (abort?)
+            } else {
+                push_printable_repr(&state.buf.bef, readbuf[0]);
 
-            terminal_size window = get_terminal_size(term);
-            redraw_state(term, window, state);
+                terminal_size window = get_terminal_size(term);
+                redraw_state(term, window, state);
+            }
         }
-        usleep(1'000'000);
     }
 
 }
