@@ -12,7 +12,8 @@ struct termios;
 
 struct file_descriptor;
 
-#define TESC(x) "\x1b[" #x
+#define TERMINAL_ESCAPE_SEQUENCE "\x1b["
+#define TESC(x) TERMINAL_ESCAPE_SEQUENCE #x
 
 void display_tcattr(const struct termios& tcattr);
 

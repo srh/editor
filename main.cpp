@@ -102,6 +102,9 @@ size_t size_mul(size_t x, size_t y) {
 struct terminal_frame {
     // Carries the presumed window size that the frame was rendered for.
     terminal_size window;
+    // Cursor pos (0..<window.*)
+    uint32_t cursor_y = 0;
+    uint32_t cursor_x = 0;
     // data.size() = u32_mul(window.rows, window.cols).
     std::vector<char> data;
 };
@@ -115,6 +118,8 @@ terminal_frame init_frame(const terminal_size& window) {
 
 terminal_frame render_frame(const terminal_size& window, size_t step) {
     terminal_frame ret = init_frame(window);
+    ret.cursor_y = step % window.rows;
+    ret.cursor_x = (step * 3) % window.cols;
 
     for (size_t i = 0; i < ret.data.size(); ++i) {
         char num = size_mul(i, step) % 61;
@@ -126,6 +131,7 @@ terminal_frame render_frame(const terminal_size& window, size_t step) {
 
 void write_frame(int fd, const terminal_frame& frame) {
     // TODO: Either single buffered write or some minimal diff write.
+    write_cstring(fd, TESC(?25l));
     write_cstring(fd, TESC(H));
     for (size_t i = 0; i < frame.window.rows; ++i) {
         write_data(fd, &frame.data[i * frame.window.cols], frame.window.cols);
@@ -133,6 +139,11 @@ void write_frame(int fd, const terminal_frame& frame) {
             write_cstring(fd, "\r\n");
         }
     }
+    std::string cursor_string = TERMINAL_ESCAPE_SEQUENCE + std::to_string(frame.cursor_y + 1) + ';';
+    cursor_string += std::to_string(frame.cursor_x + 1);
+    cursor_string += 'H';
+    write_data(fd, cursor_string.data(), cursor_string.size());
+    write_cstring(fd, TESC(?25h));
 }
 
 void draw_frame(int fd, const terminal_size& window, size_t step) {
