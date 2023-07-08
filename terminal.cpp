@@ -129,8 +129,8 @@ void set_raw_mode(int fd) {
     // TODO: Consider enabling echoing (often) so that the user experiences instant
     // feedback on laggy ssh connections.  (And of course, that means designing the UI
     // code around this...)
-    tcattr.c_iflag &= ~IXON;
-    tcattr.c_oflag &= ~OPOST;
+    tcattr.c_iflag &= ~(IXON|ICRNL|INLCR);
+    tcattr.c_oflag &= ~(OPOST|OCRNL|ONLCR);
     tcattr.c_lflag &= ~(ICANON|ECHO|ISIG);
     // TODO: Consider VMIN set to 0.
     tcattr.c_cc[VMIN] = 1;

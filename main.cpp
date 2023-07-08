@@ -248,8 +248,7 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
 
 void push_printable_repr(std::string *str, char sch) {
     uint8_t ch = uint8_t(sch);
-    // TODO: Ctrl+M isn't sending '\r'
-    if (ch == '\n' || ch == '\t' || ch == '\r') {
+    if (ch == '\n' || ch == '\t') {
         str->push_back(ch);
     } else if (ch < 32 || ch > 126) {
         str->push_back('\\');
@@ -286,7 +285,11 @@ void main_loop(int term, const command_line_args& args) {
                 exit = true;
                 // Some kind of exit mode (abort?)
             } else {
-                push_printable_repr(&state.buf.bef, readbuf[0]);
+                if (ch == 13) {
+                    push_printable_repr(&state.buf.bef, '\n');
+                } else {
+                    push_printable_repr(&state.buf.bef, readbuf[0]);
+                }
 
                 terminal_size window = get_terminal_size(term);
                 redraw_state(term, window, state);
