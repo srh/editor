@@ -99,6 +99,10 @@ size_t size_mul(size_t x, size_t y) {
     // TODO: Throw upon overflow.
     return x * y;
 }
+size_t size_add(size_t x, size_t y) {
+    // TODO: Throw upon overflow.
+    return x + y;
+}
 
 struct terminal_frame {
     // Carries the presumed window size that the frame was rendered for.
@@ -174,9 +178,69 @@ qwi::state initial_state(const command_line_args& args) {
 void redraw_state(int term, const terminal_size& window, const qwi::state& state) {
     terminal_frame frame = init_frame(window);
 
-    for (size_t i = 0, e = std::min<size_t>(frame.data.size(), state.buf.size()); i < e; ++i) {
+    // First find the front of the row of our first_visible_offset.  (Which usually is
+    // equal, unless the window was resized.)
+    size_t column = 0;
+    for (size_t i = 0; i < state.buf.first_visible_offset; ++i) {
+        // TODO: We dup this logic below, which is gross.
+        if (state.buf[i] == '\n') {
+            column = 0;
+        } else if (state.buf[i] == '\t') {
+            column = size_add(column | 7, 1);
+            column = (column >= window.cols ? 0 : column);
+        } else {
+            ++column;
+            column = (column == window.cols ? 0 : column);
+        }
+    }
+
+    // Because we don't support window resize (yet).
+    const bool window_was_resized = false;
+    // Check if first_visible_offset is invalid.
+    if (!window_was_resized) {
+        runtime_check(column == 0, "first_visible_offset should be rendered at the first column");
+    }
+
+    size_t i = state.buf.first_visible_offset - column;
+    // TODO: Update state.buf.first_visible_offset at some point... only when we
+    // manually scroll or type text.
+
+    // Now we render.
+    size_t row = 0;
+    size_t col = 0;
+    while (row < window.rows && i < state.buf.size()) {
+        char ch = state.buf[i];
         // TODO: Restrict to non-control characters.
-        frame.data[i] = state.buf.at(i);
+        if (ch == '\n') {
+            do {
+                frame.data[row * window.cols + col] = ' ';
+                ++col;
+            } while (col < window.cols);
+            ++row;
+            col = 0;
+        } else if (ch == '\t') {
+            do {
+                frame.data[row * window.cols + col] = ' ';
+                ++col;
+            } while (col < window.cols && (col & 7) != 0);
+            if (col == window.cols) {
+                col = 0;
+                ++row;
+            }
+        } else {
+            frame.data[row * window.cols + col] = ch;
+            ++col;
+            if (col == window.cols) {
+                col = 0;
+                ++row;
+            }
+        }
+        ++i;
+    }
+
+    // We have to fill the rest of the screen.
+    for (size_t j = row * window.cols + col, e = window.rows * window.cols; j < e; ++j) {
+        frame.data[j] = ' ';
     }
 
     write_frame(term, frame);
@@ -184,7 +248,10 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
 
 void push_printable_repr(std::string *str, char sch) {
     uint8_t ch = uint8_t(sch);
-    if (ch < 32 || ch > 126) {
+    // TODO: Ctrl+M isn't sending '\r'
+    if (ch == '\n' || ch == '\t' || ch == '\r') {
+        str->push_back(ch);
+    } else if (ch < 32 || ch > 126) {
         str->push_back('\\');
         str->push_back('x');
         const char *hex = "0123456789abcdef";
@@ -197,6 +264,9 @@ void push_printable_repr(std::string *str, char sch) {
 
 void main_loop(int term, const command_line_args& args) {
     qwi::state state = initial_state(args);
+
+    terminal_size window = get_terminal_size(term);
+    redraw_state(term, window, state);
 
     bool exit = false;
     for (; !exit; ) {

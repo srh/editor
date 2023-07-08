@@ -30,6 +30,9 @@ struct buffer {
     char at(size_t i) const {
         return i < bef.size() ? bef[i] : aft.at(i - bef.size());
     }
+    char operator[](size_t i) const {
+        return i < bef.size() ? bef[i] : aft[i - bef.size()];
+    }
 };
 
 struct state {
