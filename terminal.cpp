@@ -121,6 +121,9 @@ void display_tcattr(const struct termios& tcattr) {
 }
 
 void set_raw_mode(int fd) {
+    // TODO: Figure out how 'emacs -nw' and 'vi' and make a window with the GUI terminal
+    // having no scrollback.
+
     struct termios tcattr;
     get_and_check_tcattr(fd, &tcattr);
     // TODO: Consider enabling echoing (often) so that the user experiences instant

@@ -3,6 +3,8 @@
 
 #include <memory>
 
+#include <stdint.h>
+
 #include "error.hpp"
 
 // We _don't_ include <termios.h> in this header, to avoid all the macro pollution.
@@ -17,7 +19,7 @@ void display_tcattr(const struct termios& tcattr);
 void set_raw_mode(int fd);
 void clear_screen(int fd);
 
-struct terminal_size { unsigned short rows = 0, cols = 0; };
+struct terminal_size { uint32_t rows = 0, cols = 0; };
 terminal_size get_terminal_size(int fd);
 
 struct terminal_restore {

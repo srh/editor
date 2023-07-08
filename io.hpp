@@ -27,6 +27,7 @@ struct file_descriptor {
     NO_COPY(file_descriptor);
 };
 
+void write_data(int fd, const char *s, size_t count);
 void write_cstring(int fd, const char *s);
 
 #endif  // QWERTILLION_IO_HPP_

@@ -89,13 +89,30 @@ int main(int argc, const char **argv) {
     }
 }
 
-void draw_frame(int fd, const terminal_size& window) {
+uint32_t u32_mul(uint32_t x, uint32_t y) {
+    // TODO: Throw upon overflow.
+    return x * y;
+}
+
+size_t size_mul(size_t x, size_t y) {
+    // TODO: Throw upon overflow.
+    return x * y;
+}
+
+void draw_frame(int fd, const terminal_size& window, size_t step) {
+    std::vector<char> data;
+    data.resize(u32_mul(window.rows, window.cols));
+    for (size_t i = 0; i < data.size(); ++i) {
+        char num = size_mul(i, step) % 61;
+        data[i] = (num < 10 ? '0' : num < 36 ? 'a' - 10 : 'A' - 36) + num;
+    }
+
+
     for (size_t i = 0; i < window.rows; ++i) {
-        size_t num = i % 52;
-        char buf[] = "0\r\n";
-        buf[0] = (num < 26 ? 'a' : 'A') + (num % 26);
-        write_cstring(fd, buf);
-        usleep(30'000);
+        write_data(fd, &data[i * window.cols], window.cols);
+        if (i < window.rows - 1) {
+            write_cstring(fd, "\r\n");
+        }
     }
 }
 
@@ -123,11 +140,13 @@ int run_program(const command_line_args& args) {
         fflush(stdout);
 
         clear_screen(term.fd);
-        write_cstring(term.fd, TESC(H));
-        usleep(1'000'000);
 
-        draw_frame(term.fd, size);
-        usleep(1'000'000);
+        for (size_t step = 0; step < 8; ++step) {
+            write_cstring(term.fd, TESC(H));
+            usleep(2'000'000);
+            draw_frame(term.fd, size, step);
+            usleep(4'000'000);
+        }
 
         term_restore.restore();
     }
