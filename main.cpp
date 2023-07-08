@@ -195,6 +195,7 @@ void main_loop(int term, const command_line_args& args) {
             res = read(term, readbuf, 1);
         } while (res == -1 && errno == EINTR);
 
+        // TODO: Of course, we'd want to auto-save the file upon this and all sorts of exceptions.
         runtime_check(res != -1 || errno == EAGAIN, "unexpected error on terminal read: %s", runtime_check_strerror);
 
         if (res != 0) {
