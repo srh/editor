@@ -338,7 +338,7 @@ void push_printable_repr(std::string *str, char sch) {
     }
 }
 
-bool readTtyChar(int term_fd, char *out) {
+bool read_tty_char(int term_fd, char *out) {
     char readbuf[1];
     ssize_t res;
     do {
@@ -355,6 +355,50 @@ bool readTtyChar(int term_fd, char *out) {
     return false;
 }
 
+void check_read_tty_char(int term_fd, char *out) {
+    bool success = read_tty_char(term_fd, out);
+    runtime_check(success, "zero-length read from tty configured with VMIN=1");
+}
+
+void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
+    // TODO: When term is non-blocking, we'll need to wait for readiness...?
+    char ch;
+    check_read_tty_char(term, &ch);
+    // TODO: Named constants for these keyboard keys and such.
+    // TODO: Implement scrolling to cursor upon all buffer manipulations.
+    if (ch == 13) {
+        insert_char(&state->buf, '\n');
+    } else if (ch == '\t' || (ch >= 32 && ch < 127)) {
+        insert_char(&state->buf, ch);
+    } else if (ch == 28) {
+        // Ctrl+backslash
+        *exit_loop = true;
+        // TODO: Drop exit var and just break; here?  We have a spurious redraw.  Or just abort?
+    } else if (ch == 127) {
+        // Backspace.
+        backspace_char(&state->buf);
+    } else if (ch == 8) {
+        // Delete.
+        delete_char(&state->buf);
+    } else if (ch == 27) {
+        check_read_tty_char(term, &ch);
+        // TODO: Handle all possible escapes...
+        if (ch == '[') {
+            check_read_tty_char(term, &ch);
+
+            if (ch == 'C') {
+                move_right(&state->buf);
+            } else if (ch == 'D') {
+                move_left(&state->buf);
+            } else {
+                // TODO: Handle all possible escapes...
+            }
+        }
+    } else {
+        // TODO: Handle other possible control chars.
+    }
+}
+
 void main_loop(int term, const command_line_args& args) {
     qwi::state state = initial_state(args);
 
@@ -363,44 +407,7 @@ void main_loop(int term, const command_line_args& args) {
 
     bool exit = false;
     for (; !exit; ) {
-        // TODO: When term is non-blocking, we'll need to wait for readiness...?
-        char ch;
-        bool success = readTtyChar(term, &ch);
-        runtime_check(success, "zero-length read from tty configured with VMIN=1");
-        // TODO: Named constants for these keyboard keys and such.
-        // TODO: Implement scrolling to cursor upon all buffer manipulations.
-        if (ch == 13) {
-            insert_char(&state.buf, '\n');
-        } else if (ch == '\t' || (ch >= 32 && ch < 127)) {
-            insert_char(&state.buf, ch);
-        } else if (ch == 28) {
-            // Ctrl+backslash
-            exit = true;
-            // TODO: Drop exit var and just break; here?  We have a spurious redraw.  Or just abort?
-        } else if (ch == 127) {
-            // Backspace.
-            backspace_char(&state.buf);
-        } else if (ch == 8) {
-            // Delete.
-            delete_char(&state.buf);
-        } else if (ch == 27) {
-            success = readTtyChar(term, &ch);
-            runtime_check(success, "zero-length read from tty configured with VMIN=1");  // TODO: helper method
-            // TODO: Handle all possible escapes...
-            if (ch == '[') {
-                success = readTtyChar(term, &ch);
-                runtime_check(success, "zero-length read from tty configured with VMIN=1");  // TODO: helper method
-                if (ch == 'C') {
-                    move_right(&state.buf);
-                } else if (ch == 'D') {
-                    move_left(&state.buf);
-                } else {
-                    // TODO: Handle all possible escapes...
-                }
-            }
-        } else {
-            // TODO: Handle other possible control chars.
-        }
+        read_and_process_tty_input(term, &state, &exit);
 
         terminal_size window = get_terminal_size(term);
         redraw_state(term, window, state);
