@@ -309,6 +309,23 @@ void push_printable_repr(std::string *str, char sch) {
     }
 }
 
+bool readTtyChar(int term_fd, char *out) {
+    char readbuf[1];
+    ssize_t res;
+    do {
+        res = read(term_fd, readbuf, 1);
+    } while (res == -1 && errno == EINTR);
+
+    // TODO: Of course, we'd want to auto-save the file upon this and all sorts of exceptions.
+    runtime_check(res != -1 || errno == EAGAIN, "unexpected error on terminal read: %s", runtime_check_strerror);
+
+    if (res != 0) {
+        *out = readbuf[0];
+        return true;
+    }
+    return false;
+}
+
 void main_loop(int term, const command_line_args& args) {
     qwi::state state = initial_state(args);
 
@@ -317,34 +334,25 @@ void main_loop(int term, const command_line_args& args) {
 
     bool exit = false;
     for (; !exit; ) {
-        char readbuf[1];
-        ssize_t res;
-        do {
-            res = read(term, readbuf, 1);
-        } while (res == -1 && errno == EINTR);
-
-        // TODO: Of course, we'd want to auto-save the file upon this and all sorts of exceptions.
-        runtime_check(res != -1 || errno == EAGAIN, "unexpected error on terminal read: %s", runtime_check_strerror);
-
-        if (res != 0) {
-            char ch = readbuf[0];
-            if (ch == 28) {
-                // Ctrl+backslash
-                exit = true;
-                // Some kind of exit mode (abort?)
+        // TODO: When term is non-blocking, we'll need to wait for readiness...?
+        char ch;
+        bool success = readTtyChar(term, &ch);
+        runtime_check(success, "zero-length read from tty configured with VMIN=1");
+        if (ch == 28) {
+            // Ctrl+backslash
+            exit = true;
+            // Some kind of exit mode (abort?)
+        } else {
+            if (ch == 13) {
+                push_printable_repr(&state.buf.bef, '\n');
             } else {
-                if (ch == 13) {
-                    push_printable_repr(&state.buf.bef, '\n');
-                } else {
-                    push_printable_repr(&state.buf.bef, readbuf[0]);
-                }
-
-                terminal_size window = get_terminal_size(term);
-                redraw_state(term, window, state);
+                push_printable_repr(&state.buf.bef, ch);
             }
+
+            terminal_size window = get_terminal_size(term);
+            redraw_state(term, window, state);
         }
     }
-
 }
 
 int run_program(const command_line_args& args) {
