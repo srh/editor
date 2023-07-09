@@ -294,6 +294,35 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
     write_frame(term, frame);
 }
 
+void insert_char(qwi::buffer *buf, char sch) {
+    buf->bef.push_back(sch);
+}
+void backspace_char(qwi::buffer *buf) {
+    if (!buf->bef.empty()) {
+        buf->bef.pop_back();
+    }
+}
+void delete_char(qwi::buffer *buf) {
+    // erase checks if (!buf->aft.empty()).
+    buf->aft.erase(0, 1);
+}
+
+void move_right(qwi::buffer *buf) {
+    if (buf->aft.empty()) {
+        return;
+    }
+    buf->bef.push_back(buf->aft.front());
+    buf->aft.erase(0, 1);
+}
+
+void move_left(qwi::buffer *buf) {
+    if (buf->bef.empty()) {
+        return;
+    }
+    buf->aft.insert(buf->aft.begin(), buf->bef.back());
+    buf->bef.pop_back();
+}
+
 void push_printable_repr(std::string *str, char sch) {
     uint8_t ch = uint8_t(sch);
     if (ch == '\n' || ch == '\t') {
@@ -338,20 +367,43 @@ void main_loop(int term, const command_line_args& args) {
         char ch;
         bool success = readTtyChar(term, &ch);
         runtime_check(success, "zero-length read from tty configured with VMIN=1");
-        if (ch == 28) {
+        // TODO: Named constants for these keyboard keys and such.
+        // TODO: Implement scrolling to cursor upon all buffer manipulations.
+        if (ch == 13) {
+            insert_char(&state.buf, '\n');
+        } else if (ch == '\t' || (ch >= 32 && ch < 127)) {
+            insert_char(&state.buf, ch);
+        } else if (ch == 28) {
             // Ctrl+backslash
             exit = true;
-            // Some kind of exit mode (abort?)
-        } else {
-            if (ch == 13) {
-                push_printable_repr(&state.buf.bef, '\n');
-            } else {
-                push_printable_repr(&state.buf.bef, ch);
+            // TODO: Drop exit var and just break; here?  We have a spurious redraw.  Or just abort?
+        } else if (ch == 127) {
+            // Backspace.
+            backspace_char(&state.buf);
+        } else if (ch == 8) {
+            // Delete.
+            delete_char(&state.buf);
+        } else if (ch == 27) {
+            success = readTtyChar(term, &ch);
+            runtime_check(success, "zero-length read from tty configured with VMIN=1");  // TODO: helper method
+            // TODO: Handle all possible escapes...
+            if (ch == '[') {
+                success = readTtyChar(term, &ch);
+                runtime_check(success, "zero-length read from tty configured with VMIN=1");  // TODO: helper method
+                if (ch == 'C') {
+                    move_right(&state.buf);
+                } else if (ch == 'D') {
+                    move_left(&state.buf);
+                } else {
+                    // TODO: Handle all possible escapes...
+                }
             }
-
-            terminal_size window = get_terminal_size(term);
-            redraw_state(term, window, state);
+        } else {
+            // TODO: Handle other possible control chars.
         }
+
+        terminal_size window = get_terminal_size(term);
+        redraw_state(term, window, state);
     }
 }
 
