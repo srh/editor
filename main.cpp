@@ -176,12 +176,11 @@ void draw_empty_frame_for_exit(int fd, const terminal_size& window) {
     write_frame(fd, frame);
 }
 
-qwi::state initial_state(const command_line_args& args) {
+qwi::state initial_state(const command_line_args& args, const terminal_size& window) {
     runtime_check(args.files.size() == 0,
                   "file opening (on command line) not supported (yet!)");  // TODO
     qwi::state state;
-    state.bufs.push_back(qwi::buffer{});
-    state.bufs.back().name = "*scratch*";
+    state.buf.set_window(qwi::window_size{.rows = window.rows, .cols = window.cols});
     return state;
 }
 
@@ -524,9 +523,9 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
 }
 
 void main_loop(int term, const command_line_args& args) {
-    qwi::state state = initial_state(args);
-
     terminal_size window = get_terminal_size(term);
+    qwi::state state = initial_state(args, window);
+
     redraw_state(term, window, state);
 
     bool exit = false;

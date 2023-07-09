@@ -7,6 +7,8 @@
 
 namespace qwi {
 
+struct window_size { uint32_t rows = 0, cols = 0; };
+
 struct buffer {
     // Used to choose in the list of buffers, unique to the buffer.  Program logic should
     // not allow empty or overlong values.
@@ -22,9 +24,13 @@ struct buffer {
     // Column that is maintained as we press up and down arrow keys past shorter lines.
     size_t virtual_column = 0;
 
+    /* UI-specific stuff -- this could get factored out of buffer at some point */
+    // For now, this assumes a monospace font (maybe with 2x-width glyphs) on all GUIs.
+    window_size window;
     // 0 <= first_visible_offset <= size().
     size_t first_visible_offset = 0;
 
+    void set_window(const window_size& win) { window = win; }
     size_t current_column() const;
     size_t cursor() const { return bef.size(); }
     void set_cursor(size_t pos);
@@ -37,6 +43,7 @@ struct buffer {
         return i < bef.size() ? bef[i] : aft[i - bef.size()];
     }
 };
+
 
 struct state {
     // Sorted in order from least-recently-used -- `buf` is the active buffer and should
