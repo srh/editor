@@ -328,11 +328,31 @@ void move_left(qwi::buffer *buf) {
     buf->bef.pop_back();
     buf->virtual_column = buf->current_column();
 }
+
+size_t distance_to_eol(const qwi::buffer& buf, size_t pos) {
+    size_t p = pos;
+    for (size_t e = buf.size(); p < e; ++p) {
+        if (buf[p] == '\n') {
+            break;
+        }
+    }
+    return p - pos;
+}
+
 void move_up(qwi::buffer *buf) {
+    size_t c = buf->virtual_column;
     // TODO: Implement, ofc
 }
 void move_down(qwi::buffer *buf) {
-    // TODO: Implement, ofc
+    size_t c = buf->virtual_column;
+    // position of next newline (or: end of buffer):
+    size_t eolPos = buf->cursor() + distance_to_eol(*buf, buf->cursor());
+    // beginning of next line (or: end of buffer):
+    size_t nextLinePos = eolPos + (eolPos != buf->size());
+    // size of next line (or: zero)
+    size_t d = distance_to_eol(*buf, nextLinePos);
+    size_t nextPos = nextLinePos + std::min(c, d);
+    buf->set_cursor(nextPos);
 }
 
 void push_printable_repr(std::string *str, char sch) {

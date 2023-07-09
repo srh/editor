@@ -27,6 +27,7 @@ struct buffer {
 
     size_t current_column() const;
     size_t cursor() const { return bef.size(); }
+    void set_cursor(size_t pos);
     size_t size() const { return bef.size() + aft.size(); }
     // TODO: Make wrapper type for char.
     char at(size_t i) const {

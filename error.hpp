@@ -28,6 +28,13 @@ struct runtime_check_failure { };
         } \
     } while (false)
 
+#define logic_check(pred, fmt, ...) do { \
+        if (!(pred)) { \
+            fprintf(stderr, "Logic error! " fmt "\n", ##__VA_ARGS__); \
+            throw runtime_check_failure{}; \
+        } \
+    } while (false)
+
 
 
 #endif  // QWERTILLION_ERROR_HPP_
