@@ -190,11 +190,16 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
 
     // First find the front of the row of our first_visible_offset.  (Which usually is
     // equal, unless the window was resized.)
+
+    // TODO: Couldn't we traverse backwards?  Yeah, but maybe we'll change the data
+    // structure anyway.
     size_t column = 0;
+    size_t front_of_row = 0;
     for (size_t i = 0; i < state.buf.first_visible_offset; ++i) {
         // TODO: We dup this logic below, which is gross.
         if (state.buf[i] == '\n') {
             column = 0;
+            front_of_row = i + 1;
         } else if (state.buf[i] == '\t') {
             column = size_add(column | 7, 1);
             column = (column >= window.cols ? 0 : column);
@@ -211,7 +216,7 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
         runtime_check(column == 0, "first_visible_offset should be rendered at the first column");
     }
 
-    size_t i = state.buf.first_visible_offset - column;
+    size_t i = front_of_row;
     // TODO: Update state.buf.first_visible_offset at some point... only when we
     // manually scroll or type text.
 
@@ -225,6 +230,7 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
         char ch = state.buf[i];
         // TODO: Restrict to non-control characters.
         if (ch == '\n') {
+            // TODO: We could use '\x1bK'
             do {
                 frame.data[row * window.cols + col] = ' ';
                 ++col;
