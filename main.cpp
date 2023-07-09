@@ -298,6 +298,12 @@ void insert_char(qwi::buffer *buf, char sch) {
     buf->bef.push_back(sch);
     buf->virtual_column = buf->current_column();
 }
+// Cheap fn for debugging purposes.
+void push_printable_repr(std::string *str, char sch);
+void insert_printable_repr(qwi::buffer *buf, char sch) {
+    push_printable_repr(&buf->bef, sch);
+    buf->virtual_column = buf->current_column();
+}
 void backspace_char(qwi::buffer *buf) {
     if (!buf->bef.empty()) {
         buf->bef.pop_back();
@@ -474,6 +480,7 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
                 move_end(&state->buf);
                 chars_read.clear();
             } else if (isdigit(ch)) {
+                // TODO: Generic parsing of numeric/~ escape codes.
                 if (ch == '3') {
                     check_read_tty_char(term, &ch);
                     chars_read.push_back(ch);
@@ -512,6 +519,7 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
         }
     } else {
         // TODO: Handle other possible control chars.
+        insert_printable_repr(&state->buf, ch);
     }
 }
 
