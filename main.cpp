@@ -196,13 +196,21 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
     size_t column = 0;
     size_t front_of_row = 0;
     for (size_t i = 0; i < state.buf.first_visible_offset; ++i) {
+        uint8_t ch = uint8_t(state.buf[i]);
         // TODO: We dup this logic below, which is gross.
-        if (state.buf[i] == '\n') {
+        if (ch == '\n') {
             column = 0;
             front_of_row = i + 1;
-        } else if (state.buf[i] == '\t') {
+        } else if (ch == '\t') {
             column = size_add(column | 7, 1);
             column = (column >= window.cols ? 0 : column);
+        } else if (ch < 32 || ch == 127) {
+            if (column > window.cols - 2) {
+                column = 2;
+            } else {
+                column += 2;
+                column = (column == window.cols ? 0 : column);
+            }
         } else {
             ++column;
             column = (column == window.cols ? 0 : column);
@@ -227,10 +235,10 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
         if (i == state.buf.cursor()) {
             frame.cursor = { .row = uint32_t(row), .col = uint32_t(col) };
         }
-        char ch = state.buf[i];
-        // TODO: Restrict to non-control characters.
+        uint8_t ch = uint8_t(state.buf[i]);
         if (ch == '\n') {
             // TODO: We could use '\x1bK'
+            // clear to EOL
             do {
                 frame.data[row * window.cols + col] = ' ';
                 ++col;
@@ -238,6 +246,7 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
             ++row;
             col = 0;
         } else if (ch == '\t') {
+            // clear to EOL
             do {
                 frame.data[row * window.cols + col] = ' ';
                 ++col;
@@ -246,7 +255,22 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
                 col = 0;
                 ++row;
             }
+        } else if (ch < 32 || ch == 127) {
+            if (col > window.cols - 2) {
+                // Just one cell to clear to EOL.
+                frame.data[row * window.cols + col] = ' ';
+                ++row;
+                col = 0;
+                if (row == window.rows) {
+                    break;
+                }
+            }
+            frame.data[row * window.cols + col] = '^';
+            ++col;
+            frame.data[row * window.cols + col] = (ch ^ 64);
+            ++col;
         } else {
+            // I guess 128-255 get rendered verbatim.
             frame.data[row * window.cols + col] = ch;
             ++col;
             if (col == window.cols) {
