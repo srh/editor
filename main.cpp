@@ -366,6 +366,7 @@ void move_up(qwi::buffer *buf) {
     size_t nextPos = begOfLine + std::min(c, d);
     buf->set_cursor(nextPos);
 }
+
 void move_down(qwi::buffer *buf) {
     // TODO: This virtual_column logic doesn't work with tab characters.
     size_t c = buf->virtual_column;
@@ -377,6 +378,18 @@ void move_down(qwi::buffer *buf) {
     size_t d = distance_to_eol(*buf, nextLinePos);
     size_t nextPos = nextLinePos + std::min(c, d);
     buf->set_cursor(nextPos);
+}
+
+void move_home(qwi::buffer *buf) {
+    size_t bolPos = buf->cursor() - distance_to_beginning_of_line(*buf, buf->cursor());
+    buf->set_cursor(bolPos);
+    buf->virtual_column = buf->current_column();
+}
+
+void move_end(qwi::buffer *buf) {
+    size_t eolPos = buf->cursor() + distance_to_eol(*buf, buf->cursor());
+    buf->set_cursor(eolPos);
+    buf->virtual_column = buf->current_column();
 }
 
 void push_printable_repr(std::string *str, char sch) {
@@ -455,10 +468,10 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
                 move_down(&state->buf);
                 chars_read.clear();
             } else if (ch == 'H') {
-                // TODO: Handle Home key.
+                move_home(&state->buf);
                 chars_read.clear();
             } else if (ch == 'F') {
-                // TODO: Handle End key.
+                move_end(&state->buf);
                 chars_read.clear();
             } else if (isdigit(ch)) {
                 if (ch == '3') {
