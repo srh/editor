@@ -339,11 +339,35 @@ size_t distance_to_eol(const qwi::buffer& buf, size_t pos) {
     return p - pos;
 }
 
+size_t distance_to_beginning_of_line(const qwi::buffer& buf, size_t pos) {
+    logic_check(pos <= buf.size(), "distance_to_beginning_of_line with out of range pos");
+    size_t p = pos;
+    for (;;) {
+        if (p == 0) {
+            return pos;
+        }
+        --p;
+        if (buf[p] == '\n') {
+            return pos - (p + 1);
+        }
+    }
+}
+
 void move_up(qwi::buffer *buf) {
+    // TODO: This virtual_column logic doesn't work with tab characters.
+    // TODO: This is a bit convoluted because it's based on jsmacs code.
     size_t c = buf->virtual_column;
-    // TODO: Implement, ofc
+    size_t bolPos = buf->cursor() - distance_to_beginning_of_line(*buf, buf->cursor());
+    size_t leftBolPos = bolPos - (bolPos != 0);
+    // end of previous line, or our line if we're on the first line.
+    size_t endOfLine = leftBolPos + distance_to_eol(*buf, leftBolPos);
+    size_t d = distance_to_beginning_of_line(*buf, endOfLine);
+    size_t begOfLine = endOfLine - distance_to_beginning_of_line(*buf, endOfLine);
+    size_t nextPos = begOfLine + std::min(c, d);
+    buf->set_cursor(nextPos);
 }
 void move_down(qwi::buffer *buf) {
+    // TODO: This virtual_column logic doesn't work with tab characters.
     size_t c = buf->virtual_column;
     // position of next newline (or: end of buffer):
     size_t eolPos = buf->cursor() + distance_to_eol(*buf, buf->cursor());
