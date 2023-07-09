@@ -296,15 +296,19 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
 
 void insert_char(qwi::buffer *buf, char sch) {
     buf->bef.push_back(sch);
+    buf->virtual_column = buf->current_column();
 }
 void backspace_char(qwi::buffer *buf) {
     if (!buf->bef.empty()) {
         buf->bef.pop_back();
     }
+    buf->virtual_column = buf->current_column();
 }
 void delete_char(qwi::buffer *buf) {
     // erase checks if (!buf->aft.empty()).
     buf->aft.erase(0, 1);
+    // TODO: We don't do this for doDeleteRight (or doAppendRight) in jsmacs -- the bug is in jsmacs!
+    buf->virtual_column = buf->current_column();
 }
 
 void move_right(qwi::buffer *buf) {
@@ -313,6 +317,7 @@ void move_right(qwi::buffer *buf) {
     }
     buf->bef.push_back(buf->aft.front());
     buf->aft.erase(0, 1);
+    buf->virtual_column = buf->current_column();
 }
 
 void move_left(qwi::buffer *buf) {
@@ -321,6 +326,13 @@ void move_left(qwi::buffer *buf) {
     }
     buf->aft.insert(buf->aft.begin(), buf->bef.back());
     buf->bef.pop_back();
+    buf->virtual_column = buf->current_column();
+}
+void move_up(qwi::buffer *buf) {
+    // TODO: Implement, ofc
+}
+void move_down(qwi::buffer *buf) {
+    // TODO: Implement, ofc
 }
 
 void push_printable_repr(std::string *str, char sch) {
@@ -377,21 +389,68 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
     } else if (ch == 127) {
         // Backspace.
         backspace_char(&state->buf);
-    } else if (ch == 8) {
-        // Delete.
-        delete_char(&state->buf);
     } else if (ch == 27) {
+        std::string chars_read;
         check_read_tty_char(term, &ch);
+        chars_read.push_back(ch);
         // TODO: Handle all possible escapes...
         if (ch == '[') {
             check_read_tty_char(term, &ch);
+            chars_read.push_back(ch);
 
             if (ch == 'C') {
                 move_right(&state->buf);
+                chars_read.clear();
             } else if (ch == 'D') {
                 move_left(&state->buf);
-            } else {
-                // TODO: Handle all possible escapes...
+                chars_read.clear();
+            } else if (ch == 'A') {
+                move_up(&state->buf);
+                chars_read.clear();
+            } else if (ch == 'B') {
+                move_down(&state->buf);
+                chars_read.clear();
+            } else if (ch == 'H') {
+                // TODO: Handle Home key.
+                chars_read.clear();
+            } else if (ch == 'F') {
+                // TODO: Handle End key.
+                chars_read.clear();
+            } else if (isdigit(ch)) {
+                if (ch == '3') {
+                    check_read_tty_char(term, &ch);
+                    chars_read.push_back(ch);
+                    if (ch == '~') {
+                        delete_char(&state->buf);
+                        chars_read.clear();
+                    } else if (ch == ';') {
+                        check_read_tty_char(term, &ch);
+                        chars_read.push_back(ch);
+                        if (ch == '2') {
+                            check_read_tty_char(term, &ch);
+                            chars_read.push_back(ch);
+                            if (ch == '~') {
+                                // TODO: Handle Shift+Del key.
+                                chars_read.clear();
+                            }
+                        }
+                    }
+                } else if (ch == '2') {
+                    check_read_tty_char(term, &ch);
+                    chars_read.push_back(ch);
+                    if (ch == '~') {
+                        // TODO: Handle Insert key.
+                        chars_read.clear();
+                    }
+                }
+            }
+        }
+        // Insert for the user (the developer, me) unrecognized escape codes.
+        if (!chars_read.empty()) {
+            insert_char(&state->buf, '\\');
+            insert_char(&state->buf, 'e');
+            for (char c : chars_read) {
+                insert_char(&state->buf, c);
             }
         }
     } else {
