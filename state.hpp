@@ -21,17 +21,6 @@ struct buffer {
     // Absolute position of the mark, if there is one.
     std::optional<size_t> mark;
 
-    // Column that is maintained as we press up and down arrow keys past shorter lines.
-    size_t virtual_column = 0;
-
-    /* UI-specific stuff -- this could get factored out of buffer at some point */
-    // For now, this assumes a monospace font (maybe with 2x-width glyphs) on all GUIs.
-    window_size window;
-    // 0 <= first_visible_offset <= size().
-    size_t first_visible_offset = 0;
-
-    void set_window(const window_size& win) { window = win; }
-    size_t current_column() const;
     size_t cursor() const { return bef.size(); }
     void set_cursor(size_t pos);
     size_t size() const { return bef.size() + aft.size(); }
@@ -42,6 +31,20 @@ struct buffer {
     char operator[](size_t i) const {
         return i < bef.size() ? bef[i] : aft[i - bef.size()];
     }
+
+    // Column that is maintained as we press up and down arrow keys past shorter lines.
+    /* UI-specific stuff -- this could get factored out of buffer at some point */
+    // For now, this assumes a monospace font (maybe with 2x-width glyphs) on all GUIs.
+    size_t virtual_column = 0;
+
+    window_size window;
+    // 0 <= first_visible_offset <= size().
+    size_t first_visible_offset = 0;
+    // TODO: current_column is nonsense -- it doesn't account for tab characters or
+    // double-wide.  We don't really want to have or use this function.
+    size_t current_column() const;
+
+    void set_window(const window_size& win) { window = win; }
 };
 
 
