@@ -359,12 +359,12 @@ void move_up(qwi::buffer *buf) {
     // TODO: This virtual_column logic doesn't work with tab characters.
     // TODO: This is a bit convoluted because it's based on jsmacs code.
     size_t c = buf->virtual_column;
-    size_t bolPos = buf->cursor() - distance_to_beginning_of_line(*buf, buf->cursor());
+    size_t bolPos = buf->cursor() - qwi::distance_to_beginning_of_line(*buf, buf->cursor());
     size_t leftBolPos = bolPos - (bolPos != 0);
     // end of previous line, or our line if we're on the first line.
-    size_t endOfLine = leftBolPos + distance_to_eol(*buf, leftBolPos);
-    size_t d = distance_to_beginning_of_line(*buf, endOfLine);
-    size_t begOfLine = endOfLine - distance_to_beginning_of_line(*buf, endOfLine);
+    size_t endOfLine = leftBolPos + qwi::distance_to_eol(*buf, leftBolPos);
+    size_t d = qwi::distance_to_beginning_of_line(*buf, endOfLine);
+    size_t begOfLine = endOfLine - qwi::distance_to_beginning_of_line(*buf, endOfLine);
     size_t nextPos = begOfLine + std::min(c, d);
     buf->set_cursor(nextPos);
 }
@@ -373,23 +373,23 @@ void move_down(qwi::buffer *buf) {
     // TODO: This virtual_column logic doesn't work with tab characters.
     size_t c = buf->virtual_column;
     // position of next newline (or: end of buffer):
-    size_t eolPos = buf->cursor() + distance_to_eol(*buf, buf->cursor());
+    size_t eolPos = buf->cursor() + qwi::distance_to_eol(*buf, buf->cursor());
     // beginning of next line (or: end of buffer):
     size_t nextLinePos = eolPos + (eolPos != buf->size());
     // size of next line (or: zero)
-    size_t d = distance_to_eol(*buf, nextLinePos);
+    size_t d = qwi::distance_to_eol(*buf, nextLinePos);
     size_t nextPos = nextLinePos + std::min(c, d);
     buf->set_cursor(nextPos);
 }
 
 void move_home(qwi::buffer *buf) {
-    size_t bolPos = buf->cursor() - distance_to_beginning_of_line(*buf, buf->cursor());
+    size_t bolPos = buf->cursor() - qwi::distance_to_beginning_of_line(*buf, buf->cursor());
     buf->set_cursor(bolPos);
     buf->virtual_column = buf->current_column();
 }
 
 void move_end(qwi::buffer *buf) {
-    size_t eolPos = buf->cursor() + distance_to_eol(*buf, buf->cursor());
+    size_t eolPos = buf->cursor() + qwi::distance_to_eol(*buf, buf->cursor());
     buf->set_cursor(eolPos);
     buf->virtual_column = buf->current_column();
 }

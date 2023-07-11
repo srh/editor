@@ -52,9 +52,9 @@ struct state {
     std::vector<buffer> bufs;
 };
 
-}  // namespace qwi
-
 size_t distance_to_eol(const qwi::buffer& buf, size_t pos);
 size_t distance_to_beginning_of_line(const qwi::buffer& buf, size_t pos);
+
+}  // namespace qwi
 
 #endif  // QWERTILLION_STATE_HPP_
