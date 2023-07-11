@@ -187,109 +187,130 @@ qwi::state initial_state(const command_line_args& args, const terminal_size& win
 void redraw_state(int term, const terminal_size& window, const qwi::state& state) {
     terminal_frame frame = init_frame(window);
 
-    // First find the front of the row of our first_visible_offset.  (Which usually is
-    // equal, unless the window was resized.)
-
-    // TODO: Couldn't we traverse backwards?  Yeah, but maybe we'll change the data
-    // structure anyway.
-    size_t column = 0;
-    size_t front_of_row = 0;
-    for (size_t i = 0; i < state.buf.first_visible_offset; ++i) {
-        uint8_t ch = uint8_t(state.buf[i]);
-        // TODO: We dup this logic below, which is gross.
-        if (ch == '\n') {
-            column = 0;
-            front_of_row = i + 1;
-        } else if (ch == '\t') {
-            column = size_add(column | 7, 1);
-            column = (column >= window.cols ? 0 : column);
-        } else if (ch < 32 || ch == 127) {
-            if (column > window.cols - 2) {
-                column = 2;
-            } else {
-                column += 2;
-                column = (column == window.cols ? 0 : column);
-            }
-        } else {
-            ++column;
-            column = (column == window.cols ? 0 : column);
-        }
+    if (window.cols < 2 || window.rows == 0) {
+        // TODO: This dups code at the bottom of this fn horribly.
+        write_frame(term, frame);
+        return;
     }
 
-    // Because we don't support window resize (yet).
-    const bool window_was_resized = false;
-    // Check if first_visible_offset is invalid.
-    if (!window_was_resized) {
-        runtime_check(column == 0, "first_visible_offset should be rendered at the first column");
-    }
+    // first_visible_offset is the first rendered character in the buffer -- this may be a
+    // tab character or 2-column-rendered control character, only part of which was
+    // rendered.  We render the entire line first_visible_offset was part of, and
+    // copy_row_if_visible conditionally copies the line into the `frame` for rendering --
+    // taking care to call it before incrementing i for partially rendered characters, and
+    // _after_ incrementing i for the completely rendered character.
 
-    size_t i = front_of_row;
-    // TODO: Update state.buf.first_visible_offset at some point... only when we
-    // manually scroll or type text.
+    // TODO: We actually don't want to re-render a whole line
+    size_t i = state.buf.first_visible_offset - distance_to_beginning_of_line(state.buf, state.buf.first_visible_offset);
 
-    // Now we render.
-    size_t row = 0;
+    std::vector<char> render_row(window.cols, 0);
+    size_t render_cursor = render_row.size();  // Means no cursor on this row.
+    size_t line_col = 0;
     size_t col = 0;
-    while (row < window.rows && i < state.buf.size()) {
-        if (i == state.buf.cursor()) {
-            frame.cursor = { .row = uint32_t(row), .col = uint32_t(col) };
+    size_t row = 0;
+    // This gets called after we paste our character into the row and i is the offset
+    // after the last completely written character.  Called precisely when col ==
+    // window.cols.
+    auto copy_row_if_visible = [&]() {
+        if (i > state.buf.first_visible_offset) {
+            // It simplifies code to throw in this (row < window.rows) check here, instead
+            // of carefully calculating where we might need to check it.
+            if (row < window.rows) {
+                memcpy(&frame.data[row * window.cols], render_row.data(), window.cols);
+                if (render_cursor != render_row.size()) {
+                    frame.cursor = { .row = uint32_t(row), .col = uint32_t(render_cursor) };
+                    render_cursor = render_row.size();
+                }
+            }
+            ++row;
+            col = 0;
         }
+    };
+    while (row < window.rows && i < state.buf.size()) {
+        // col < window.cols.
+        if (i == state.buf.cursor()) {
+            render_cursor = col;
+        }
+
         uint8_t ch = uint8_t(state.buf[i]);
         if (ch == '\n') {
             // TODO: We could use '\x1bK'
             // clear to EOL
             do {
-                frame.data[row * window.cols + col] = ' ';
+                render_row[col] = ' ';
                 ++col;
             } while (col < window.cols);
-            ++row;
-            col = 0;
+            line_col = 0;
+            ++i;
+            copy_row_if_visible();
         } else if (ch == '\t') {
-            // clear to EOL
+            size_t next_line_col = size_add(line_col | 7, 1);
             do {
-                frame.data[row * window.cols + col] = ' ';
+                render_row[col] = ' ';
                 ++col;
-            } while (col < window.cols && (col & 7) != 0);
+                ++line_col;
+                if (col == window.cols) {
+                    copy_row_if_visible();
+                }
+            } while (line_col < next_line_col - 1 && row < window.rows);
+            // line_col == next_line_col - 1 now.  This time we increment i because the
+            // last character was rendered.  Thus if \t's rendering ends at window.col,
+            // we'll behave correctly.
+            render_row[col] = ' ';
+            ++col;
+            ++line_col;
+            ++i;
             if (col == window.cols) {
-                col = 0;
-                ++row;
+                copy_row_if_visible();
             }
         } else if (ch < 32 || ch == 127) {
-            if (col > window.cols - 2) {
-                // Just one cell to clear to EOL.
-                frame.data[row * window.cols + col] = ' ';
-                ++row;
-                col = 0;
-                if (row == window.rows) {
-                    break;
-                }
-            }
-            frame.data[row * window.cols + col] = '^';
+            render_row[col] = '^';
             ++col;
-            frame.data[row * window.cols + col] = (ch ^ 64);
-            ++col;
-        } else {
-            // I guess 128-255 get rendered verbatim.
-            frame.data[row * window.cols + col] = ch;
-            ++col;
+            ++line_col;
             if (col == window.cols) {
-                col = 0;
-                ++row;
+                copy_row_if_visible();
+            }
+            render_row[col] = (ch ^ 64);
+            ++col;
+            ++line_col;
+            ++i;
+            if (col == window.cols) {
+                copy_row_if_visible();
+            }
+        } else {
+            // TODO: Make this the first branch.
+            // I guess 128-255 get rendered verbatim.
+            render_row[col] = ch;
+            ++col;
+            ++line_col;
+            ++i;
+            if (col == window.cols) {
+                copy_row_if_visible();
             }
         }
-        ++i;
     }
 
-    // Case where cursor is at the end of the buf.
-    if (row < window.rows && i == state.buf.cursor()) {
-        frame.cursor = { .row = uint32_t(row), .col = uint32_t(col) };
+    if (i == state.buf.cursor()) {
+        render_cursor = col;
     }
 
-    // We have to fill the rest of the screen.
-    for (size_t j = row * window.cols + col, e = window.rows * window.cols; j < e; ++j) {
-        frame.data[j] = ' ';
+    // If we reached end of buffer, we might still need to copy the current render_row and
+    // the remaining screen.
+    while (row < window.rows) {
+        do {
+            render_row[col] = ' ';
+            ++col;
+        } while (col < window.cols);
+        memcpy(&frame.data[row * window.cols], render_row.data(), window.cols);
+        if (render_cursor != render_row.size()) {
+            frame.cursor = { .row = uint32_t(row), .col = uint32_t(render_cursor) };
+            render_cursor = render_row.size();
+        }
+        ++row;
+        col = 0;
     }
 
+    // TODO: Early-bailout at top of function duplicates this.
     write_frame(term, frame);
 }
 
@@ -332,30 +353,6 @@ void move_left(qwi::buffer *buf) {
     buf->aft.insert(buf->aft.begin(), buf->bef.back());
     buf->bef.pop_back();
     buf->virtual_column = buf->current_column();
-}
-
-size_t distance_to_eol(const qwi::buffer& buf, size_t pos) {
-    size_t p = pos;
-    for (size_t e = buf.size(); p < e; ++p) {
-        if (buf[p] == '\n') {
-            break;
-        }
-    }
-    return p - pos;
-}
-
-size_t distance_to_beginning_of_line(const qwi::buffer& buf, size_t pos) {
-    logic_check(pos <= buf.size(), "distance_to_beginning_of_line with out of range pos");
-    size_t p = pos;
-    for (;;) {
-        if (p == 0) {
-            return pos;
-        }
-        --p;
-        if (buf[p] == '\n') {
-            return pos - (p + 1);
-        }
-    }
 }
 
 void move_up(qwi::buffer *buf) {

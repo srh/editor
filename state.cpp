@@ -21,5 +21,28 @@ void buffer::set_cursor(size_t pos) {
     aft.erase(0, aft_pos);
 }
 
-
 }  // namespace qwi
+
+size_t distance_to_eol(const qwi::buffer& buf, size_t pos) {
+    size_t p = pos;
+    for (size_t e = buf.size(); p < e; ++p) {
+        if (buf[p] == '\n') {
+            break;
+        }
+    }
+    return p - pos;
+}
+
+size_t distance_to_beginning_of_line(const qwi::buffer& buf, size_t pos) {
+    logic_check(pos <= buf.size(), "distance_to_beginning_of_line with out of range pos");
+    size_t p = pos;
+    for (;;) {
+        if (p == 0) {
+            return pos;
+        }
+        --p;
+        if (buf[p] == '\n') {
+            return pos - (p + 1);
+        }
+    }
+}
