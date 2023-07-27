@@ -184,6 +184,38 @@ qwi::state initial_state(const command_line_args& args, const terminal_size& win
     return state;
 }
 
+// Returns true if not '\n'.  Sets *line_col in any case.  Calls emit_drawn_chars(char *,
+// size_t) once to pass out chars to be rendered in the terminal (except when a newline is
+// encountered).  Always passes a count of 1 or greater to emit_drawn_chars.
+template <class C>
+bool compute_char_rendering(const uint8_t ch,
+                            size_t *line_col, C&& emit_drawn_chars) {
+    if (ch == '\n') {
+        *line_col = 0;
+        return false;
+    }
+    if (ch == '\t') {
+        size_t next_line_col = size_add((*line_col) | 7, 1);
+        //             12345678
+        char buf[8] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
+        emit_drawn_chars(buf, next_line_col - *line_col);
+        *line_col = next_line_col;
+        return true;
+    }
+    if (ch < 32 || ch == 127) {
+        char buf[2] = { '^', char(ch ^ 64) };
+        emit_drawn_chars(buf, 2);
+        *line_col += 2;
+        return true;
+    }
+    // I guess 128-255 get rendered verbatim.
+    // Making this a 1-element array is my own neurosis.
+    char buf[1] = { char(ch) };
+    emit_drawn_chars(buf, 1);
+    ++*line_col;
+    return true;
+}
+
 void redraw_state(int term, const terminal_size& window, const qwi::state& state) {
     terminal_frame frame = init_frame(window);
 
@@ -233,60 +265,32 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
         }
 
         uint8_t ch = uint8_t(state.buf[i]);
-        if (ch == '\n') {
+
+        bool res = compute_char_rendering(ch, &line_col, [&](const char *buf, size_t count) {
+            // Always, count > 0.
+            for (size_t j = 0; j < count - 1; ++j) {
+                render_row[col] = buf[j];
+                ++col;
+                if (col == window.cols) {
+                    copy_row_if_visible();
+                }
+            }
+            render_row[col] = buf[count - 1];
+            ++col;
+            ++i;
+            if (col == window.cols) {
+                copy_row_if_visible();
+            }
+        });
+        if (!res) {
             // TODO: We could use '\x1bK'
             // clear to EOL
             do {
                 render_row[col] = ' ';
                 ++col;
             } while (col < window.cols);
-            line_col = 0;
             ++i;
             copy_row_if_visible();
-        } else if (ch == '\t') {
-            size_t next_line_col = size_add(line_col | 7, 1);
-            do {
-                render_row[col] = ' ';
-                ++col;
-                ++line_col;
-                if (col == window.cols) {
-                    copy_row_if_visible();
-                }
-            } while (line_col < next_line_col - 1 && row < window.rows);
-            // line_col == next_line_col - 1 now.  This time we increment i because the
-            // last character was rendered.  Thus if \t's rendering ends at window.col,
-            // we'll behave correctly.
-            render_row[col] = ' ';
-            ++col;
-            ++line_col;
-            ++i;
-            if (col == window.cols) {
-                copy_row_if_visible();
-            }
-        } else if (ch < 32 || ch == 127) {
-            render_row[col] = '^';
-            ++col;
-            ++line_col;
-            if (col == window.cols) {
-                copy_row_if_visible();
-            }
-            render_row[col] = (ch ^ 64);
-            ++col;
-            ++line_col;
-            ++i;
-            if (col == window.cols) {
-                copy_row_if_visible();
-            }
-        } else {
-            // TODO: Make this the first branch.
-            // I guess 128-255 get rendered verbatim.
-            render_row[col] = ch;
-            ++col;
-            ++line_col;
-            ++i;
-            if (col == window.cols) {
-                copy_row_if_visible();
-            }
         }
     }
 
