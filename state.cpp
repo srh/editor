@@ -4,7 +4,7 @@
 
 namespace qwi {
 
-size_t buffer::current_column() const {
+size_t buffer::cursor_distance_to_beginning_of_line() const {
     size_t ix = bef.find_last_of('\n');
     // this works in the std::string::npos case too
     return bef.size() - ix - 1;

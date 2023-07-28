@@ -216,6 +216,19 @@ bool compute_char_rendering(const uint8_t ch,
     return true;
 }
 
+size_t current_column(const qwi::buffer& buf) {
+    size_t line_col = 0;
+    bool saw_newline = false;
+    const size_t cursor = buf.cursor();
+    for (size_t i = cursor - buf.cursor_distance_to_beginning_of_line(); i < cursor; ++i) {
+        uint8_t ch = uint8_t(buf[i]);
+        saw_newline |= !compute_char_rendering(ch, &line_col, [](const char *, size_t) { });
+    }
+    runtime_check(!saw_newline, "encountered impossible newline in current_column");
+
+    return line_col;
+}
+
 void redraw_state(int term, const terminal_size& window, const qwi::state& state) {
     terminal_frame frame = init_frame(window);
 
@@ -320,25 +333,26 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
 
 void insert_char(qwi::buffer *buf, char sch) {
     buf->bef.push_back(sch);
-    buf->virtual_column = buf->current_column();
+    // TODO: Don't recompute virtual_column every time.
+    buf->virtual_column = current_column(*buf);
 }
 // Cheap fn for debugging purposes.
 void push_printable_repr(std::string *str, char sch);
 void insert_printable_repr(qwi::buffer *buf, char sch) {
     push_printable_repr(&buf->bef, sch);
-    buf->virtual_column = buf->current_column();
+    buf->virtual_column = current_column(*buf);
 }
 void backspace_char(qwi::buffer *buf) {
     if (!buf->bef.empty()) {
         buf->bef.pop_back();
     }
-    buf->virtual_column = buf->current_column();
+    buf->virtual_column = current_column(*buf);
 }
 void delete_char(qwi::buffer *buf) {
     // erase checks if (!buf->aft.empty()).
     buf->aft.erase(0, 1);
     // TODO: We don't do this for doDeleteRight (or doAppendRight) in jsmacs -- the bug is in jsmacs!
-    buf->virtual_column = buf->current_column();
+    buf->virtual_column = current_column(*buf);
 }
 
 void move_right(qwi::buffer *buf) {
@@ -347,7 +361,7 @@ void move_right(qwi::buffer *buf) {
     }
     buf->bef.push_back(buf->aft.front());
     buf->aft.erase(0, 1);
-    buf->virtual_column = buf->current_column();
+    buf->virtual_column = current_column(*buf);
 }
 
 void move_left(qwi::buffer *buf) {
@@ -356,7 +370,7 @@ void move_left(qwi::buffer *buf) {
     }
     buf->aft.insert(buf->aft.begin(), buf->bef.back());
     buf->bef.pop_back();
-    buf->virtual_column = buf->current_column();
+    buf->virtual_column = current_column(*buf);
 }
 
 void move_up(qwi::buffer *buf) {
@@ -389,13 +403,13 @@ void move_down(qwi::buffer *buf) {
 void move_home(qwi::buffer *buf) {
     size_t bolPos = buf->cursor() - qwi::distance_to_beginning_of_line(*buf, buf->cursor());
     buf->set_cursor(bolPos);
-    buf->virtual_column = buf->current_column();
+    buf->virtual_column = current_column(*buf);
 }
 
 void move_end(qwi::buffer *buf) {
     size_t eolPos = buf->cursor() + qwi::distance_to_eol(*buf, buf->cursor());
     buf->set_cursor(eolPos);
-    buf->virtual_column = buf->current_column();
+    buf->virtual_column = current_column(*buf);
 }
 
 void push_printable_repr(std::string *str, char sch) {

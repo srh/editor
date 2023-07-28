@@ -40,9 +40,9 @@ struct buffer {
     window_size window;
     // 0 <= first_visible_offset <= size().
     size_t first_visible_offset = 0;
-    // TODO: current_column is nonsense -- it doesn't account for tab characters or
-    // double-wide.  We don't really want to have or use this function.
-    size_t current_column() const;
+
+    // Returns distance_to_beginning_of_line(*this, this->cursor()).
+    size_t cursor_distance_to_beginning_of_line() const;
 
     void set_window(const window_size& win) { window = win; }
 };
