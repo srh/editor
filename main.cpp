@@ -404,16 +404,19 @@ void move_up(qwi::buffer *buf) {
     // "real" line.  For each row, we'll track the current proposed cursor position,
     // should that row end up being the previous line.
     size_t col = 0;
+    size_t line_col = 0;
     size_t prev_row_cursor_proposal = SIZE_MAX;
     size_t current_row_cursor_proposal = bol;
     for (size_t i = bol; i < cursor; ++i) {
         uint8_t ch = uint8_t((*buf)[i]);
-        char_rendering rend = compute_char_rendering(ch, &col);
+        char_rendering rend = compute_char_rendering(ch, &line_col);
         if (rend.count == SIZE_MAX) {
             // is eol
             prev_row_cursor_proposal = current_row_cursor_proposal;
+            col = 0;
             current_row_cursor_proposal = i + 1;
         } else {
+            col += rend.count;
             if (col >= window_cols) {
                 // Line wrapping case.
                 col -= window_cols;
@@ -447,7 +450,8 @@ void move_down(qwi::buffer *buf) {
     const size_t target_column = buf->virtual_column % window_cols;
 
     // Remember we do some traversing in current_column.
-    size_t col = current_column(*buf) % window_cols;
+    size_t line_col = current_column(*buf);
+    size_t col = line_col % window_cols;
 
     // Simple: We walk forward until the number of rows traversed is >= 1 _and_ we're at
     // either the first char of the row or the last char whose col is <= target_column.
@@ -456,14 +460,16 @@ void move_down(qwi::buffer *buf) {
     size_t candidate_index = SIZE_MAX;
     for (size_t i = buf->cursor(), e = buf->size(); i < e; ++i) {
         uint8_t ch = uint8_t((*buf)[i]);
-        char_rendering rend = compute_char_rendering(ch, &col);
+        char_rendering rend = compute_char_rendering(ch, &line_col);
         if (rend.count == SIZE_MAX) {
             if (candidate_index != SIZE_MAX) {
                 break;
             }
+            col = 0;
             // The first index of the next line is always a candidate.
             candidate_index = i + 1;
         } else {
+            col += rend.count;
             if (col >= window_cols) {
                 if (candidate_index != SIZE_MAX) {
                     break;
