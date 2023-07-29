@@ -28,6 +28,7 @@ struct buffer {
     char at(size_t i) const {
         return i < bef.size() ? bef[i] : aft.at(i - bef.size());
     }
+    // TODO: Remove.  Too dangerous because we use `qwi::buffer*` too often.
     char operator[](size_t i) const {
         return i < bef.size() ? bef[i] : aft[i - bef.size()];
     }

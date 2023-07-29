@@ -374,17 +374,69 @@ void move_left(qwi::buffer *buf) {
 }
 
 void move_up(qwi::buffer *buf) {
-    // TODO: This virtual_column logic doesn't work with tab characters.
-    // TODO: This is a bit convoluted because it's based on jsmacs code.
-    size_t c = buf->virtual_column;
-    size_t bolPos = buf->cursor() - qwi::distance_to_beginning_of_line(*buf, buf->cursor());
-    size_t leftBolPos = bolPos - (bolPos != 0);
-    // end of previous line, or our line if we're on the first line.
-    size_t endOfLine = leftBolPos + qwi::distance_to_eol(*buf, leftBolPos);
-    size_t d = qwi::distance_to_beginning_of_line(*buf, endOfLine);
-    size_t begOfLine = endOfLine - qwi::distance_to_beginning_of_line(*buf, endOfLine);
-    size_t nextPos = begOfLine + std::min(c, d);
-    buf->set_cursor(nextPos);
+    const size_t window_cols = buf->window.cols;
+    // We're not interested in virtual_column as a "line column" -- just interested in the
+    // visual distance to beginning of line.
+    const size_t target_column = buf->virtual_column % window_cols;
+
+    // Basically we want the output of the following algorithm:
+    // 1. Render the current line up to the cursor.
+    // 2. Note the row the cursor's on.
+    // 3. Back up to the previous row.
+    // 4. If at least one character starts on the preceding row, set the cursor to the greater of:
+    //    - the last character whose starting column is <= virtual_column
+    //    - the first character that starts on the preceding row
+    // 4-b. If NO characters start on the preceding row (e.g. window_cols == 3 and we have
+    // a tab character), set the cursor to the last character that starts before the
+    // preceding row.
+
+    // Note that Emacs (in GUI mode, at least) never encounters the 4-b case because it
+    // switches to line truncation when the window width gets low.
+
+    const size_t cursor = buf->cursor();
+    const size_t bol1 = cursor - buf->cursor_distance_to_beginning_of_line();
+    const size_t bol = bol1 == 0 ? 0 : (bol1 - 1) - qwi::distance_to_beginning_of_line(*buf, bol1 - 1);
+
+    // So we're going to render forward from bol, which is the beginning of the previous
+    // "real" line.  For each row, we'll track the current proposed cursor position,
+    // should that row end up being the previous line.
+    size_t col = 0;
+    size_t prev_row_cursor_proposal = SIZE_MAX;
+    size_t current_row_cursor_proposal = bol;
+    for (size_t i = bol; i < cursor; ++i) {
+        uint8_t ch = uint8_t((*buf)[i]);
+        bool not_eol = compute_char_rendering(ch, &col, [&](const char *, size_t) {});
+        if (!not_eol) {
+            // is eol
+            prev_row_cursor_proposal = current_row_cursor_proposal;
+            current_row_cursor_proposal = i + 1;
+        } else {
+            if (col >= window_cols) {
+                // Line wrapping case.
+                col -= window_cols;
+                prev_row_cursor_proposal = current_row_cursor_proposal;
+                if (col >= window_cols) {
+                    // Special narrow window case.
+                    prev_row_cursor_proposal = i;
+                    do {
+                        col -= window_cols;
+                    } while (col >= window_cols);
+                }
+
+                current_row_cursor_proposal = i + 1;
+            } else {
+                if (col <= target_column) {
+                    current_row_cursor_proposal = i + 1;
+                }
+            }
+        }
+    }
+
+    if (prev_row_cursor_proposal == SIZE_MAX) {
+        // We're already on the top row.
+        return;
+    }
+    buf->set_cursor(prev_row_cursor_proposal);
 }
 
 void move_down(qwi::buffer *buf) {
