@@ -184,36 +184,38 @@ qwi::state initial_state(const command_line_args& args, const terminal_size& win
     return state;
 }
 
+struct char_rendering {
+    char buf[8];
+    size_t count;  // SIZE_MAX means newline
+};
+
 // Returns true if not '\n'.  Sets *line_col in any case.  Calls emit_drawn_chars(char *,
 // size_t) once to pass out chars to be rendered in the terminal (except when a newline is
 // encountered).  Always passes a count of 1 or greater to emit_drawn_chars.
-template <class C>
-bool compute_char_rendering(const uint8_t ch,
-                            size_t *line_col, C&& emit_drawn_chars) {
+char_rendering compute_char_rendering(const uint8_t ch, size_t *line_col) {
+    char_rendering ret;
     if (ch == '\n') {
         *line_col = 0;
-        return false;
+        ret.count = SIZE_MAX;
+    } else {
+        if (ch == '\t') {
+            size_t next_line_col = size_add((*line_col) | 7, 1);
+            //             12345678
+            char buf[8] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
+            memcpy(ret.buf, buf, sizeof(ret.buf));
+            ret.count = next_line_col - *line_col;
+        } else if (ch < 32 || ch == 127) {
+            ret.buf[0] = '^';
+            ret.buf[1] = char(ch ^ 64);
+            ret.count = 2;
+        } else {
+            // I guess 128-255 get rendered verbatim.
+            ret.buf[0] = char(ch);
+            ret.count = 1;
+        }
+        *line_col += ret.count;
     }
-    if (ch == '\t') {
-        size_t next_line_col = size_add((*line_col) | 7, 1);
-        //             12345678
-        char buf[8] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
-        emit_drawn_chars(buf, next_line_col - *line_col);
-        *line_col = next_line_col;
-        return true;
-    }
-    if (ch < 32 || ch == 127) {
-        char buf[2] = { '^', char(ch ^ 64) };
-        emit_drawn_chars(buf, 2);
-        *line_col += 2;
-        return true;
-    }
-    // I guess 128-255 get rendered verbatim.
-    // Making this a 1-element array is my own neurosis.
-    char buf[1] = { char(ch) };
-    emit_drawn_chars(buf, 1);
-    ++*line_col;
-    return true;
+    return ret;
 }
 
 size_t current_column(const qwi::buffer& buf) {
@@ -222,7 +224,8 @@ size_t current_column(const qwi::buffer& buf) {
     const size_t cursor = buf.cursor();
     for (size_t i = cursor - buf.cursor_distance_to_beginning_of_line(); i < cursor; ++i) {
         uint8_t ch = uint8_t(buf[i]);
-        saw_newline |= !compute_char_rendering(ch, &line_col, [](const char *, size_t) { });
+        char_rendering rend = compute_char_rendering(ch, &line_col);
+        saw_newline |= (rend.count == SIZE_MAX);
     }
     runtime_check(!saw_newline, "encountered impossible newline in current_column");
 
@@ -279,23 +282,23 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
 
         uint8_t ch = uint8_t(state.buf[i]);
 
-        bool res = compute_char_rendering(ch, &line_col, [&](const char *buf, size_t count) {
+        char_rendering rend = compute_char_rendering(ch, &line_col);
+        if (rend.count != SIZE_MAX) {
             // Always, count > 0.
-            for (size_t j = 0; j < count - 1; ++j) {
-                render_row[col] = buf[j];
+            for (size_t j = 0; j < rend.count - 1; ++j) {
+                render_row[col] = rend.buf[j];
                 ++col;
                 if (col == window.cols) {
                     copy_row_if_visible();
                 }
             }
-            render_row[col] = buf[count - 1];
+            render_row[col] = rend.buf[rend.count - 1];
             ++col;
             ++i;
             if (col == window.cols) {
                 copy_row_if_visible();
             }
-        });
-        if (!res) {
+        } else {
             // TODO: We could use '\x1bK'
             // clear to EOL
             do {
@@ -405,8 +408,8 @@ void move_up(qwi::buffer *buf) {
     size_t current_row_cursor_proposal = bol;
     for (size_t i = bol; i < cursor; ++i) {
         uint8_t ch = uint8_t((*buf)[i]);
-        bool not_eol = compute_char_rendering(ch, &col, [](const char *, size_t) {});
-        if (!not_eol) {
+        char_rendering rend = compute_char_rendering(ch, &col);
+        if (rend.count == SIZE_MAX) {
             // is eol
             prev_row_cursor_proposal = current_row_cursor_proposal;
             current_row_cursor_proposal = i + 1;
@@ -453,8 +456,8 @@ void move_down(qwi::buffer *buf) {
     size_t candidate_index = SIZE_MAX;
     for (size_t i = buf->cursor(), e = buf->size(); i < e; ++i) {
         uint8_t ch = uint8_t((*buf)[i]);
-        bool not_eol = compute_char_rendering(ch, &col, [](const char *, size_t) {});
-        if (!not_eol) {
+        char_rendering rend = compute_char_rendering(ch, &col);
+        if (rend.count == SIZE_MAX) {
             if (candidate_index != SIZE_MAX) {
                 break;
             }
