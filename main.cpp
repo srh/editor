@@ -405,7 +405,7 @@ void move_up(qwi::buffer *buf) {
     size_t current_row_cursor_proposal = bol;
     for (size_t i = bol; i < cursor; ++i) {
         uint8_t ch = uint8_t((*buf)[i]);
-        bool not_eol = compute_char_rendering(ch, &col, [&](const char *, size_t) {});
+        bool not_eol = compute_char_rendering(ch, &col, [](const char *, size_t) {});
         if (!not_eol) {
             // is eol
             prev_row_cursor_proposal = current_row_cursor_proposal;
@@ -440,16 +440,49 @@ void move_up(qwi::buffer *buf) {
 }
 
 void move_down(qwi::buffer *buf) {
-    // TODO: This virtual_column logic doesn't work with tab characters.
-    size_t c = buf->virtual_column;
-    // position of next newline (or: end of buffer):
-    size_t eolPos = buf->cursor() + qwi::distance_to_eol(*buf, buf->cursor());
-    // beginning of next line (or: end of buffer):
-    size_t nextLinePos = eolPos + (eolPos != buf->size());
-    // size of next line (or: zero)
-    size_t d = qwi::distance_to_eol(*buf, nextLinePos);
-    size_t nextPos = nextLinePos + std::min(c, d);
-    buf->set_cursor(nextPos);
+    const size_t window_cols = buf->window.cols;
+    const size_t target_column = buf->virtual_column % window_cols;
+
+    // Remember we do some traversing in current_column.
+    size_t col = current_column(*buf) % window_cols;
+
+    // Simple: We walk forward until the number of rows traversed is >= 1 _and_ we're at
+    // either the first char of the row or the last char whose col is <= target_column.
+    // We use candidate_index != SIZE_MAX to determine if we've entered the next line.
+
+    size_t candidate_index = SIZE_MAX;
+    for (size_t i = buf->cursor(), e = buf->size(); i < e; ++i) {
+        uint8_t ch = uint8_t((*buf)[i]);
+        bool not_eol = compute_char_rendering(ch, &col, [](const char *, size_t) {});
+        if (!not_eol) {
+            if (candidate_index != SIZE_MAX) {
+                break;
+            }
+            // The first index of the next line is always a candidate.
+            candidate_index = i + 1;
+        } else {
+            if (col >= window_cols) {
+                if (candidate_index != SIZE_MAX) {
+                    break;
+                }
+                do {
+                    col -= window_cols;
+                } while (col >= window_cols);
+                // The first index of the next line is always a candidate.
+                candidate_index = i + 1;
+            } else {
+                if (candidate_index != SIZE_MAX && col <= target_column) {
+                    candidate_index = i + 1;
+                }
+            }
+        }
+    }
+
+    if (candidate_index == SIZE_MAX) {
+        candidate_index = buf->size();
+    }
+
+    buf->set_cursor(candidate_index);
 }
 
 void move_home(qwi::buffer *buf) {
