@@ -378,12 +378,23 @@ void kill_line(qwi::buffer *buf) {
     }
 }
 
+void move_right_by(qwi::buffer *buf, size_t count) {
+    count = std::min<size_t>(count, buf->aft.size());
+    buf->bef.append(buf->aft, 0, count);
+    buf->aft.erase(0, count);
+    // TODO: Should we set virtual_column if count is 0?  (Can count be 0?)
+    buf->virtual_column = current_column(*buf);
+}
+
 void move_right(qwi::buffer *buf) {
-    if (buf->aft.empty()) {
-        return;
-    }
-    buf->bef.push_back(buf->aft.front());
-    buf->aft.erase(0, 1);
+    move_right_by(buf, 1);
+}
+
+void move_left_by(qwi::buffer *buf, size_t count) {
+    count = std::min<size_t>(count, buf->bef.size());
+    buf->aft.insert(0, buf->bef, buf->bef.size() - count, count);
+    buf->bef.resize(buf->bef.size() - count);
+    // TODO: Should we set virtual_column if count is 0?  (Can count be 0?)
     buf->virtual_column = current_column(*buf);
 }
 
@@ -394,6 +405,55 @@ void move_left(qwi::buffer *buf) {
     buf->aft.insert(buf->aft.begin(), buf->bef.back());
     buf->bef.pop_back();
     buf->virtual_column = current_column(*buf);
+}
+
+bool is_solid(uint8_t ch) {
+    // Used by move_forward_word, move_backward_word.
+    return (ch >= 'a' && ch <= 'z') ||
+        (ch >= 'A' && ch <= 'Z') ||
+        (ch >= '0' && ch <= '9');
+}
+
+size_t forward_word_distance(const qwi::buffer *buf) {
+    const size_t cursor = buf->cursor();
+    size_t i = cursor;
+    bool reachedSolid = false;
+    for (; i < buf->size(); ++i) {
+        uint8_t ch = uint8_t((*buf)[i]);
+        if (is_solid(ch)) {
+            reachedSolid = true;
+        } else if (reachedSolid) {
+            break;
+        }
+    }
+    return i - cursor;
+}
+
+size_t backward_word_distance(const qwi::buffer *buf) {
+    const size_t cursor = buf->cursor();
+    size_t count = 0;
+    bool reachedSolid = false;
+    while (count < cursor) {
+        uint8_t ch = uint8_t((*buf)[cursor - (count + 1)]);
+        if (is_solid(ch)) {
+            reachedSolid = true;
+        } else if (reachedSolid) {
+            break;
+        }
+
+        ++count;
+    }
+    return count;
+}
+
+void move_forward_word(qwi::buffer *buf) {
+    size_t d = forward_word_distance(buf);
+    move_right_by(buf, d);
+}
+
+void move_backward_word(qwi::buffer *buf) {
+    size_t d = backward_word_distance(buf);
+    move_left_by(buf, d);
 }
 
 void move_up(qwi::buffer *buf) {
@@ -633,6 +693,14 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
                     }
                 }
             }
+        } else if (ch == 'f') {
+            // M-f
+            move_forward_word(&state->buf);
+            chars_read.clear();
+        } else if (ch == 'b') {
+            // M-b
+            move_backward_word(&state->buf);
+            chars_read.clear();
         }
         // Insert for the user (the developer, me) unrecognized escape codes.
         if (!chars_read.empty()) {
@@ -642,7 +710,7 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
                 insert_char(&state->buf, c);
             }
         }
-    } else if (ch < 32 || ch == 127) {
+    } else if (ch >= 0 && ch <= 127) {
         switch (ch ^ CTRL_XOR_MASK) {
         case 'A':
             move_home(&state->buf);
@@ -681,7 +749,8 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
             insert_printable_repr(&state->buf, ch);
         }
     } else {
-        // TODO: Handle other possible control chars.
+        // TODO: Handle high characters -- do we just insert them, or do we validate
+        // UTF-8, or what?
         insert_printable_repr(&state->buf, ch);
     }
 }
