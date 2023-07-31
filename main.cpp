@@ -226,7 +226,7 @@ size_t current_column(const qwi::buffer& buf) {
     bool saw_newline = false;
     const size_t cursor = buf.cursor();
     for (size_t i = cursor - buf.cursor_distance_to_beginning_of_line(); i < cursor; ++i) {
-        uint8_t ch = uint8_t(buf[i]);
+        uint8_t ch = uint8_t(buf.get(i));
         char_rendering rend = compute_char_rendering(ch, &line_col);
         saw_newline |= (rend.count == SIZE_MAX);
     }
@@ -283,7 +283,7 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
             render_cursor = col;
         }
 
-        uint8_t ch = uint8_t(state.buf[i]);
+        uint8_t ch = uint8_t(state.buf.get(i));
 
         char_rendering rend = compute_char_rendering(ch, &line_col);
         if (rend.count != SIZE_MAX) {
@@ -419,7 +419,7 @@ size_t forward_word_distance(const qwi::buffer *buf) {
     size_t i = cursor;
     bool reachedSolid = false;
     for (; i < buf->size(); ++i) {
-        uint8_t ch = uint8_t((*buf)[i]);
+        uint8_t ch = uint8_t(buf->get(i));
         if (is_solid(ch)) {
             reachedSolid = true;
         } else if (reachedSolid) {
@@ -434,7 +434,7 @@ size_t backward_word_distance(const qwi::buffer *buf) {
     size_t count = 0;
     bool reachedSolid = false;
     while (count < cursor) {
-        uint8_t ch = uint8_t((*buf)[cursor - (count + 1)]);
+        uint8_t ch = uint8_t(buf->get(cursor - (count + 1)));
         if (is_solid(ch)) {
             reachedSolid = true;
         } else if (reachedSolid) {
@@ -488,7 +488,7 @@ void move_up(qwi::buffer *buf) {
     size_t prev_row_cursor_proposal = SIZE_MAX;
     size_t current_row_cursor_proposal = bol;
     for (size_t i = bol; i < cursor; ++i) {
-        uint8_t ch = uint8_t((*buf)[i]);
+        uint8_t ch = uint8_t(buf->get(i));
         char_rendering rend = compute_char_rendering(ch, &line_col);
         if (rend.count == SIZE_MAX) {
             // is eol
@@ -539,7 +539,7 @@ void move_down(qwi::buffer *buf) {
 
     size_t candidate_index = SIZE_MAX;
     for (size_t i = buf->cursor(), e = buf->size(); i < e; ++i) {
-        uint8_t ch = uint8_t((*buf)[i]);
+        uint8_t ch = uint8_t(buf->get(i));
         char_rendering rend = compute_char_rendering(ch, &line_col);
         if (rend.count == SIZE_MAX) {
             if (candidate_index != SIZE_MAX) {
@@ -710,7 +710,7 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
                 insert_char(&state->buf, c);
             }
         }
-    } else if (ch >= 0 && ch <= 127) {
+    } else if (uint8_t(ch) <= 127) {
         switch (ch ^ CTRL_XOR_MASK) {
         case 'A':
             move_home(&state->buf);

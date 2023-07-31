@@ -24,7 +24,7 @@ void buffer::set_cursor(size_t pos) {
 size_t distance_to_eol(const qwi::buffer& buf, size_t pos) {
     size_t p = pos;
     for (size_t e = buf.size(); p < e; ++p) {
-        if (buf[p] == '\n') {
+        if (buf.get(p) == '\n') {
             break;
         }
     }
@@ -39,7 +39,7 @@ size_t distance_to_beginning_of_line(const qwi::buffer& buf, size_t pos) {
             return pos;
         }
         --p;
-        if (buf[p] == '\n') {
+        if (buf.get(p) == '\n') {
             return pos - (p + 1);
         }
     }
