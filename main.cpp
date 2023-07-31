@@ -360,6 +360,23 @@ void delete_char(qwi::buffer *buf) {
     // TODO: We don't do this for doDeleteRight (or doAppendRight) in jsmacs -- the bug is in jsmacs!
     buf->virtual_column = current_column(*buf);
 }
+void delete_right(qwi::buffer *buf, size_t count) {
+    // erase checks if size too big.
+    buf->aft.erase(0, count);
+    // TODO: We don't do this for doDeleteRight (or doAppendRight) in jsmacs -- the bug is in jsmacs!
+    buf->virtual_column = current_column(*buf);
+}
+void kill_line(qwi::buffer *buf) {
+    // TODO: Store killed lines and clumps in kill ring.
+    size_t eolDistance = qwi::distance_to_eol(*buf, buf->cursor());
+
+    if (eolDistance == 0 && buf->cursor() < buf->size()) {
+        // TODO: Record yank of this newline character.
+        delete_char(buf);
+    } else {
+        delete_right(buf, eolDistance);
+    }
+}
 
 void move_right(qwi::buffer *buf) {
     if (buf->aft.empty()) {
@@ -560,9 +577,6 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
         // Ctrl+backslash
         *exit_loop = true;
         // TODO: Drop exit var and just break; here?  We have a spurious redraw.  Or just abort?
-    } else if (ch == 127) {
-        // Backspace.
-        backspace_char(&state->buf);
     } else if (ch == 27) {
         std::string chars_read;
         check_read_tty_char(term, &ch);
@@ -628,11 +642,45 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
                 insert_char(&state->buf, c);
             }
         }
+    } else if (ch < 32 || ch == 127) {
+        switch (ch ^ CTRL_XOR_MASK) {
+        case 'A':
+            move_home(&state->buf);
+            break;
+        case 'B':
+            move_left(&state->buf);
+            break;
+        case 'D':
+            delete_char(&state->buf);
+            break;
+        case 'E':
+            move_end(&state->buf);
+            break;
+        case 'F':
+            move_right(&state->buf);
+            break;
+        case 'N':
+            move_down(&state->buf);
+            break;
+        case 'P':
+            move_up(&state->buf);
+            break;
+        case '?':
+            backspace_char(&state->buf);
+            break;
+        case 'K':
+            kill_line(&state->buf);
+            break;
+        case 'W':
+        case 'Y':
+        case '@':
+            // Ctrl+Space same as C-@
+        default:
+            // For now we do push the printable repr for any unhandled chars, for debugging purposes.
+            // TODO: Handle other possible control chars.
+            insert_printable_repr(&state->buf, ch);
+        }
     } else {
-        
-
-
-        // For now we do push the printable repr for any unhandled chars, for debugging purposes.
         // TODO: Handle other possible control chars.
         insert_printable_repr(&state->buf, ch);
     }
