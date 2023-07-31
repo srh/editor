@@ -59,6 +59,20 @@ struct state {
 size_t distance_to_eol(const qwi::buffer& buf, size_t pos);
 size_t distance_to_beginning_of_line(const qwi::buffer& buf, size_t pos);
 
+struct clipboard {
+    // A list of strings stored in the clipboard.
+    std::vector<std::string> clips;
+    // Did we just record some text?  Future text recordings will be appended to the
+    // previous.  For example, if we typed C-k C-k C-k, we'd want those contiguous
+    // cuttings to be concatenated into one.
+    bool justRecorded = false;
+    // How many times have we pasted in a row, using M-y?
+    size_t pasteNumber = 0;
+    // Did we just yank some text from the clipboard?  This number tells how much text we
+    // just yanked.
+    std::optional<size_t> justYanked;
+};
+
 }  // namespace qwi
 
 #endif  // QWERTILLION_STATE_HPP_
