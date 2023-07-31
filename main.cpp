@@ -189,6 +189,9 @@ struct char_rendering {
     size_t count;  // SIZE_MAX means newline
 };
 
+constexpr uint8_t CTRL_XOR_MASK = 64;
+constexpr uint8_t TAB_MOD_MASK = 7;  // 8 is hard-coded tab stop
+
 // Returns true if not '\n'.  Sets *line_col in any case.  Calls emit_drawn_chars(char *,
 // size_t) once to pass out chars to be rendered in the terminal (except when a newline is
 // encountered).  Always passes a count of 1 or greater to emit_drawn_chars.
@@ -199,14 +202,14 @@ char_rendering compute_char_rendering(const uint8_t ch, size_t *line_col) {
         ret.count = SIZE_MAX;
     } else {
         if (ch == '\t') {
-            size_t next_line_col = size_add((*line_col) | 7, 1);
+            size_t next_line_col = size_add((*line_col) | TAB_MOD_MASK, 1);
             //             12345678
             char buf[8] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
             memcpy(ret.buf, buf, sizeof(ret.buf));
             ret.count = next_line_col - *line_col;
         } else if (ch < 32 || ch == 127) {
             ret.buf[0] = '^';
-            ret.buf[1] = char(ch ^ 64);
+            ret.buf[1] = char(ch ^ CTRL_XOR_MASK);
             ret.count = 2;
         } else {
             // I guess 128-255 get rendered verbatim.
@@ -626,6 +629,10 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
             }
         }
     } else {
+        
+
+
+        // For now we do push the printable repr for any unhandled chars, for debugging purposes.
         // TODO: Handle other possible control chars.
         insert_printable_repr(&state->buf, ch);
     }
