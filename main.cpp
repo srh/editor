@@ -337,10 +337,18 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
     write_frame(term, frame);
 }
 
-void insert_char(qwi::buffer *buf, char sch) {
-    buf->bef.push_back(sch);
+void insert_chars(qwi::buffer *buf, const char *chs, size_t count) {
+    size_t og_cursor = buf->cursor();
+    buf->bef.append(chs, count);
+    if (buf->mark.has_value()) {
+        *buf->mark += (*buf->mark > og_cursor ? count : 0);
+    }
     // TODO: Don't recompute virtual_column every time.
     buf->virtual_column = current_column(*buf);
+}
+
+void insert_char(qwi::buffer *buf, char sch) {
+    insert_chars(buf, &sch, 1);
 }
 // Cheap fn for debugging purposes.
 void push_printable_repr(std::string *str, char sch);
@@ -348,23 +356,39 @@ void insert_printable_repr(qwi::buffer *buf, char sch) {
     push_printable_repr(&buf->bef, sch);
     buf->virtual_column = current_column(*buf);
 }
-void backspace_char(qwi::buffer *buf) {
-    if (!buf->bef.empty()) {
-        buf->bef.pop_back();
+
+void delete_left(qwi::buffer *buf, size_t count) {
+    count = std::min<size_t>(count, buf->bef.size());
+    size_t og_cursor = buf->cursor();
+    buf->bef.resize(buf->bef.size() - count);
+    if (buf->mark.has_value()) {
+        if (*buf->mark > og_cursor) {
+            *buf->mark -= count;
+        } else {
+            *buf->mark = std::min<size_t>(*buf->mark, og_cursor - count);
+        }
     }
+
+    buf->virtual_column = current_column(*buf);
+}
+
+void backspace_char(qwi::buffer *buf) {
+    delete_left(buf, 1);
+}
+
+void delete_right(qwi::buffer *buf, size_t count) {
+    size_t cursor = buf->cursor();
+    count = std::min<size_t>(count, buf->aft.size());
+    buf->aft.erase(0, count);
+    if (buf->mark.has_value()) {
+        *buf->mark += (*buf->mark > cursor) ? count : 0;
+    }
+
+    // TODO: We don't do this for doDeleteRight (or doAppendRight) in jsmacs -- the bug is in jsmacs!
     buf->virtual_column = current_column(*buf);
 }
 void delete_char(qwi::buffer *buf) {
-    // erase checks if (!buf->aft.empty()).
-    buf->aft.erase(0, 1);
-    // TODO: We don't do this for doDeleteRight (or doAppendRight) in jsmacs -- the bug is in jsmacs!
-    buf->virtual_column = current_column(*buf);
-}
-void delete_right(qwi::buffer *buf, size_t count) {
-    // erase checks if size too big.
-    buf->aft.erase(0, count);
-    // TODO: We don't do this for doDeleteRight (or doAppendRight) in jsmacs -- the bug is in jsmacs!
-    buf->virtual_column = current_column(*buf);
+    delete_right(buf, 1);
 }
 void kill_line(qwi::buffer *buf) {
     // TODO: Store killed lines and clumps in kill ring.
@@ -586,6 +610,10 @@ void move_end(qwi::buffer *buf) {
     buf->virtual_column = current_column(*buf);
 }
 
+void set_mark(qwi::buffer *buf) {
+    buf->mark = buf->cursor();
+}
+
 void push_printable_repr(std::string *str, char sch) {
     uint8_t ch = uint8_t(sch);
     if (ch == '\n' || ch == '\t') {
@@ -743,6 +771,8 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
         case 'Y':
         case '@':
             // Ctrl+Space same as C-@
+            set_mark(&state->buf);
+            break;
         default:
             // For now we do push the printable repr for any unhandled chars, for debugging purposes.
             // TODO: Handle other possible control chars.
