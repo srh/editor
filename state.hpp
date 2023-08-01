@@ -9,14 +9,20 @@ namespace qwi {
 
 struct window_size { uint32_t rows = 0, cols = 0; };
 
+struct buffer_char {
+    uint8_t value;
+
+    friend auto operator<=>(buffer_char, buffer_char) = default;
+};
+
 struct buffer {
     // Used to choose in the list of buffers, unique to the buffer.  Program logic should
     // not allow empty or overlong values.
     std::string name;
 
     // We just have strings for text before/after the cursor.  Very bad perf.
-    std::string bef;
-    std::string aft;
+    std::basic_string<buffer_char> bef;
+    std::basic_string<buffer_char> aft;
 
     // Absolute position of the mark, if there is one.
     std::optional<size_t> mark;
@@ -25,10 +31,10 @@ struct buffer {
     void set_cursor(size_t pos);
     size_t size() const { return bef.size() + aft.size(); }
     // TODO: Make wrapper type for char.
-    char at(size_t i) const {
+    buffer_char at(size_t i) const {
         return i < bef.size() ? bef[i] : aft.at(i - bef.size());
     }
-    char get(size_t i) const {
+    buffer_char get(size_t i) const {
         return i < bef.size() ? bef[i] : aft[i - bef.size()];
     }
 

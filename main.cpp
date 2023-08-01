@@ -14,6 +14,8 @@
 #include "state.hpp"
 #include "terminal.hpp"
 
+using qwi::buffer_char;
+
 struct command_line_args {
     bool version = false;
     bool help = false;
@@ -195,7 +197,8 @@ constexpr uint8_t TAB_MOD_MASK = 7;  // 8 is hard-coded tab stop
 // Returns true if not '\n'.  Sets *line_col in any case.  Calls emit_drawn_chars(char *,
 // size_t) once to pass out chars to be rendered in the terminal (except when a newline is
 // encountered).  Always passes a count of 1 or greater to emit_drawn_chars.
-char_rendering compute_char_rendering(const uint8_t ch, size_t *line_col) {
+char_rendering compute_char_rendering(const buffer_char bch, size_t *line_col) {
+    const uint8_t ch = bch.value;
     char_rendering ret;
     if (ch == '\n') {
         *line_col = 0;
@@ -226,7 +229,7 @@ size_t current_column(const qwi::buffer& buf) {
     bool saw_newline = false;
     const size_t cursor = buf.cursor();
     for (size_t i = cursor - buf.cursor_distance_to_beginning_of_line(); i < cursor; ++i) {
-        uint8_t ch = uint8_t(buf.get(i));
+        buffer_char ch = buf.get(i);
         char_rendering rend = compute_char_rendering(ch, &line_col);
         saw_newline |= (rend.count == SIZE_MAX);
     }
@@ -283,7 +286,7 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
             render_cursor = col;
         }
 
-        uint8_t ch = uint8_t(state.buf.get(i));
+        buffer_char ch = state.buf.get(i);
 
         char_rendering rend = compute_char_rendering(ch, &line_col);
         if (rend.count != SIZE_MAX) {
@@ -337,7 +340,7 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
     write_frame(term, frame);
 }
 
-void insert_chars(qwi::buffer *buf, const char *chs, size_t count) {
+void insert_chars(qwi::buffer *buf, const buffer_char *chs, size_t count) {
     size_t og_cursor = buf->cursor();
     buf->bef.append(chs, count);
     if (buf->mark.has_value()) {
@@ -347,11 +350,15 @@ void insert_chars(qwi::buffer *buf, const char *chs, size_t count) {
     buf->virtual_column = current_column(*buf);
 }
 
-void insert_char(qwi::buffer *buf, char sch) {
+void insert_char(qwi::buffer *buf, buffer_char sch) {
     insert_chars(buf, &sch, 1);
 }
+void insert_char(qwi::buffer *buf, char sch) {
+    buffer_char ch = {uint8_t(sch)};
+    insert_chars(buf, &ch, 1);
+}
 // Cheap fn for debugging purposes.
-void push_printable_repr(std::string *str, char sch);
+void push_printable_repr(std::basic_string<buffer_char> *str, char sch);
 void insert_printable_repr(qwi::buffer *buf, char sch) {
     push_printable_repr(&buf->bef, sch);
     buf->virtual_column = current_column(*buf);
@@ -431,7 +438,8 @@ void move_left(qwi::buffer *buf) {
     buf->virtual_column = current_column(*buf);
 }
 
-bool is_solid(uint8_t ch) {
+bool is_solid(buffer_char bch) {
+    uint8_t ch = bch.value;
     // Used by move_forward_word, move_backward_word.
     return (ch >= 'a' && ch <= 'z') ||
         (ch >= 'A' && ch <= 'Z') ||
@@ -443,7 +451,7 @@ size_t forward_word_distance(const qwi::buffer *buf) {
     size_t i = cursor;
     bool reachedSolid = false;
     for (; i < buf->size(); ++i) {
-        uint8_t ch = uint8_t(buf->get(i));
+        buffer_char ch = buf->get(i);
         if (is_solid(ch)) {
             reachedSolid = true;
         } else if (reachedSolid) {
@@ -458,7 +466,7 @@ size_t backward_word_distance(const qwi::buffer *buf) {
     size_t count = 0;
     bool reachedSolid = false;
     while (count < cursor) {
-        uint8_t ch = uint8_t(buf->get(cursor - (count + 1)));
+        buffer_char ch = buf->get(cursor - (count + 1));
         if (is_solid(ch)) {
             reachedSolid = true;
         } else if (reachedSolid) {
@@ -512,7 +520,7 @@ void move_up(qwi::buffer *buf) {
     size_t prev_row_cursor_proposal = SIZE_MAX;
     size_t current_row_cursor_proposal = bol;
     for (size_t i = bol; i < cursor; ++i) {
-        uint8_t ch = uint8_t(buf->get(i));
+        buffer_char ch = buf->get(i);
         char_rendering rend = compute_char_rendering(ch, &line_col);
         if (rend.count == SIZE_MAX) {
             // is eol
@@ -563,7 +571,7 @@ void move_down(qwi::buffer *buf) {
 
     size_t candidate_index = SIZE_MAX;
     for (size_t i = buf->cursor(), e = buf->size(); i < e; ++i) {
-        uint8_t ch = uint8_t(buf->get(i));
+        buffer_char ch = buf->get(i);
         char_rendering rend = compute_char_rendering(ch, &line_col);
         if (rend.count == SIZE_MAX) {
             if (candidate_index != SIZE_MAX) {
@@ -614,18 +622,18 @@ void set_mark(qwi::buffer *buf) {
     buf->mark = buf->cursor();
 }
 
-void push_printable_repr(std::string *str, char sch) {
+void push_printable_repr(std::basic_string<buffer_char> *str, char sch) {
     uint8_t ch = uint8_t(sch);
     if (ch == '\n' || ch == '\t') {
-        str->push_back(ch);
+        str->push_back(buffer_char{ch});
     } else if (ch < 32 || ch > 126) {
-        str->push_back('\\');
-        str->push_back('x');
+        str->push_back(buffer_char{'\\'});
+        str->push_back(buffer_char{'x'});
         const char *hex = "0123456789abcdef";
-        str->push_back(hex[ch / 16]);
-        str->push_back(hex[ch % 16]);
+        str->push_back(buffer_char{uint8_t(hex[ch / 16])});
+        str->push_back(buffer_char{uint8_t(hex[ch % 16])});
     } else {
-        str->push_back(ch);
+        str->push_back(buffer_char{ch});
     }
 }
 
