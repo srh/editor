@@ -238,15 +238,25 @@ size_t current_column(const qwi::buffer& buf) {
     return line_col;
 }
 
+void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf);
 
 void redraw_state(int term, const terminal_size& window, const qwi::state& state) {
     terminal_frame frame = init_frame(window);
 
-    if (window.cols < 2 || window.rows == 0) {
-        // TODO: This dups code at the bottom of this fn horribly.
-        write_frame(term, frame);
-        return;
+    if (!(window.cols < 2 || window.rows == 0)) {
+        // TODO: Support resizing.
+        runtime_check(window.cols == state.buf.window.cols, "window cols changed");
+        runtime_check(window.rows == state.buf.window.rows, "window rows changed");
+
+        render_frame(&frame, state.buf);
     }
+
+    write_frame(term, frame);
+}
+
+void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf) {
+    terminal_frame& frame = *frame_ptr;
+    const qwi::window_size window = buf.window;
 
     // first_visible_offset is the first rendered character in the buffer -- this may be a
     // tab character or 2-column-rendered control character, only part of which was
@@ -256,7 +266,7 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
     // _after_ incrementing i for the completely rendered character.
 
     // TODO: We actually don't want to re-render a whole line
-    size_t i = state.buf.first_visible_offset - distance_to_beginning_of_line(state.buf, state.buf.first_visible_offset);
+    size_t i = buf.first_visible_offset - distance_to_beginning_of_line(buf, buf.first_visible_offset);
 
     std::vector<char> render_row(window.cols, 0);
     size_t render_cursor = render_row.size();  // Means no cursor on this row.
@@ -267,7 +277,7 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
     // after the last completely written character.  Called precisely when col ==
     // window.cols.
     auto copy_row_if_visible = [&]() {
-        if (i > state.buf.first_visible_offset) {
+        if (i > buf.first_visible_offset) {
             // It simplifies code to throw in this (row < window.rows) check here, instead
             // of carefully calculating where we might need to check it.
             if (row < window.rows) {
@@ -281,13 +291,13 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
             col = 0;
         }
     };
-    while (row < window.rows && i < state.buf.size()) {
+    while (row < window.rows && i < buf.size()) {
         // col < window.cols.
-        if (i == state.buf.cursor()) {
+        if (i == buf.cursor()) {
             render_cursor = col;
         }
 
-        buffer_char ch = state.buf.get(i);
+        buffer_char ch = buf.get(i);
 
         char_rendering rend = compute_char_rendering(ch, &line_col);
         if (rend.count != SIZE_MAX) {
@@ -317,7 +327,7 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
         }
     }
 
-    if (i == state.buf.cursor()) {
+    if (i == buf.cursor()) {
         render_cursor = col;
     }
 
@@ -336,9 +346,6 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
         ++row;
         col = 0;
     }
-
-    // TODO: Early-bailout at top of function duplicates this.
-    write_frame(term, frame);
 }
 
 void insert_chars(qwi::buffer *buf, const buffer_char *chs, size_t count) {
