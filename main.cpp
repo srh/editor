@@ -348,6 +348,7 @@ void insert_chars(qwi::buffer *buf, const buffer_char *chs, size_t count) {
     }
     // TODO: Don't recompute virtual_column every time.
     buf->virtual_column = current_column(*buf);
+    buf->first_visible_offset = std::min(buf->size(), buf->first_visible_offset);
 }
 
 void insert_char(qwi::buffer *buf, buffer_char sch) {
@@ -377,6 +378,7 @@ void delete_left(qwi::buffer *buf, size_t count) {
     }
 
     buf->virtual_column = current_column(*buf);
+    buf->first_visible_offset = std::min(buf->size(), buf->first_visible_offset);
 }
 
 void backspace_char(qwi::buffer *buf) {
@@ -393,6 +395,7 @@ void delete_right(qwi::buffer *buf, size_t count) {
 
     // TODO: We don't do this for doDeleteRight (or doAppendRight) in jsmacs -- the bug is in jsmacs!
     buf->virtual_column = current_column(*buf);
+    buf->first_visible_offset = std::min(buf->size(), buf->first_visible_offset);
 }
 void delete_char(qwi::buffer *buf) {
     delete_right(buf, 1);
