@@ -238,6 +238,7 @@ size_t current_column(const qwi::buffer& buf) {
     return line_col;
 }
 
+
 void redraw_state(int term, const terminal_size& window, const qwi::state& state) {
     terminal_frame frame = init_frame(window);
 
@@ -348,7 +349,7 @@ void insert_chars(qwi::buffer *buf, const buffer_char *chs, size_t count) {
     }
     // TODO: Don't recompute virtual_column every time.
     buf->virtual_column = current_column(*buf);
-    buf->first_visible_offset = std::min(buf->size(), buf->first_visible_offset);
+    buf->first_visible_offset += (buf->first_visible_offset > og_cursor ? count : 0);
 }
 
 void insert_char(qwi::buffer *buf, buffer_char sch) {
@@ -378,7 +379,12 @@ void delete_left(qwi::buffer *buf, size_t count) {
     }
 
     buf->virtual_column = current_column(*buf);
-    buf->first_visible_offset = std::min(buf->size(), buf->first_visible_offset);
+    // TODO: Duplicated logic with *buf->mark.
+    if (buf->first_visible_offset > og_cursor) {
+        buf->first_visible_offset -= count;
+    } else {
+        buf->first_visible_offset = std::min<size_t>(buf->first_visible_offset, og_cursor - count);
+    }
 }
 
 void backspace_char(qwi::buffer *buf) {
@@ -390,12 +396,21 @@ void delete_right(qwi::buffer *buf, size_t count) {
     count = std::min<size_t>(count, buf->aft.size());
     buf->aft.erase(0, count);
     if (buf->mark.has_value()) {
-        *buf->mark += (*buf->mark > cursor) ? count : 0;
+        if (*buf->mark > cursor + count) {
+            *buf->mark -= count;
+        } else if (*buf->mark > cursor) {
+            *buf->mark = cursor;
+        }
     }
 
     // TODO: We don't do this for doDeleteRight (or doAppendRight) in jsmacs -- the bug is in jsmacs!
     buf->virtual_column = current_column(*buf);
-    buf->first_visible_offset = std::min(buf->size(), buf->first_visible_offset);
+    // TODO: Duplicated logic with *buf->mark.
+    if (buf->first_visible_offset > cursor + count) {
+        buf->first_visible_offset -= count;
+    } else if (buf->first_visible_offset > cursor) {
+        buf->first_visible_offset = cursor;
+    }
 }
 void delete_char(qwi::buffer *buf) {
     delete_right(buf, 1);
@@ -406,7 +421,7 @@ void kill_line(qwi::buffer *buf) {
 
     if (eolDistance == 0 && buf->cursor() < buf->size()) {
         // TODO: Record yank of this newline character.
-        delete_char(buf);
+        delete_right(buf, 1);
     } else {
         delete_right(buf, eolDistance);
     }
