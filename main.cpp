@@ -245,10 +245,42 @@ struct render_coord {
 
 void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf, std::vector<render_coord> *coords);
 
+bool too_small_to_render(const terminal_size& window) {
+    return window.cols < 2 || window.rows == 0;
+}
+
+bool cursor_is_offscreen(qwi::buffer *buf, size_t cursor) {
+    terminal_size window = terminal_size{buf->window.rows, buf->window.cols};
+    if (too_small_to_render(window)) {
+        // Return false?
+        return false;
+    }
+
+    terminal_frame frame = init_frame(window);
+    std::vector<render_coord> coords = { {cursor, std::nullopt} };
+    render_frame(&frame, *buf, &coords);
+    return !coords[0].rendered_pos.has_value();
+}
+
+// Scrolls buf so that buf_pos is close to the middle (as close as possible, e.g. if it's
+// too close to the top of the buffer, it'll be above the middle).  buf_pos is probably
+// the cursor position.
+void scroll_to_mid(qwi::buffer *buf, size_t buf_pos) {
+    // TODO: Implement.
+}
+
+void recenter_cursor_if_offscreen(qwi::buffer *buf) {
+    if (cursor_is_offscreen(buf, buf->cursor())) {
+        scroll_to_mid(buf, buf->cursor());
+    }
+}
+
+
+
 void redraw_state(int term, const terminal_size& window, const qwi::state& state) {
     terminal_frame frame = init_frame(window);
 
-    if (!(window.cols < 2 || window.rows == 0)) {
+    if (!too_small_to_render(window)) {
         // TODO: Support resizing.
         runtime_check(window.cols == state.buf.window.cols, "window cols changed");
         runtime_check(window.rows == state.buf.window.rows, "window rows changed");
