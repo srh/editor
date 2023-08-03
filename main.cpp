@@ -106,13 +106,13 @@ size_t size_add(size_t x, size_t y) {
     return x + y;
 }
 
+struct cursor_pos { uint32_t row = 0, col = 0; };
 struct terminal_frame {
     // Carries the presumed window size that the frame was rendered for.
     terminal_size window;
     // Cursor pos (0..<window.*)
 
     // nullopt means it's invisible.
-    struct cursor_pos { uint32_t row = 0, col = 0; };
     std::optional<cursor_pos> cursor;
 
     // data.size() = u32_mul(window.rows, window.cols).
@@ -128,7 +128,7 @@ terminal_frame init_frame(const terminal_size& window) {
 
 terminal_frame render_frame(const terminal_size& window, size_t step) {
     terminal_frame ret = init_frame(window);
-    ret.cursor = terminal_frame::cursor_pos{
+    ret.cursor = cursor_pos{
         .row = uint32_t(step % window.rows),
         .col = uint32_t((step * 3) % window.cols),
     };
@@ -238,7 +238,12 @@ size_t current_column(const qwi::buffer& buf) {
     return line_col;
 }
 
-void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf);
+struct render_coord {
+    size_t buf_pos;
+    std::optional<cursor_pos> rendered_pos;
+};
+
+void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf, std::vector<render_coord> *coords);
 
 void redraw_state(int term, const terminal_size& window, const qwi::state& state) {
     terminal_frame frame = init_frame(window);
@@ -248,13 +253,17 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
         runtime_check(window.cols == state.buf.window.cols, "window cols changed");
         runtime_check(window.rows == state.buf.window.rows, "window rows changed");
 
-        render_frame(&frame, state.buf);
+        std::vector<render_coord> coords = { {state.buf.cursor(), std::nullopt} };
+        render_frame(&frame, state.buf, &coords);
+        frame.cursor = coords[0].rendered_pos;
     }
 
     write_frame(term, frame);
 }
 
-void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf) {
+// render_coords must be sorted by buf_pos.
+// render_frame doesn't render the cursor -- that's computed with render_coords and rendered then.
+void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf, std::vector<render_coord> *render_coords) {
     terminal_frame& frame = *frame_ptr;
     const qwi::window_size window = buf.window;
 
@@ -269,7 +278,8 @@ void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf) {
     size_t i = buf.first_visible_offset - distance_to_beginning_of_line(buf, buf.first_visible_offset);
 
     std::vector<char> render_row(window.cols, 0);
-    size_t render_cursor = render_row.size();  // Means no cursor on this row.
+    size_t render_coords_begin = 0;
+    size_t render_coords_end = 0;
     size_t line_col = 0;
     size_t col = 0;
     size_t row = 0;
@@ -282,19 +292,27 @@ void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf) {
             // of carefully calculating where we might need to check it.
             if (row < window.rows) {
                 memcpy(&frame.data[row * window.cols], render_row.data(), window.cols);
-                if (render_cursor != render_row.size()) {
-                    frame.cursor = { .row = uint32_t(row), .col = uint32_t(render_cursor) };
-                    render_cursor = render_row.size();
+                while (render_coords_begin < render_coords_end) {
+                    (*render_coords)[render_coords_begin].rendered_pos->row = row;
+                    ++render_coords_begin;
                 }
             }
             ++row;
             col = 0;
         }
+        // Note that this only does anything if the while loop above wasn't hit.
+        while (render_coords_begin < render_coords_end) {
+            (*render_coords)[render_coords_begin].rendered_pos = std::nullopt;
+            ++render_coords_begin;
+        }
     };
+    size_t render_coord_target = render_coords_end < render_coords->size() ? (*render_coords)[render_coords_end].buf_pos : SIZE_MAX;
     while (row < window.rows && i < buf.size()) {
         // col < window.cols.
-        if (i == buf.cursor()) {
-            render_cursor = col;
+        while (i == render_coord_target) {
+            (*render_coords)[render_coords_end].rendered_pos = {UINT32_MAX, uint32_t(col)};
+            ++render_coords_end;
+            render_coord_target = render_coords_end < render_coords->size() ? (*render_coords)[render_coords_end].buf_pos : SIZE_MAX;
         }
 
         buffer_char ch = buf.get(i);
@@ -327,8 +345,10 @@ void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf) {
         }
     }
 
-    if (i == buf.cursor()) {
-        render_cursor = col;
+    while (i == render_coord_target) {
+        (*render_coords)[render_coords_end].rendered_pos = {UINT32_MAX, uint32_t(col)};
+        ++render_coords_end;
+        render_coord_target = render_coords_end < render_coords->size() ? (*render_coords)[render_coords_end].buf_pos : SIZE_MAX;
     }
 
     // If we reached end of buffer, we might still need to copy the current render_row and
@@ -339,12 +359,16 @@ void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf) {
             ++col;
         } while (col < window.cols);
         memcpy(&frame.data[row * window.cols], render_row.data(), window.cols);
-        if (render_cursor != render_row.size()) {
-            frame.cursor = { .row = uint32_t(row), .col = uint32_t(render_cursor) };
-            render_cursor = render_row.size();
+        while (render_coords_begin < render_coords_end) {
+            (*render_coords)[render_coords_begin].rendered_pos->row = row;
+            ++render_coords_begin;
         }
         ++row;
         col = 0;
+    }
+    while (render_coords_begin < render_coords_end) {
+        (*render_coords)[render_coords_begin].rendered_pos = std::nullopt;
+        ++render_coords_begin;
     }
 }
 
