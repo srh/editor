@@ -291,11 +291,43 @@ void scroll_to_row(qwi::buffer *buf, const uint32_t rowno, const size_t buf_pos)
         } else {
             // We stepped back too far -- first_visible_offset >= pos and <= previous
             // value of pos.
-            // TODO: Implement for real.
-            buf->first_visible_offset = pos;
-            return;
+            break;
         }
     }
+
+    // We stepped back too far.  We have rows_stepbacked > rowno.  pos is the beginning of
+    // the line.  We want to walk pos forward until we've rendered `rows_stepbacked -
+    // rowno` lines, and compute a new first_visible_offset.
+
+    size_t i = pos;
+    size_t line_col = 0;
+    size_t col = 0;
+    bool saw_newline = false;
+    for (;; ++i) {
+        if (i == buf_pos) {
+            // idk how this would be possible; just a simple way to prove no infinite traversal.
+            buf->first_visible_offset = pos;
+            break;
+        }
+
+        buffer_char ch = buf->get(i);
+        char_rendering rend = compute_char_rendering(ch, &line_col);
+        saw_newline |= (rend.count == SIZE_MAX);
+        col += rend.count == SIZE_MAX ? 0 : rend.count;
+        while (col >= window_cols) {
+            --rows_stepbacked;
+            col -= window_cols;
+            if (rows_stepbacked == rowno) {
+                // Now what?  If col > 0, then first_visible_offset is i.  If col == 0, then
+                // first_visible_offset is i + 1.
+                buf->first_visible_offset = i + (col == 0);
+
+                goto done_loop;
+            }
+        }
+    }
+ done_loop:
+    runtime_check(!saw_newline, "encountered impossible newline in scroll_to_row");
 }
 
 // Scrolls buf so that buf_pos is close to the middle (as close as possible, e.g. if it's
@@ -355,6 +387,7 @@ void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf, std::vector
     // after the last completely written character.  Called precisely when col ==
     // window.cols.
     auto copy_row_if_visible = [&]() {
+        col = 0;
         if (i > buf.first_visible_offset) {
             // It simplifies code to throw in this (row < window.rows) check here, instead
             // of carefully calculating where we might need to check it.
@@ -366,7 +399,6 @@ void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf, std::vector
                 }
             }
             ++row;
-            col = 0;
         }
         // Note that this only does anything if the while loop above wasn't hit.
         while (render_coords_begin < render_coords_end) {
