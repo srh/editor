@@ -224,18 +224,21 @@ char_rendering compute_char_rendering(const buffer_char bch, size_t *line_col) {
     return ret;
 }
 
-size_t current_column(const qwi::buffer& buf) {
+size_t pos_current_column(const qwi::buffer& buf, const size_t pos) {
     size_t line_col = 0;
     bool saw_newline = false;
-    const size_t cursor = buf.cursor();
-    for (size_t i = cursor - buf.cursor_distance_to_beginning_of_line(); i < cursor; ++i) {
+    for (size_t i = pos - qwi::distance_to_beginning_of_line(buf, pos); i < pos; ++i) {
         buffer_char ch = buf.get(i);
         char_rendering rend = compute_char_rendering(ch, &line_col);
         saw_newline |= (rend.count == SIZE_MAX);
     }
-    runtime_check(!saw_newline, "encountered impossible newline in current_column");
+    runtime_check(!saw_newline, "encountered impossible newline in pos_current_column");
 
     return line_col;
+}
+
+size_t current_column(const qwi::buffer& buf) {
+    return pos_current_column(buf, buf.cursor());
 }
 
 struct render_coord {
@@ -262,11 +265,44 @@ bool cursor_is_offscreen(qwi::buffer *buf, size_t cursor) {
     return !coords[0].rendered_pos.has_value();
 }
 
+// Scrolls buf so that buf_pos is close to rowno.  (Sometimes it can't get there, e.g. we
+// can't scroll past front of buffer, or a very narrow window might force buf_pos's row <
+// rowno without equality).
+void scroll_to_row(qwi::buffer *buf, const uint32_t rowno, const size_t buf_pos) {
+    // We're going to back up and render one line at a time.
+    // TODO: Implement.
+    const size_t window_cols = buf->window.cols;
+
+    size_t rows_stepbacked = 0;
+    size_t pos = buf_pos;
+    for (;;) {
+        size_t col = pos_current_column(*buf, pos);
+        size_t row_in_line = col / window_cols;
+        rows_stepbacked += row_in_line;
+        pos = pos - qwi::distance_to_beginning_of_line(*buf, pos);
+        if (rows_stepbacked == rowno || pos == 0) {
+            // First visible offset is pos, at beginning of line.
+            buf->first_visible_offset = pos;
+            return;
+        } else if (rows_stepbacked < rowno) {
+            // pos > 0, as we tested.
+            --pos;
+            ++rows_stepbacked;
+        } else {
+            // We stepped back too far -- first_visible_offset >= pos and <= previous
+            // value of pos.
+            // TODO: Implement for real.
+            buf->first_visible_offset = pos;
+            return;
+        }
+    }
+}
+
 // Scrolls buf so that buf_pos is close to the middle (as close as possible, e.g. if it's
 // too close to the top of the buffer, it'll be above the middle).  buf_pos is probably
 // the cursor position.
 void scroll_to_mid(qwi::buffer *buf, size_t buf_pos) {
-    // TODO: Implement.
+    scroll_to_row(buf, buf->window.rows / 2, buf_pos);
 }
 
 void recenter_cursor_if_offscreen(qwi::buffer *buf) {
@@ -413,6 +449,7 @@ void insert_chars(qwi::buffer *buf, const buffer_char *chs, size_t count) {
     // TODO: Don't recompute virtual_column every time.
     buf->virtual_column = current_column(*buf);
     buf->first_visible_offset += (buf->first_visible_offset > og_cursor ? count : 0);
+    recenter_cursor_if_offscreen(buf);
 }
 
 void insert_char(qwi::buffer *buf, buffer_char sch) {
@@ -425,6 +462,7 @@ void insert_char(qwi::buffer *buf, char sch) {
 // Cheap fn for debugging purposes.
 void push_printable_repr(std::basic_string<buffer_char> *str, char sch);
 void insert_printable_repr(qwi::buffer *buf, char sch) {
+    // TODO: Implement using insert_chars.
     push_printable_repr(&buf->bef, sch);
     buf->virtual_column = current_column(*buf);
 }
@@ -448,6 +486,7 @@ void delete_left(qwi::buffer *buf, size_t count) {
     } else {
         buf->first_visible_offset = std::min<size_t>(buf->first_visible_offset, og_cursor - count);
     }
+    recenter_cursor_if_offscreen(buf);
 }
 
 void backspace_char(qwi::buffer *buf) {
@@ -474,6 +513,7 @@ void delete_right(qwi::buffer *buf, size_t count) {
     } else if (buf->first_visible_offset > cursor) {
         buf->first_visible_offset = cursor;
     }
+    recenter_cursor_if_offscreen(buf);
 }
 void delete_char(qwi::buffer *buf) {
     delete_right(buf, 1);
@@ -496,6 +536,7 @@ void move_right_by(qwi::buffer *buf, size_t count) {
     buf->aft.erase(0, count);
     // TODO: Should we set virtual_column if count is 0?  (Can count be 0?)
     buf->virtual_column = current_column(*buf);
+    recenter_cursor_if_offscreen(buf);
 }
 
 void move_right(qwi::buffer *buf) {
@@ -508,6 +549,7 @@ void move_left_by(qwi::buffer *buf, size_t count) {
     buf->bef.resize(buf->bef.size() - count);
     // TODO: Should we set virtual_column if count is 0?  (Can count be 0?)
     buf->virtual_column = current_column(*buf);
+    recenter_cursor_if_offscreen(buf);
 }
 
 void move_left(qwi::buffer *buf) {
@@ -636,6 +678,7 @@ void move_up(qwi::buffer *buf) {
         return;
     }
     buf->set_cursor(prev_row_cursor_proposal);
+    recenter_cursor_if_offscreen(buf);
 }
 
 void move_down(qwi::buffer *buf) {
@@ -685,18 +728,23 @@ void move_down(qwi::buffer *buf) {
     }
 
     buf->set_cursor(candidate_index);
+    recenter_cursor_if_offscreen(buf);
 }
 
 void move_home(qwi::buffer *buf) {
     size_t bolPos = buf->cursor() - qwi::distance_to_beginning_of_line(*buf, buf->cursor());
     buf->set_cursor(bolPos);
     buf->virtual_column = current_column(*buf);
+    // TODO: Use uh, screen home and screen end?
+    // TODO: Use move_left_by and move_right_by.
+    recenter_cursor_if_offscreen(buf);
 }
 
 void move_end(qwi::buffer *buf) {
     size_t eolPos = buf->cursor() + qwi::distance_to_eol(*buf, buf->cursor());
     buf->set_cursor(eolPos);
     buf->virtual_column = current_column(*buf);
+    recenter_cursor_if_offscreen(buf);
 }
 
 void set_mark(qwi::buffer *buf) {
