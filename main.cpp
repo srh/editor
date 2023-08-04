@@ -126,21 +126,6 @@ terminal_frame init_frame(const terminal_size& window) {
     return ret;
 }
 
-terminal_frame render_frame(const terminal_size& window, size_t step) {
-    terminal_frame ret = init_frame(window);
-    ret.cursor = cursor_pos{
-        .row = uint32_t(step % window.rows),
-        .col = uint32_t((step * 3) % window.cols),
-    };
-
-    for (size_t i = 0; i < ret.data.size(); ++i) {
-        char num = size_mul(i, step) % 61;
-        ret.data[i] = (num < 10 ? '0' : num < 36 ? 'a' - 10 : 'A' - 36) + num;
-    }
-
-    return ret;
-}
-
 void write_frame(int fd, const terminal_frame& frame) {
     // TODO: Either single buffered write or some minimal diff write.
     write_cstring(fd, TESC(?25l));
@@ -159,12 +144,6 @@ void write_frame(int fd, const terminal_frame& frame) {
         // TODO: Make cursor visible when exiting program.
         write_cstring(fd, TESC(?25h));
     }
-}
-
-void draw_frame(int fd, const terminal_size& window, size_t step) {
-    terminal_frame frame = render_frame(window, step);
-
-    write_frame(fd, frame);
 }
 
 void draw_empty_frame_for_exit(int fd, const terminal_size& window) {
@@ -270,7 +249,6 @@ bool cursor_is_offscreen(qwi::buffer *buf, size_t cursor) {
 // rowno without equality).
 void scroll_to_row(qwi::buffer *buf, const uint32_t rowno, const size_t buf_pos) {
     // We're going to back up and render one line at a time.
-    // TODO: Implement.
     const size_t window_cols = buf->window.cols;
 
     size_t rows_stepbacked = 0;
@@ -494,9 +472,9 @@ void insert_char(qwi::buffer *buf, char sch) {
 // Cheap fn for debugging purposes.
 void push_printable_repr(std::basic_string<buffer_char> *str, char sch);
 void insert_printable_repr(qwi::buffer *buf, char sch) {
-    // TODO: Implement using insert_chars.
-    push_printable_repr(&buf->bef, sch);
-    buf->virtual_column = current_column(*buf);
+    std::basic_string<buffer_char> str;
+    push_printable_repr(&str, sch);
+    insert_chars(buf, str.data(), str.size());
 }
 
 void delete_left(qwi::buffer *buf, size_t count) {
@@ -576,6 +554,7 @@ void move_right(qwi::buffer *buf) {
 }
 
 void move_left_by(qwi::buffer *buf, size_t count) {
+    // TODO: Could both this and move_right_by be the same fn, using buf->set_cursor?
     count = std::min<size_t>(count, buf->bef.size());
     buf->aft.insert(0, buf->bef, buf->bef.size() - count, count);
     buf->bef.resize(buf->bef.size() - count);
@@ -764,19 +743,14 @@ void move_down(qwi::buffer *buf) {
 }
 
 void move_home(qwi::buffer *buf) {
-    size_t bolPos = buf->cursor() - qwi::distance_to_beginning_of_line(*buf, buf->cursor());
-    buf->set_cursor(bolPos);
-    buf->virtual_column = current_column(*buf);
     // TODO: Use uh, screen home and screen end?
-    // TODO: Use move_left_by and move_right_by.
-    recenter_cursor_if_offscreen(buf);
+    size_t distance = buf->cursor_distance_to_beginning_of_line();
+    move_left_by(buf, distance);
 }
 
 void move_end(qwi::buffer *buf) {
-    size_t eolPos = buf->cursor() + qwi::distance_to_eol(*buf, buf->cursor());
-    buf->set_cursor(eolPos);
-    buf->virtual_column = current_column(*buf);
-    recenter_cursor_if_offscreen(buf);
+    size_t distance = qwi::distance_to_eol(*buf, buf->cursor());
+    move_right_by(buf, distance);
 }
 
 void set_mark(qwi::buffer *buf) {

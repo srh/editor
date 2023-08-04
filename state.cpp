@@ -14,11 +14,12 @@ void buffer::set_cursor(size_t pos) {
     if (pos < bef.size()) {
         aft.insert(aft.begin(), bef.begin() + pos, bef.end());
         bef.resize(pos);
+    } else {
+        size_t aft_pos = pos - bef.size();
+        logic_check(aft_pos <= aft.size(), "set_cursor outside buf range");
+        bef.append(aft.data(), aft_pos);
+        aft.erase(0, aft_pos);
     }
-    size_t aft_pos = pos - bef.size();
-    logic_check(aft_pos <= aft.size(), "set_cursor outside buf range");
-    bef.append(aft.data(), aft_pos);
-    aft.erase(0, aft_pos);
 }
 
 size_t distance_to_eol(const qwi::buffer& buf, size_t pos) {
