@@ -30,7 +30,6 @@ struct buffer {
     size_t cursor() const { return bef.size(); }
     void set_cursor(size_t pos);
     size_t size() const { return bef.size() + aft.size(); }
-    // TODO: Make wrapper type for char.
     buffer_char at(size_t i) const {
         return i < bef.size() ? bef[i] : aft.at(i - bef.size());
     }

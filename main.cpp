@@ -555,25 +555,25 @@ void insert_printable_repr(qwi::buffer *buf, char sch) {
     insert_chars(buf, str.data(), str.size());
 }
 
+void update_offset_for_delete_range(size_t *offset, size_t range_beg, size_t range_end) {
+    if (*offset > range_end) {
+        *offset -= (range_end - range_beg);
+    } else if (*offset > range_beg) {
+        *offset = range_beg;
+    }
+}
+
 void delete_left(qwi::buffer *buf, size_t count) {
     count = std::min<size_t>(count, buf->bef.size());
-    size_t og_cursor = buf->cursor();
-    buf->bef.resize(buf->bef.size() - count);
+    size_t og_cursor = buf->bef.size();
+    size_t new_cursor = og_cursor - count;
+    buf->bef.resize(new_cursor);
     if (buf->mark.has_value()) {
-        if (*buf->mark > og_cursor) {
-            *buf->mark -= count;
-        } else {
-            *buf->mark = std::min<size_t>(*buf->mark, og_cursor - count);
-        }
+        update_offset_for_delete_range(&*buf->mark, new_cursor, og_cursor);
     }
 
     buf->virtual_column = current_column(*buf);
-    // TODO: Duplicated logic with *buf->mark.
-    if (buf->first_visible_offset > og_cursor) {
-        buf->first_visible_offset -= count;
-    } else {
-        buf->first_visible_offset = std::min<size_t>(buf->first_visible_offset, og_cursor - count);
-    }
+    update_offset_for_delete_range(&buf->first_visible_offset, new_cursor, og_cursor);
     recenter_cursor_if_offscreen(buf);
 }
 
@@ -586,21 +586,12 @@ void delete_right(qwi::buffer *buf, size_t count) {
     count = std::min<size_t>(count, buf->aft.size());
     buf->aft.erase(0, count);
     if (buf->mark.has_value()) {
-        if (*buf->mark > cursor + count) {
-            *buf->mark -= count;
-        } else if (*buf->mark > cursor) {
-            *buf->mark = cursor;
-        }
+        update_offset_for_delete_range(&*buf->mark, cursor, cursor + count);
     }
 
     // TODO: We don't do this for doDeleteRight (or doAppendRight) in jsmacs -- the bug is in jsmacs!
     buf->virtual_column = current_column(*buf);
-    // TODO: Duplicated logic with *buf->mark.
-    if (buf->first_visible_offset > cursor + count) {
-        buf->first_visible_offset -= count;
-    } else if (buf->first_visible_offset > cursor) {
-        buf->first_visible_offset = cursor;
-    }
+    update_offset_for_delete_range(&buf->first_visible_offset, cursor, cursor + count);
     recenter_cursor_if_offscreen(buf);
 }
 void delete_char(qwi::buffer *buf) {
@@ -652,6 +643,7 @@ void move_left(qwi::buffer *buf) {
 
 bool is_solid(buffer_char bch) {
     uint8_t ch = bch.value;
+    // TODO: Figure out what chars should be in this set.
     // Used by move_forward_word, move_backward_word.
     return (ch >= 'a' && ch <= 'z') ||
         (ch >= 'A' && ch <= 'Z') ||
