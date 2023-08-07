@@ -99,6 +99,10 @@ uint32_t u32_mul(uint32_t x, uint32_t y) {
     // TODO: Throw upon overflow.
     return x * y;
 }
+uint32_t u32_add(uint32_t x, uint32_t y) {
+    // TODO: Throw upon overflow.
+    return x + y;
+}
 
 size_t size_mul(size_t x, size_t y) {
     // TODO: Throw upon overflow.
@@ -286,12 +290,14 @@ size_t current_column(const qwi::buffer& buf) {
     return pos_current_column(buf, buf.cursor());
 }
 
+struct window_coord { uint32_t row = 0, col = 0; };
+
 struct render_coord {
     size_t buf_pos;
-    std::optional<terminal_coord> rendered_pos;
+    std::optional<window_coord> rendered_pos;
 };
 
-void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf, std::vector<render_coord> *coords);
+void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft, const qwi::buffer& buf, std::vector<render_coord> *coords);
 
 bool too_small_to_render(const terminal_size& window) {
     return window.cols < 2 || window.rows == 0;
@@ -315,7 +321,8 @@ bool cursor_is_offscreen(qwi::buffer *buf, size_t cursor) {
 
     terminal_frame frame = init_frame(window);
     std::vector<render_coord> coords = { {cursor, std::nullopt} };
-    render_frame(&frame, *buf, &coords);
+    terminal_coord window_topleft = { 0, 0 };
+    render_into_frame(&frame, window_topleft, *buf, &coords);
     return !coords[0].rendered_pos.has_value();
 }
 
@@ -396,7 +403,18 @@ void recenter_cursor_if_offscreen(qwi::buffer *buf) {
     }
 }
 
+terminal_coord add(const terminal_coord& window_topleft, window_coord wc) {
+    return terminal_coord{u32_add(window_topleft.row, wc.row),
+        u32_add(window_topleft.col, wc.col)};
+}
 
+std::optional<terminal_coord> add(const terminal_coord& window_topleft, const std::optional<window_coord>& wc) {
+    if (wc.has_value()) {
+        return add(window_topleft, *wc);
+    } else {
+        return std::nullopt;
+    }
+}
 
 void redraw_state(int term, const terminal_size& window, const qwi::state& state) {
     terminal_frame frame = init_frame(window);
@@ -407,8 +425,10 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
         runtime_check(window.rows == state.buf.window.rows, "window rows changed");
 
         std::vector<render_coord> coords = { {state.buf.cursor(), std::nullopt} };
-        render_frame(&frame, state.buf, &coords);
-        frame.cursor = coords[0].rendered_pos;
+        terminal_coord window_topleft = {0, 0};
+        render_into_frame(&frame, window_topleft, state.buf, &coords);
+
+        frame.cursor = add(window_topleft, coords[0].rendered_pos);
     }
 
     write_frame(term, frame);
@@ -416,12 +436,15 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
 
 // render_coords must be sorted by buf_pos.
 // render_frame doesn't render the cursor -- that's computed with render_coords and rendered then.
-void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf, std::vector<render_coord> *render_coords) {
+void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
+                       const qwi::buffer& buf, std::vector<render_coord> *render_coords) {
     terminal_frame& frame = *frame_ptr;
     const qwi::window_size window = buf.window;
-    // This is a runtime check of current hard-coded behavior -- there is one buf window.
-    runtime_check(window.rows == frame.window.rows, "frame window rows mismatches buf window rows");
-    runtime_check(window.cols == frame.window.cols, "frame window cols mismatches buf window cols");
+    // Some very necessary checks for memory safety.
+    runtime_check(u32_add(window_topleft.row, window.rows) <= frame.window.rows,
+                  "buf window rows exceeds frame window");
+    runtime_check(u32_add(window_topleft.col, window.cols) <= frame.window.cols,
+                  "buf window cols exceeds frame window");
 
     // first_visible_offset is the first rendered character in the buffer -- this may be a
     // tab character or 2-column-rendered control character, only part of which was
@@ -448,7 +471,8 @@ void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf, std::vector
             // It simplifies code to throw in this (row < window.rows) check here, instead
             // of carefully calculating where we might need to check it.
             if (row < window.rows) {
-                memcpy(&frame.data[row * window.cols], render_row.data(), window.cols);
+                memcpy(&frame.data[(window_topleft.row + row) * frame.window.cols + window_topleft.col], render_row.data(), window.cols);
+
                 while (render_coords_begin < render_coords_end) {
                     (*render_coords)[render_coords_begin].rendered_pos->row = row;
                     ++render_coords_begin;
@@ -514,7 +538,7 @@ void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf, std::vector
             render_row[col] = ' ';
             ++col;
         } while (col < window.cols);
-        memcpy(&frame.data[row * window.cols], render_row.data(), window.cols);
+        memcpy(&frame.data[(window_topleft.row + row) * frame.window.cols + window_topleft.col], render_row.data(), window.cols);
         while (render_coords_begin < render_coords_end) {
             (*render_coords)[render_coords_begin].rendered_pos->row = row;
             ++render_coords_begin;
