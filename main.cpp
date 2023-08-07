@@ -103,6 +103,10 @@ uint32_t u32_add(uint32_t x, uint32_t y) {
     // TODO: Throw upon overflow.
     return x + y;
 }
+uint32_t u32_sub(uint32_t x, uint32_t y) {
+    // TODO: Throw upon overflow.
+    return x - y;
+}
 
 size_t size_mul(size_t x, size_t y) {
     // TODO: Throw upon overflow.
@@ -127,9 +131,11 @@ struct terminal_frame {
     std::vector<char> data;
 };
 
+constexpr bool INIT_FRAME_INITIALIZES_WITH_SPACES = true;
 terminal_frame init_frame(const terminal_size& window) {
     terminal_frame ret;
-    ret.data.resize(u32_mul(window.rows, window.cols));
+    static_assert(INIT_FRAME_INITIALIZES_WITH_SPACES);
+    ret.data.resize(u32_mul(window.rows, window.cols), ' ');
     ret.window = window;
     return ret;
 }
@@ -156,8 +162,10 @@ void write_frame(int fd, const terminal_frame& frame) {
 
 void draw_empty_frame_for_exit(int fd, const terminal_size& window) {
     terminal_frame frame = init_frame(window);
-    for (size_t i = 0; i < frame.data.size(); ++i) {
-        frame.data[i] = ' ';
+    if (!INIT_FRAME_INITIALIZES_WITH_SPACES) {
+        for (size_t i = 0; i < frame.data.size(); ++i) {
+            frame.data[i] = ' ';
+        }
     }
     // TODO: Ensure cursor is restored on non-happy-paths.
     frame.cursor = {0, 0};
@@ -190,6 +198,8 @@ std::basic_string<buffer_char> read_file(const fs::path& path) {
     return ret;
 }
 
+const uint32_t STATUS_AREA_HEIGHT = 1;
+
 qwi::state initial_state(const command_line_args& args, const terminal_size& window) {
     const size_t n_files = args.files.size();
 
@@ -214,12 +224,16 @@ qwi::state initial_state(const command_line_args& args, const terminal_size& win
         }
     }
 
+    qwi::window_size buf_window = {
+        .rows = std::max(STATUS_AREA_HEIGHT, window.rows) - STATUS_AREA_HEIGHT,
+        .cols = window.cols};
+
     qwi::state state;
     if (n_files == 0) {
-        state.buf.set_window(qwi::window_size{.rows = window.rows, .cols = window.cols});
+        state.buf.set_window(buf_window);
         state.buf.name = "*scratch*";
     } else {
-        state.buf.set_window(qwi::window_size{.rows = window.rows, .cols = window.cols});
+        state.buf.set_window(buf_window);
         state.buf.name = filenames.at(0);
         state.buf.aft = std::move(file_content.at(0));
 
@@ -227,7 +241,7 @@ qwi::state initial_state(const command_line_args& args, const terminal_size& win
         for (size_t i = 1; i < n_files; ++i) {
             state.bufs.emplace_back();
             auto& buf = state.bufs.back();
-            buf.set_window(qwi::window_size{.rows = window.rows, .cols = window.cols});
+            buf.set_window(buf_window);
             buf.name = filenames.at(i);
             buf.aft = std::move(file_content.at(i));
         }
@@ -299,13 +313,12 @@ struct render_coord {
 
 void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft, const qwi::buffer& buf, std::vector<render_coord> *coords);
 
-bool too_small_to_render(const terminal_size& window) {
+bool too_small_to_render(const qwi::window_size& window) {
     return window.cols < 2 || window.rows == 0;
 }
 
 bool cursor_is_offscreen(qwi::buffer *buf, size_t cursor) {
-    terminal_size window = terminal_size{buf->window.rows, buf->window.cols};
-    if (too_small_to_render(window)) {
+    if (too_small_to_render(buf->window)) {
         // Return false?
         return false;
     }
@@ -319,6 +332,7 @@ bool cursor_is_offscreen(qwi::buffer *buf, size_t cursor) {
         return true;
     }
 
+    terminal_size window = terminal_size{buf->window.rows, buf->window.cols};
     terminal_frame frame = init_frame(window);
     std::vector<render_coord> coords = { {cursor, std::nullopt} };
     terminal_coord window_topleft = { 0, 0 };
@@ -416,19 +430,42 @@ std::optional<terminal_coord> add(const terminal_coord& window_topleft, const st
     }
 }
 
+void render_string(terminal_frame *frame, const terminal_coord& coord, const std::string& str) {
+    uint32_t col = coord.col;  // <= frame->window.cols
+    runtime_check(col <= frame->window.cols, "render_string: coord out of range");
+    size_t line_col = 0;
+    for (size_t i = 0; i < str.size() && col < frame->window.cols; ++i) {
+        char_rendering rend = compute_char_rendering(buffer_char::from_char(str[i]), &line_col);
+        if (rend.count == SIZE_MAX) {
+            // Newline...(?)
+            return;
+        }
+        size_t to_copy = std::min<size_t>(rend.count, frame->window.cols - col);
+        memcpy(&frame->data[coord.row * frame->window.cols + col], rend.buf, to_copy);
+        col += to_copy;
+    }
+}
+
+void render_status_area(terminal_frame *frame, const qwi::state& state) {
+    uint32_t last_row = u32_sub(frame->window.rows, 1);
+    render_string(frame, {.row = last_row, .col = 0}, state.buf.name);
+}
+
 void redraw_state(int term, const terminal_size& window, const qwi::state& state) {
     terminal_frame frame = init_frame(window);
 
-    if (!too_small_to_render(window)) {
+    if (!too_small_to_render(state.buf.window)) {
         // TODO: Support resizing.
         runtime_check(window.cols == state.buf.window.cols, "window cols changed");
-        runtime_check(window.rows == state.buf.window.rows, "window rows changed");
+        runtime_check(window.rows == state.buf.window.rows + STATUS_AREA_HEIGHT, "window rows changed");
 
         std::vector<render_coord> coords = { {state.buf.cursor(), std::nullopt} };
         terminal_coord window_topleft = {0, 0};
         render_into_frame(&frame, window_topleft, state.buf, &coords);
 
         frame.cursor = add(window_topleft, coords[0].rendered_pos);
+
+        render_status_area(&frame, state);
     }
 
     write_frame(term, frame);

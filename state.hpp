@@ -12,6 +12,7 @@ struct window_size { uint32_t rows = 0, cols = 0; };
 struct buffer_char {
     uint8_t value;
 
+    static buffer_char from_char(char ch) { return buffer_char{uint8_t(ch)}; }
     friend auto operator<=>(buffer_char, buffer_char) = default;
 };
 
@@ -42,6 +43,8 @@ struct buffer {
     // For now, this assumes a monospace font (maybe with 2x-width glyphs) on all GUIs.
     size_t virtual_column = 0;
 
+    // This is and will continue to be the size of the text window -- does not include any
+    // status bar rows, even if there is one per buffer.
     window_size window;
     // 0 <= first_visible_offset <= size().
     size_t first_visible_offset = 0;
