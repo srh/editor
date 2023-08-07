@@ -106,14 +106,15 @@ size_t size_add(size_t x, size_t y) {
     return x + y;
 }
 
-struct cursor_pos { uint32_t row = 0, col = 0; };
+// A coordinate relative to the terminal frame (as opposed to some smaller buffer window).
+struct terminal_coord { uint32_t row = 0, col = 0; };
 struct terminal_frame {
     // Carries the presumed window size that the frame was rendered for.
     terminal_size window;
     // Cursor pos (0..<window.*)
 
     // nullopt means it's invisible.
-    std::optional<cursor_pos> cursor;
+    std::optional<terminal_coord> cursor;
 
     // data.size() = u32_mul(window.rows, window.cols).
     std::vector<char> data;
@@ -222,7 +223,7 @@ size_t current_column(const qwi::buffer& buf) {
 
 struct render_coord {
     size_t buf_pos;
-    std::optional<cursor_pos> rendered_pos;
+    std::optional<terminal_coord> rendered_pos;
 };
 
 void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf, std::vector<render_coord> *coords);
@@ -236,6 +237,15 @@ bool cursor_is_offscreen(qwi::buffer *buf, size_t cursor) {
     if (too_small_to_render(window)) {
         // Return false?
         return false;
+    }
+
+    // We might say this is generic code -- even if the buf is for a smaller window, this
+    // terminal frame is artificially constructed.
+
+    if (cursor < buf->first_visible_offset) {
+        // Take this easy early exit.  Note that sometimes when cursor ==
+        // buf->first_visible_offset we still will return true.
+        return true;
     }
 
     terminal_frame frame = init_frame(window);
@@ -344,6 +354,9 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
 void render_frame(terminal_frame *frame_ptr, const qwi::buffer& buf, std::vector<render_coord> *render_coords) {
     terminal_frame& frame = *frame_ptr;
     const qwi::window_size window = buf.window;
+    // This is a runtime check of current hard-coded behavior -- there is one buf window.
+    runtime_check(window.rows == frame.window.rows, "frame window rows mismatches buf window rows");
+    runtime_check(window.cols == frame.window.cols, "frame window cols mismatches buf window cols");
 
     // first_visible_offset is the first rendered character in the buffer -- this may be a
     // tab character or 2-column-rendered control character, only part of which was
