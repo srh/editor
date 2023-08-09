@@ -243,7 +243,8 @@ void render_string(terminal_frame *frame, const terminal_coord& coord, const std
     }
 }
 
-void render_status_area(terminal_frame *frame, const qwi::state& state) {
+// TODO: Non-const reference for state param -- we set its status_prompt's buf's window.
+void render_status_area(terminal_frame *frame, qwi::state& state) {
     uint32_t last_row = u32_sub(frame->window.rows, 1);
     if (state.status_prompt.has_value()) {
         std::string message;
@@ -255,6 +256,7 @@ void render_status_area(terminal_frame *frame, const qwi::state& state) {
 
         std::vector<render_coord> coords = { {state.status_prompt->buf.cursor(), std::nullopt} };
         terminal_coord prompt_topleft = {.row = last_row, .col = uint32_t(message.size())};
+        state.status_prompt->buf.set_window({.rows = 1, .cols = frame->window.cols - prompt_topleft.col});
         render_into_frame(frame, prompt_topleft, state.status_prompt->buf, &coords);
 
         // TODO: This is super-hacky -- we overwrite the main buffer's cursor.
@@ -264,7 +266,8 @@ void render_status_area(terminal_frame *frame, const qwi::state& state) {
     }
 }
 
-void redraw_state(int term, const terminal_size& window, const qwi::state& state) {
+// TODO: non-const reference for state, passed into render_status_area
+void redraw_state(int term, const terminal_size& window, qwi::state& state) {
     terminal_frame frame = init_frame(window);
 
     if (!too_small_to_render(state.buf.window)) {
