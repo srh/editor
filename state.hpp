@@ -20,6 +20,7 @@ struct buffer {
     // Used to choose in the list of buffers, unique to the buffer.  Program logic should
     // not allow empty or overlong values.
     std::string name;
+    std::optional<std::string> married_file;
 
     // We just have strings for text before/after the cursor.  Very bad perf.
     std::basic_string<buffer_char> bef;
@@ -53,6 +54,8 @@ struct buffer {
     size_t cursor_distance_to_beginning_of_line() const;
 
     void set_window(const window_size& win) { window = win; }
+
+    std::string copy_to_string() const;
 };
 
 struct prompt {
@@ -88,5 +91,16 @@ struct clipboard {
 };
 
 }  // namespace qwi
+
+inline char *as_chars(qwi::buffer_char *chs) {
+    static_assert(sizeof(*chs) == sizeof(char));
+    return reinterpret_cast<char *>(chs);
+}
+
+inline const char *as_chars(const qwi::buffer_char *chs) {
+    static_assert(sizeof(*chs) == sizeof(char));
+    return reinterpret_cast<const char *>(chs);
+}
+
 
 #endif  // QWERTILLION_STATE_HPP_

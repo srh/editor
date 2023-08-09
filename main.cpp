@@ -149,7 +149,7 @@ std::basic_string<buffer_char> read_file(const fs::path& path) {
     f.seekg(0);
     runtime_check(!f.fail(), "error seeking back to beginning of file %s", path.c_str());
 
-    f.read(reinterpret_cast<char *>(ret.data()), ret.size());
+    f.read(as_chars(ret.data()), ret.size());
     runtime_check(!f.fail(), "error reading file %s", path.c_str());
 
     return ret;
@@ -164,8 +164,14 @@ qwi::state initial_state(const command_line_args& args, const terminal_size& win
     file_content.reserve(n_files);
     std::vector<fs::path> filenames;
     filenames.reserve(n_files);
+    /* TODO: Figure out the "correct" way to refer to a path.
+         - we want to handle situations where the full path can't be resolved
+     */
+    std::vector<fs::path> og_paths;
+    og_paths.reserve(n_files);
     for (const std::string& spath : args.files) {
         fs::path path = spath;
+        og_paths.push_back(path);
         file_content.push_back(read_file(path));
         fs::path filename = path.filename();
         filenames.push_back(filename);
@@ -192,6 +198,7 @@ qwi::state initial_state(const command_line_args& args, const terminal_size& win
     } else {
         state.buf.set_window(buf_window);
         state.buf.name = filenames.at(0);
+        state.buf.married_file = og_paths.at(0).string();
         state.buf.aft = std::move(file_content.at(0));
 
         state.bufs.reserve(n_files - 1);
@@ -200,6 +207,7 @@ qwi::state initial_state(const command_line_args& args, const terminal_size& win
             auto& buf = state.bufs.back();
             buf.set_window(buf_window);
             buf.name = filenames.at(i);
+            buf.married_file = og_paths.at(i).string();
             buf.aft = std::move(file_content.at(i));
         }
     }
@@ -326,16 +334,61 @@ void check_read_tty_char(int term_fd, char *out) {
     runtime_check(success, "zero-length read from tty configured with VMIN=1");
 }
 
+void save_buf_to_married_file(const qwi::buffer& buf) {
+    // TODO: Display that save succeeded, somehow.
+    logic_check(buf.married_file.has_value(), "save_buf_to_married_file with unmarried buf");
+    std::ofstream fstream(*buf.married_file, std::ios::binary | std::ios::trunc);
+    // TODO: Write a temporary file and rename it.
+    fstream.write(as_chars(buf.bef.data()), buf.bef.size());
+    fstream.write(as_chars(buf.aft.data()), buf.aft.size());
+    fstream.close();
+    // TODO: Better error handling
+    runtime_check(!fstream.fail(), "error writing to file %s", buf.married_file->c_str());
+}
+
+void set_save_prompt(qwi::state *state) {
+    logic_check(!state->status_prompt.has_value(), "set_save_prompt with existing prompt");
+    state->status_prompt = {qwi::prompt::type::file_save, qwi::buffer()};
+    // TODO: How/where should we set the prompt's buf's window?
+}
+
+void save_file_action(qwi::state *state) {
+    if (state->status_prompt.has_value()) {
+        // Ignore keypress.
+        return;
+    }
+
+    if (state->buf.married_file.has_value()) {
+        save_buf_to_married_file(state->buf);
+    } else {
+        set_save_prompt(state);
+    }
+}
+
+void enter_key(qwi::state *state) {
+    if (!state->status_prompt.has_value()) {
+        insert_char(&state->buf, '\n');
+    } else {
+        // TODO: Of course, handle errors, such as if directory doesn't exist.
+        std::string text = state->status_prompt->buf.copy_to_string();
+        state->status_prompt = std::nullopt;
+        state->buf.married_file = text;
+        save_buf_to_married_file(state->buf);
+    }
+}
+
 void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
     // TODO: When term is non-blocking, we'll need to wait for readiness...?
     char ch;
     check_read_tty_char(term, &ch);
+
+    qwi::buffer *active_buf = state->status_prompt.has_value() ? &state->status_prompt->buf : &state->buf;
+
     // TODO: Named constants for these keyboard keys and such.
-    // TODO: Implement scrolling to cursor upon all buffer manipulations.
     if (ch == 13) {
-        insert_char(&state->buf, '\n');
+        enter_key(state);
     } else if (ch == '\t' || (ch >= 32 && ch < 127)) {
-        insert_char(&state->buf, ch);
+        insert_char(active_buf, ch);
     } else if (ch == 28) {
         // Ctrl+backslash
         *exit_loop = true;
@@ -350,22 +403,22 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
             chars_read.push_back(ch);
 
             if (ch == 'C') {
-                move_right(&state->buf);
+                move_right(active_buf);
                 chars_read.clear();
             } else if (ch == 'D') {
-                move_left(&state->buf);
+                move_left(active_buf);
                 chars_read.clear();
             } else if (ch == 'A') {
-                move_up(&state->buf);
+                move_up(active_buf);
                 chars_read.clear();
             } else if (ch == 'B') {
-                move_down(&state->buf);
+                move_down(active_buf);
                 chars_read.clear();
             } else if (ch == 'H') {
-                move_home(&state->buf);
+                move_home(active_buf);
                 chars_read.clear();
             } else if (ch == 'F') {
-                move_end(&state->buf);
+                move_end(active_buf);
                 chars_read.clear();
             } else if (isdigit(ch)) {
                 // TODO: Generic parsing of numeric/~ escape codes.
@@ -373,7 +426,7 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
                     check_read_tty_char(term, &ch);
                     chars_read.push_back(ch);
                     if (ch == '~') {
-                        delete_char(&state->buf);
+                        delete_char(active_buf);
                         chars_read.clear();
                     } else if (ch == ';') {
                         check_read_tty_char(term, &ch);
@@ -398,65 +451,69 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
             }
         } else if (ch == 'f') {
             // M-f
-            move_forward_word(&state->buf);
+            move_forward_word(active_buf);
             chars_read.clear();
         } else if (ch == 'b') {
             // M-b
-            move_backward_word(&state->buf);
+            move_backward_word(active_buf);
             chars_read.clear();
         }
         // Insert for the user (the developer, me) unrecognized escape codes.
         if (!chars_read.empty()) {
-            insert_char(&state->buf, '\\');
-            insert_char(&state->buf, 'e');
+            insert_char(active_buf, '\\');
+            insert_char(active_buf, 'e');
             for (char c : chars_read) {
-                insert_char(&state->buf, c);
+                insert_char(active_buf, c);
             }
         }
     } else if (uint8_t(ch) <= 127) {
         switch (ch ^ CTRL_XOR_MASK) {
         case 'A':
-            move_home(&state->buf);
+            move_home(active_buf);
             break;
         case 'B':
-            move_left(&state->buf);
+            move_left(active_buf);
             break;
         case 'D':
-            delete_char(&state->buf);
+            delete_char(active_buf);
             break;
         case 'E':
-            move_end(&state->buf);
+            move_end(active_buf);
             break;
         case 'F':
-            move_right(&state->buf);
+            move_right(active_buf);
             break;
         case 'N':
-            move_down(&state->buf);
+            move_down(active_buf);
             break;
         case 'P':
-            move_up(&state->buf);
+            move_up(active_buf);
+            break;
+        case 'S':
+            // May prompt if the buf isn't married to a file.
+            save_file_action(state);
             break;
         case '?':
-            backspace_char(&state->buf);
+            backspace_char(active_buf);
             break;
         case 'K':
-            kill_line(&state->buf);
+            kill_line(active_buf);
             break;
         case 'W':
         case 'Y':
         case '@':
             // Ctrl+Space same as C-@
-            set_mark(&state->buf);
+            set_mark(active_buf);
             break;
         default:
             // For now we do push the printable repr for any unhandled chars, for debugging purposes.
             // TODO: Handle other possible control chars.
-            insert_printable_repr(&state->buf, ch);
+            insert_printable_repr(active_buf, ch);
         }
     } else {
         // TODO: Handle high characters -- do we just insert them, or do we validate
         // UTF-8, or what?
-        insert_printable_repr(&state->buf, ch);
+        insert_printable_repr(active_buf, ch);
     }
 }
 

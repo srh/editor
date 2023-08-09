@@ -22,6 +22,14 @@ void buffer::set_cursor(size_t pos) {
     }
 }
 
+std::string buffer::copy_to_string() const {
+    std::string ret;
+    ret.reserve(bef.size() + aft.size());
+    ret.append(as_chars(bef.data()), bef.size());
+    ret.append(as_chars(aft.data()), aft.size());
+    return ret;
+}
+
 size_t distance_to_eol(const qwi::buffer& buf, size_t pos) {
     size_t p = pos;
     for (size_t e = buf.size(); p < e; ++p) {
