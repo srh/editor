@@ -237,7 +237,23 @@ void render_string(terminal_frame *frame, const terminal_coord& coord, const std
 
 void render_status_area(terminal_frame *frame, const qwi::state& state) {
     uint32_t last_row = u32_sub(frame->window.rows, 1);
-    render_string(frame, {.row = last_row, .col = 0}, state.buf.name);
+    if (state.status_prompt.has_value()) {
+        std::string message;
+        switch (state.status_prompt->typ) {
+        case qwi::prompt::type::file_open: message = "file to open: "; break;
+        case qwi::prompt::type::file_save: message = "file to save: "; break;
+        }
+        render_string(frame, {.row = last_row, .col = 0}, message);
+
+        std::vector<render_coord> coords = { {state.status_prompt->buf.cursor(), std::nullopt} };
+        terminal_coord prompt_topleft = {.row = last_row, .col = uint32_t(message.size())};
+        render_into_frame(frame, prompt_topleft, state.status_prompt->buf, &coords);
+
+        // TODO: This is super-hacky -- we overwrite the main buffer's cursor.
+        frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
+    } else {
+        render_string(frame, {.row = last_row, .col = 0}, state.buf.name);
+    }
 }
 
 void redraw_state(int term, const terminal_size& window, const qwi::state& state) {
@@ -252,6 +268,10 @@ void redraw_state(int term, const terminal_size& window, const qwi::state& state
         terminal_coord window_topleft = {0, 0};
         render_into_frame(&frame, window_topleft, state.buf, &coords);
 
+        // TODO: This is super-hacky -- this gets overwritten if the status area has a
+        // prompt.  With multiple buffers, we need some concept of an active buffer, with
+        // an active cursor.
+        // TODO: Also, we don't render our inactive cursor, and we should.
         frame.cursor = add(window_topleft, coords[0].rendered_pos);
 
         render_status_area(&frame, state);

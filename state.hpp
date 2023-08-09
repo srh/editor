@@ -55,12 +55,19 @@ struct buffer {
     void set_window(const window_size& win) { window = win; }
 };
 
+struct prompt {
+    enum class type { file_open, file_save, };
+    type typ;
+    buffer buf;
+};
 
 struct state {
     // Sorted in order from least-recently-used -- `buf` is the active buffer and should
     // get pushed onto the end of bufs after some other buf takes its place.
     buffer buf;
     std::vector<buffer> bufs;
+
+    std::optional<prompt> status_prompt;
 };
 
 size_t distance_to_eol(const qwi::buffer& buf, size_t pos);
