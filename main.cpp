@@ -6,6 +6,7 @@
 #include <unistd.h>
 // TODO: Remove unused includes^
 
+#include <algorithm>
 #include <fstream>
 #include <filesystem>
 #include <string>
