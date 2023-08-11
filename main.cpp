@@ -157,13 +157,17 @@ std::basic_string<buffer_char> read_file(const fs::path& path) {
 
 const uint32_t STATUS_AREA_HEIGHT = 1;
 
+std::string buf_name_from_file_path(const fs::path& path) {
+    return path.filename().string();
+}
+
 qwi::state initial_state(const command_line_args& args, const terminal_size& window) {
     const size_t n_files = args.files.size();
 
     std::vector<std::basic_string<buffer_char>> file_content;
     file_content.reserve(n_files);
-    std::vector<fs::path> filenames;
-    filenames.reserve(n_files);
+    std::vector<std::string> bufNames;
+    bufNames.reserve(n_files);
     /* TODO: Figure out the "correct" way to refer to a path.
          - we want to handle situations where the full path can't be resolved
      */
@@ -173,11 +177,10 @@ qwi::state initial_state(const command_line_args& args, const terminal_size& win
         fs::path path = spath;
         og_paths.push_back(path);
         file_content.push_back(read_file(path));
-        fs::path filename = path.filename();
-        filenames.push_back(filename);
+        bufNames.push_back(buf_name_from_file_path(path));
     }
 
-    std::vector<fs::path> sortedNames = filenames;
+    std::vector<std::string> sortedNames = bufNames;
     std::sort(sortedNames.begin(), sortedNames.end());
     {
         auto it = std::adjacent_find(sortedNames.begin(), sortedNames.end());
@@ -197,7 +200,7 @@ qwi::state initial_state(const command_line_args& args, const terminal_size& win
         state.buf.name = "*scratch*";
     } else {
         state.buf.set_window(buf_window);
-        state.buf.name = filenames.at(0);
+        state.buf.name = bufNames.at(0);
         state.buf.married_file = og_paths.at(0).string();
         state.buf.aft = std::move(file_content.at(0));
 
@@ -206,7 +209,7 @@ qwi::state initial_state(const command_line_args& args, const terminal_size& win
             state.bufs.emplace_back();
             auto& buf = state.bufs.back();
             buf.set_window(buf_window);
-            buf.name = filenames.at(i);
+            buf.name = bufNames.at(i);
             buf.married_file = og_paths.at(i).string();
             buf.aft = std::move(file_content.at(i));
         }
@@ -374,9 +377,13 @@ void enter_key(qwi::state *state) {
     } else {
         // TODO: Of course, handle errors, such as if directory doesn't exist.
         std::string text = state->status_prompt->buf.copy_to_string();
-        state->status_prompt = std::nullopt;
-        state->buf.married_file = text;
-        save_buf_to_married_file(state->buf);
+        // TODO: Implement displaying errors to the user.
+        if (text != "") {
+            state->status_prompt = std::nullopt;
+            state->buf.married_file = text;
+            save_buf_to_married_file(state->buf);
+            state->buf.name = buf_name_from_file_path(fs::path(text));
+        }
     }
 }
 
