@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+struct terminal_size;
+
 namespace qwi {
 
 struct window_size { uint32_t rows = 0, cols = 0; };
@@ -72,6 +74,10 @@ struct state {
 
     std::optional<prompt> status_prompt;
 };
+
+constexpr uint32_t STATUS_AREA_HEIGHT = 1;
+void resize_window(state *st, const terminal_size& new_window);
+window_size main_buf_window_from_terminal_window(const terminal_size& term_window);
 
 size_t distance_to_eol(const qwi::buffer& buf, size_t pos);
 size_t distance_to_beginning_of_line(const qwi::buffer& buf, size_t pos);

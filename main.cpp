@@ -155,11 +155,11 @@ std::basic_string<buffer_char> read_file(const fs::path& path) {
     return ret;
 }
 
-const uint32_t STATUS_AREA_HEIGHT = 1;
-
 std::string buf_name_from_file_path(const fs::path& path) {
     return path.filename().string();
 }
+
+
 
 qwi::state initial_state(const command_line_args& args, const terminal_size& window) {
     const size_t n_files = args.files.size();
@@ -190,9 +190,7 @@ qwi::state initial_state(const command_line_args& args, const terminal_size& win
         }
     }
 
-    qwi::window_size buf_window = {
-        .rows = std::max(STATUS_AREA_HEIGHT, window.rows) - STATUS_AREA_HEIGHT,
-        .cols = window.cols};
+    qwi::window_size buf_window = qwi::main_buf_window_from_terminal_window(window);
 
     qwi::state state;
     if (n_files == 0) {
@@ -259,6 +257,7 @@ void render_status_area(terminal_frame *frame, qwi::state& state) {
 
         std::vector<render_coord> coords = { {state.status_prompt->buf.cursor(), std::nullopt} };
         terminal_coord prompt_topleft = {.row = last_row, .col = uint32_t(message.size())};
+        // TODO: Use resize_buf_window here, generally.
         state.status_prompt->buf.set_window({.rows = 1, .cols = frame->window.cols - prompt_topleft.col});
         render_into_frame(frame, prompt_topleft, state.status_prompt->buf, &coords);
 
@@ -276,7 +275,7 @@ void redraw_state(int term, const terminal_size& window, qwi::state& state) {
     if (!too_small_to_render(state.buf.window)) {
         // TODO: Support resizing.
         runtime_check(window.cols == state.buf.window.cols, "window cols changed");
-        runtime_check(window.rows == state.buf.window.rows + STATUS_AREA_HEIGHT, "window rows changed");
+        runtime_check(window.rows == state.buf.window.rows + qwi::STATUS_AREA_HEIGHT, "window rows changed");
 
         std::vector<render_coord> coords = { {state.buf.cursor(), std::nullopt} };
         terminal_coord window_topleft = {0, 0};
@@ -537,7 +536,12 @@ void main_loop(int term, const command_line_args& args) {
     for (; !exit; ) {
         read_and_process_tty_input(term, &state, &exit);
 
-        terminal_size window = get_terminal_size(term);
+        // TODO: Use SIGWINCH.  Procrastinating this for as long as possible.
+        terminal_size new_window = get_terminal_size(term);
+        if (new_window != window) {
+            resize_window(&state, new_window);
+            window = new_window;
+        }
         redraw_state(term, window, state);
     }
 }

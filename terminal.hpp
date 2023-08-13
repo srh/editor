@@ -20,7 +20,10 @@ void display_tcattr(const struct termios& tcattr);
 void set_raw_mode(int fd);
 void clear_screen(int fd);
 
-struct terminal_size { uint32_t rows = 0, cols = 0; };
+struct terminal_size {
+    uint32_t rows = 0, cols = 0;
+    friend auto operator<=>(const terminal_size&, const terminal_size&) = default;
+};
 terminal_size get_terminal_size(int fd);
 
 struct terminal_restore {

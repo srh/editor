@@ -286,3 +286,9 @@ void recenter_cursor_if_offscreen(qwi::buffer *buf) {
         scroll_to_mid(buf, buf->cursor());
     }
 }
+
+void resize_buf_window(qwi::buffer *buf, const qwi::window_size& buf_window) {
+    // This means the window actually changed -- we need to set the column.
+    buf->set_window(buf_window);
+    buf->virtual_column = current_column(*buf);
+}

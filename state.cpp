@@ -1,6 +1,9 @@
 #include "state.hpp"
 
 #include "error.hpp"
+// TODO: We don't want this dependency exactly -- we kind of want ui info to be separate from state.
+#include "terminal.hpp"
+#include "term_ui.hpp"
 
 namespace qwi {
 
@@ -52,6 +55,23 @@ size_t distance_to_beginning_of_line(const qwi::buffer& buf, size_t pos) {
             return pos - (p + 1);
         }
     }
+}
+
+window_size main_buf_window_from_terminal_window(const terminal_size& term_window) {
+    return {
+        .rows = std::max(STATUS_AREA_HEIGHT, term_window.rows) - STATUS_AREA_HEIGHT,
+        .cols = term_window.cols,
+    };
+}
+
+void resize_window(state *st, const terminal_size& new_window) {
+    window_size buf_window = main_buf_window_from_terminal_window(new_window);
+    resize_buf_window(&st->buf, buf_window);
+    for (qwi::buffer& buf : st->bufs) {
+        resize_buf_window(&buf, buf_window);
+    }
+
+    // TODO: Resize prompt window.
 }
 
 }  // namespace qwi

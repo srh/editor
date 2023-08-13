@@ -65,4 +65,7 @@ size_t pos_current_column(const qwi::buffer& buf, const size_t pos);
 size_t current_column(const qwi::buffer& buf);
 void recenter_cursor_if_offscreen(qwi::buffer *buf);
 
+// Changes buf->window; also resets virtual_column.
+void resize_buf_window(qwi::buffer *buf, const qwi::window_size& buf_window);
+
 #endif  // QWERTILLION_TERM_UI_HPP_
