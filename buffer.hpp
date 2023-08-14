@@ -25,8 +25,6 @@ inline void delete_char(qwi::buffer *buf) {
     delete_right(buf, 1);
 }
 
-void kill_line(qwi::buffer *buf);
-
 void move_right_by(qwi::buffer *buf, size_t count);
 
 inline void move_right(qwi::buffer *buf) {

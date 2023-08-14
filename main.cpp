@@ -386,6 +386,42 @@ void enter_key(qwi::state *state) {
     }
 }
 
+void kill_line(qwi::buffer *buf) {
+    // TODO: Store killed lines and clumps in kill ring.
+    size_t eolDistance = qwi::distance_to_eol(*buf, buf->cursor());
+
+    if (eolDistance == 0 && buf->cursor() < buf->size()) {
+        // TODO: Record yank of this newline character.
+        delete_right(buf, 1);
+    } else {
+        delete_right(buf, eolDistance);
+    }
+}
+
+void kill_region(qwi::buffer *buf) {
+    if (!buf->mark.has_value()) {
+        // TODO: Display error
+        return;
+    }
+    // TODO: Copy to clipboard.
+    size_t mark = *buf->mark;
+    size_t cursor = buf->cursor();
+    if (mark > cursor) {
+        delete_right(buf, mark - cursor);
+    } else if (mark < cursor) {
+        delete_left(buf, cursor - mark);
+    } else {
+        // Do nothing (no clipboard actions either).
+    }
+}
+
+void yank_from_clipboard(qwi::state *state, qwi::buffer *activeBuf) {
+    // TODO: Implement (after we actually copy stuff to the clipboard).
+    (void)state;
+    (void)activeBuf;
+}
+
+
 void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
     // TODO: When term is non-blocking, we'll need to wait for readiness...?
     char ch;
@@ -509,7 +545,11 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
             kill_line(active_buf);
             break;
         case 'W':
+            kill_region(active_buf);
+            break;
         case 'Y':
+            yank_from_clipboard(state, active_buf);
+            break;
         case '@':
             // Ctrl+Space same as C-@
             set_mark(active_buf);

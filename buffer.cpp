@@ -59,18 +59,6 @@ void delete_right(qwi::buffer *buf, size_t count) {
     recenter_cursor_if_offscreen(buf);
 }
 
-void kill_line(qwi::buffer *buf) {
-    // TODO: Store killed lines and clumps in kill ring.
-    size_t eolDistance = qwi::distance_to_eol(*buf, buf->cursor());
-
-    if (eolDistance == 0 && buf->cursor() < buf->size()) {
-        // TODO: Record yank of this newline character.
-        delete_right(buf, 1);
-    } else {
-        delete_right(buf, eolDistance);
-    }
-}
-
 void move_right_by(qwi::buffer *buf, size_t count) {
     count = std::min<size_t>(count, buf->aft.size());
     buf->bef.append(buf->aft, 0, count);
