@@ -1,0 +1,33 @@
+QWERTILLION (README)
+
+These are notes on the so-called "Qwertillion" text editor.
+
+BUGS
+
+Doesn't handle terminal window resizes cleanly.
+File names must all be distinct.
+Only supports ASCII (with move forward/backward word logic).
+
+BUILDING AND RUNNING
+
+./build.sh
+./qwi
+./qwi <files>
+./qwi -- <files>
+
+KEYBOARD SHORTCUTS
+
+Generally Emacs-like.
+
+Tab - inserts tab
+Ctrl+\ - exits program
+Home/End/C-a/C-e - beginning/end of line
+Left/Right/Up/Down; C-b/C-f/C-p/C-n - move cursor
+Delete/C-d - delete character after cursor
+Backspace - delete character before cursor
+Insert/Shift+Del - ignored
+M-f - move forward word
+M-b - move backward word
+C-s - save file (may prompt)
+C-k - kill line (clipboard not supported yet)
+C-space - sets mark (which can be set but not used)
