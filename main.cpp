@@ -421,6 +421,12 @@ void yank_from_clipboard(qwi::state *state, qwi::buffer *activeBuf) {
     (void)activeBuf;
 }
 
+void alt_yank_from_clipboard(qwi::state *state, qwi::buffer *activeBuf) {
+    // TODO: Implement (after we actually copy stuff to the clipboard).
+    (void)state;
+    (void)activeBuf;
+}
+
 
 void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
     // TODO: When term is non-blocking, we'll need to wait for readiness...?
@@ -501,6 +507,9 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
         } else if (ch == 'b') {
             // M-b
             move_backward_word(active_buf);
+            chars_read.clear();
+        } else if (ch == 'y') {
+            alt_yank_from_clipboard(state, active_buf);
             chars_read.clear();
         }
         // Insert for the user (the developer, me) unrecognized escape codes.
