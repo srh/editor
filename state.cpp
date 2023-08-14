@@ -74,4 +74,24 @@ void resize_window(state *st, const terminal_size& new_window) {
     // TODO: Resize prompt window.
 }
 
+void record_yank(clip_board *clb, buffer_string&& deletedText, yank_side side) {
+    if (clb->justRecorded) {
+        runtime_check(!clb->clips.empty(), "justRecorded true, clips empty");
+        switch (side) {
+        case yank_side::left:
+            clb->clips.back() = std::move(deletedText) + clb->clips.back();
+            break;
+        case yank_side::right:
+            clb->clips.back() += deletedText;
+            break;
+        }
+    } else {
+        clb->clips.push_back(std::move(deletedText));
+    }
+    clb->pasteNumber = 0;
+    clb->justRecorded = true;
+    clb->justYanked = std::nullopt;
+}
+
+
 }  // namespace qwi

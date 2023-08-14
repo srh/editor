@@ -18,6 +18,8 @@ struct buffer_char {
     friend auto operator<=>(buffer_char, buffer_char) = default;
 };
 
+using buffer_string = std::basic_string<buffer_char>;
+
 struct buffer {
     // Used to choose in the list of buffers, unique to the buffer.  Program logic should
     // not allow empty or overlong values.
@@ -66,25 +68,9 @@ struct prompt {
     buffer buf;
 };
 
-struct state {
-    // Sorted in order from least-recently-used -- `buf` is the active buffer and should
-    // get pushed onto the end of bufs after some other buf takes its place.
-    buffer buf;
-    std::vector<buffer> bufs;
-
-    std::optional<prompt> status_prompt;
-};
-
-constexpr uint32_t STATUS_AREA_HEIGHT = 1;
-void resize_window(state *st, const terminal_size& new_window);
-window_size main_buf_window_from_terminal_window(const terminal_size& term_window);
-
-size_t distance_to_eol(const qwi::buffer& buf, size_t pos);
-size_t distance_to_beginning_of_line(const qwi::buffer& buf, size_t pos);
-
-struct clipboard {
+struct clip_board {
     // A list of strings stored in the clipboard.
-    std::vector<std::string> clips;
+    std::vector<std::basic_string<buffer_char>> clips;
     // Did we just record some text?  Future text recordings will be appended to the
     // previous.  For example, if we typed C-k C-k C-k, we'd want those contiguous
     // cuttings to be concatenated into one.
@@ -95,6 +81,28 @@ struct clipboard {
     // just yanked.
     std::optional<size_t> justYanked;
 };
+
+enum class yank_side { left, right, };
+
+struct state {
+    // Sorted in order from least-recently-used -- `buf` is the active buffer and should
+    // get pushed onto the end of bufs after some other buf takes its place.
+    buffer buf;
+    std::vector<buffer> bufs;
+
+    std::optional<prompt> status_prompt;
+
+    clip_board clipboard;
+};
+
+constexpr uint32_t STATUS_AREA_HEIGHT = 1;
+void resize_window(state *st, const terminal_size& new_window);
+window_size main_buf_window_from_terminal_window(const terminal_size& term_window);
+
+size_t distance_to_eol(const qwi::buffer& buf, size_t pos);
+size_t distance_to_beginning_of_line(const qwi::buffer& buf, size_t pos);
+
+void record_yank(clip_board *clb, buffer_string&& deletedText, yank_side side);
 
 }  // namespace qwi
 

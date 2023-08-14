@@ -31,10 +31,12 @@ void update_offset_for_delete_range(size_t *offset, size_t range_beg, size_t ran
     }
 }
 
-void delete_left(qwi::buffer *buf, size_t count) {
+delete_result delete_left(qwi::buffer *buf, size_t count) {
     count = std::min<size_t>(count, buf->bef.size());
     size_t og_cursor = buf->bef.size();
     size_t new_cursor = og_cursor - count;
+    delete_result ret;
+    ret.deletedText.assign(buf->bef, new_cursor, count);
     buf->bef.resize(new_cursor);
     if (buf->mark.has_value()) {
         update_offset_for_delete_range(&*buf->mark, new_cursor, og_cursor);
@@ -43,11 +45,14 @@ void delete_left(qwi::buffer *buf, size_t count) {
     buf->virtual_column = current_column(*buf);
     update_offset_for_delete_range(&buf->first_visible_offset, new_cursor, og_cursor);
     recenter_cursor_if_offscreen(buf);
+    return ret;
 }
 
-void delete_right(qwi::buffer *buf, size_t count) {
+delete_result delete_right(qwi::buffer *buf, size_t count) {
     size_t cursor = buf->cursor();
     count = std::min<size_t>(count, buf->aft.size());
+    delete_result ret;
+    ret.deletedText.assign(buf->aft, 0, count);
     buf->aft.erase(0, count);
     if (buf->mark.has_value()) {
         update_offset_for_delete_range(&*buf->mark, cursor, cursor + count);
@@ -57,6 +62,7 @@ void delete_right(qwi::buffer *buf, size_t count) {
     buf->virtual_column = current_column(*buf);
     update_offset_for_delete_range(&buf->first_visible_offset, cursor, cursor + count);
     recenter_cursor_if_offscreen(buf);
+    return ret;
 }
 
 void move_right_by(qwi::buffer *buf, size_t count) {

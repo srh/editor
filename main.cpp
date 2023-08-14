@@ -386,19 +386,22 @@ void enter_key(qwi::state *state) {
     }
 }
 
-void kill_line(qwi::buffer *buf) {
+void kill_line(qwi::state *state, qwi::buffer *buf) {
+    // TODO: Use state/clipboard.
     // TODO: Store killed lines and clumps in kill ring.
     size_t eolDistance = qwi::distance_to_eol(*buf, buf->cursor());
 
+    delete_result delres;
     if (eolDistance == 0 && buf->cursor() < buf->size()) {
         // TODO: Record yank of this newline character.
-        delete_right(buf, 1);
+        delres = delete_right(buf, 1);
     } else {
-        delete_right(buf, eolDistance);
+        delres = delete_right(buf, eolDistance);
     }
+    record_yank(&state->clipboard, std::move(delres.deletedText), qwi::yank_side::right);
 }
 
-void kill_region(qwi::buffer *buf) {
+void kill_region(qwi::state *state, qwi::buffer *buf) {
     if (!buf->mark.has_value()) {
         // TODO: Display error
         return;
@@ -407,9 +410,11 @@ void kill_region(qwi::buffer *buf) {
     size_t mark = *buf->mark;
     size_t cursor = buf->cursor();
     if (mark > cursor) {
-        delete_right(buf, mark - cursor);
+        delete_result delres = delete_right(buf, mark - cursor);
+        record_yank(&state->clipboard, std::move(delres.deletedText), qwi::yank_side::right);
     } else if (mark < cursor) {
-        delete_left(buf, cursor - mark);
+        delete_result delres = delete_left(buf, cursor - mark);
+        record_yank(&state->clipboard, std::move(delres.deletedText), qwi::yank_side::left);
     } else {
         // Do nothing (no clipboard actions either).
     }
@@ -551,10 +556,10 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
             backspace_char(active_buf);
             break;
         case 'K':
-            kill_line(active_buf);
+            kill_line(state, active_buf);
             break;
         case 'W':
-            kill_region(active_buf);
+            kill_region(state, active_buf);
             break;
         case 'Y':
             yank_from_clipboard(state, active_buf);

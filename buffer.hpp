@@ -13,13 +13,17 @@ inline void insert_char(qwi::buffer *buf, char sch) {
     insert_chars(buf, &ch, 1);
 }
 
-void delete_left(qwi::buffer *buf, size_t count);
+// TODO: Maximal efficiency: don't construct a delete_result on exactly the funcalls that don't use it.
+struct delete_result {
+    qwi::buffer_string deletedText;
+};
+delete_result delete_left(qwi::buffer *buf, size_t count);
 
 inline void backspace_char(qwi::buffer *buf) {
     delete_left(buf, 1);
 }
 
-void delete_right(qwi::buffer *buf, size_t count);
+delete_result delete_right(qwi::buffer *buf, size_t count);
 
 inline void delete_char(qwi::buffer *buf) {
     delete_right(buf, 1);
