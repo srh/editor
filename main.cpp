@@ -386,6 +386,18 @@ void enter_key(qwi::state *state) {
     }
 }
 
+void delete_backward_word(qwi::state *state, qwi::buffer *buf) {
+    size_t d = backward_word_distance(buf);
+    delete_result delres = delete_left(buf, d);
+    record_yank(&state->clipboard, std::move(delres.deletedText), qwi::yank_side::left);
+}
+
+void delete_forward_word(qwi::state *state, qwi::buffer *buf) {
+    size_t d = forward_word_distance(buf);
+    delete_result delres = delete_right(buf, d);
+    record_yank(&state->clipboard, std::move(delres.deletedText), qwi::yank_side::right);
+}
+
 void kill_line(qwi::state *state, qwi::buffer *buf) {
     // TODO: Use state/clipboard.
     // TODO: Store killed lines and clumps in kill ring.
@@ -419,6 +431,8 @@ void kill_region(qwi::state *state, qwi::buffer *buf) {
         // Do nothing (no clipboard actions either).
     }
 }
+
+
 
 void yank_from_clipboard(qwi::state *state, qwi::buffer *activeBuf) {
     // TODO: Implement (after we actually copy stuff to the clipboard).
@@ -526,6 +540,13 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
         } else if (ch == 'y') {
             alt_yank_from_clipboard(state, active_buf);
             chars_read.clear();
+        } else if (ch == 'd') {
+            delete_forward_word(state, active_buf);
+            chars_read.clear();
+        } else if (ch == ('?' ^ CTRL_XOR_MASK)) {
+            // M-backspace
+            delete_backward_word(state, active_buf);
+            chars_read.clear();
         }
         // Insert for the user (the developer, me) unrecognized escape codes.
         if (!chars_read.empty()) {
@@ -535,6 +556,9 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
                 insert_char(active_buf, c);
             }
         }
+    } else if (ch == 8) {
+        // Ctrl+Backspace
+        delete_backward_word(state, active_buf);
     } else if (uint8_t(ch) <= 127) {
         switch (ch ^ CTRL_XOR_MASK) {
         case 'A':
