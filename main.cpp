@@ -399,13 +399,10 @@ void delete_forward_word(qwi::state *state, qwi::buffer *buf) {
 }
 
 void kill_line(qwi::state *state, qwi::buffer *buf) {
-    // TODO: Use state/clipboard.
-    // TODO: Store killed lines and clumps in kill ring.
     size_t eolDistance = qwi::distance_to_eol(*buf, buf->cursor());
 
     delete_result delres;
     if (eolDistance == 0 && buf->cursor() < buf->size()) {
-        // TODO: Record yank of this newline character.
         delres = delete_right(buf, 1);
     } else {
         delres = delete_right(buf, eolDistance);
