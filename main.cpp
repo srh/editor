@@ -422,14 +422,24 @@ void kill_region(qwi::state *state, qwi::buffer *buf) {
 
 void yank_from_clipboard(qwi::state *state, qwi::buffer *activeBuf) {
     // TODO: Implement (after we actually copy stuff to the clipboard).
-    (void)state;
-    (void)activeBuf;
+    std::optional<const qwi::buffer_string *> text = qwi::do_yank(&state->clipboard);
+    if (text.has_value()) {
+        // TODO: insert_chars is assumed to handle undo info here.
+        insert_chars(activeBuf, (*text)->data(), (*text)->size());
+    }
+    // Note that this gets called directly by C-y and by alt_yank_from_clipboard as a
+    // helper.  Possibly false-DRY (someday).
 }
 
 void alt_yank_from_clipboard(qwi::state *state, qwi::buffer *activeBuf) {
-    // TODO: Implement (after we actually copy stuff to the clipboard).
-    (void)state;
-    (void)activeBuf;
+    if (state->clipboard.justYanked.has_value()) {
+        // TODO: we assume here that delete_left handles undo info.
+        delete_left(activeBuf, *state->clipboard.justYanked);
+        state->clipboard.stepPasteNumber();
+        yank_from_clipboard(state, activeBuf);
+    } else {
+        // Otherwise, a no-op, a non-keypress.
+    }
 }
 
 

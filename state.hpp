@@ -80,6 +80,8 @@ struct clip_board {
     // Did we just yank some text from the clipboard?  This number tells how much text we
     // just yanked.
     std::optional<size_t> justYanked;
+
+    void stepPasteNumber() { pasteNumber += 1; }
 };
 
 enum class yank_side { left, right, };
@@ -103,6 +105,7 @@ size_t distance_to_eol(const qwi::buffer& buf, size_t pos);
 size_t distance_to_beginning_of_line(const qwi::buffer& buf, size_t pos);
 
 void record_yank(clip_board *clb, buffer_string&& deletedText, yank_side side);
+std::optional<const buffer_string *> do_yank(clip_board *clb);
 
 }  // namespace qwi
 

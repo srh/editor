@@ -93,5 +93,18 @@ void record_yank(clip_board *clb, buffer_string&& deletedText, yank_side side) {
     clb->justYanked = std::nullopt;
 }
 
+std::optional<const buffer_string *> do_yank(clip_board *clb) {
+    clb->justRecorded = false;
+    if (clb->clips.empty()) {
+        clb->justYanked = 0;
+        return std::nullopt;
+    }
+    size_t sz = clb->clips.size();
+    buffer_string *str = &clb->clips.at(sz - 1 - clb->pasteNumber % sz);
+    clb->justYanked = str->size();
+    return std::make_optional(str);
+}
+
+
 
 }  // namespace qwi
