@@ -107,6 +107,8 @@ size_t distance_to_beginning_of_line(const qwi::buffer& buf, size_t pos);
 void record_yank(clip_board *clb, buffer_string&& deletedText, yank_side side);
 std::optional<const buffer_string *> do_yank(clip_board *clb);
 
+void no_yank(clip_board *clb);
+
 }  // namespace qwi
 
 inline char *as_chars(qwi::buffer_char *chs) {

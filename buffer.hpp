@@ -3,30 +3,32 @@
 
 #include "state.hpp"
 
-void insert_chars(qwi::buffer *buf, const qwi::buffer_char *chs, size_t count);
+struct [[nodiscard]] insert_result { };
 
-inline void insert_char(qwi::buffer *buf, qwi::buffer_char sch) {
-    insert_chars(buf, &sch, 1);
+insert_result insert_chars(qwi::buffer *buf, const qwi::buffer_char *chs, size_t count);
+
+inline insert_result insert_char(qwi::buffer *buf, qwi::buffer_char sch) {
+    return insert_chars(buf, &sch, 1);
 }
-inline void insert_char(qwi::buffer *buf, char sch) {
+inline insert_result insert_char(qwi::buffer *buf, char sch) {
     qwi::buffer_char ch = {uint8_t(sch)};
-    insert_chars(buf, &ch, 1);
+    return insert_chars(buf, &ch, 1);
 }
 
 // TODO: Maximal efficiency: don't construct a delete_result on exactly the funcalls that don't use it.
-struct delete_result {
+struct [[nodiscard]] delete_result {
     qwi::buffer_string deletedText;
 };
 delete_result delete_left(qwi::buffer *buf, size_t count);
 
-inline void backspace_char(qwi::buffer *buf) {
-    delete_left(buf, 1);
+inline delete_result backspace_char(qwi::buffer *buf) {
+    return delete_left(buf, 1);
 }
 
 delete_result delete_right(qwi::buffer *buf, size_t count);
 
-inline void delete_char(qwi::buffer *buf) {
-    delete_right(buf, 1);
+inline delete_result delete_char(qwi::buffer *buf) {
+    return delete_right(buf, 1);
 }
 
 void move_right_by(qwi::buffer *buf, size_t count);

@@ -105,6 +105,10 @@ std::optional<const buffer_string *> do_yank(clip_board *clb) {
     return std::make_optional(str);
 }
 
+void no_yank(clip_board *clb) {
+    clb->justRecorded = false;
+    clb->justYanked = std::nullopt;
+}
 
 
 }  // namespace qwi

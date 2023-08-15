@@ -11,7 +11,7 @@
 
 using qwi::buffer_char;
 
-void insert_chars(qwi::buffer *buf, const buffer_char *chs, size_t count) {
+insert_result insert_chars(qwi::buffer *buf, const buffer_char *chs, size_t count) {
     size_t og_cursor = buf->cursor();
     buf->bef.append(chs, count);
     if (buf->mark.has_value()) {
@@ -21,6 +21,7 @@ void insert_chars(qwi::buffer *buf, const buffer_char *chs, size_t count) {
     buf->virtual_column = current_column(*buf);
     buf->first_visible_offset += (buf->first_visible_offset > og_cursor ? count : 0);
     recenter_cursor_if_offscreen(buf);
+    return insert_result{};
 }
 
 void update_offset_for_delete_range(size_t *offset, size_t range_beg, size_t range_end) {

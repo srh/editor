@@ -28,6 +28,53 @@ struct command_line_args {
     std::vector<std::string> files;
 };
 
+// Generated and returned to indicate that the code exhaustively handles undo and killring behavior.
+struct [[nodiscard]] undo_killring_handled { };
+
+// TODO: All keypresses should be implemented.
+undo_killring_handled unimplemented_keypress() {
+    return undo_killring_handled{};
+}
+
+undo_killring_handled nop_keypress() {
+    return undo_killring_handled{};
+}
+
+// Callers will need to handle undo.  // TODO: fix callers and remove this.
+undo_killring_handled undo_will_need_handling() {
+    return undo_killring_handled{};
+}
+
+undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, const insert_result&) {
+    // TODO: Do ... undo stuff.
+    no_yank(&state->clipboard);
+    (void)buf;
+    return undo_killring_handled{};
+}
+
+undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, const delete_result&) {
+    // TODO: Do ... undo stuff.
+    no_yank(&state->clipboard);
+    (void)buf;
+    return undo_killring_handled{};
+}
+
+struct [[nodiscard]] noundo_killring_action { };
+undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, const noundo_killring_action&) {
+    no_yank(&state->clipboard);
+    (void)buf;
+    return undo_killring_handled{};
+}
+
+// Possibly a useless categorization -- maybe useful for refactoring later.
+struct [[nodiscard]] navigation_action { };
+undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, const navigation_action&) {
+    no_yank(&state->clipboard);
+    (void)buf;
+    return undo_killring_handled{};
+}
+
+
 bool parse_command_line(FILE *err_fp, int argc, const char **argv, command_line_args *out) {
     // TODO: We could check for duplicate or conflicting args (like --help and --version
     // used together with other args).
@@ -293,15 +340,7 @@ void redraw_state(int term, const terminal_size& window, qwi::state& state) {
     write_frame(term, frame);
 }
 
-
 // Cheap fn for debugging purposes.
-void push_printable_repr(std::basic_string<buffer_char> *str, char sch);
-void insert_printable_repr(qwi::buffer *buf, char sch) {
-    std::basic_string<buffer_char> str;
-    push_printable_repr(&str, sch);
-    insert_chars(buf, str.data(), str.size());
-}
-
 void push_printable_repr(std::basic_string<buffer_char> *str, char sch) {
     uint8_t ch = uint8_t(sch);
     if (ch == '\n' || ch == '\t') {
@@ -315,6 +354,13 @@ void push_printable_repr(std::basic_string<buffer_char> *str, char sch) {
     } else {
         str->push_back(buffer_char{ch});
     }
+}
+
+undo_killring_handled insert_printable_repr(qwi::state *state, qwi::buffer *buf, char sch) {
+    std::basic_string<buffer_char> str;
+    push_printable_repr(&str, sch);
+    insert_result res = insert_chars(buf, str.data(), str.size());
+    return note_action(state, buf, res);
 }
 
 bool read_tty_char(int term_fd, char *out) {
@@ -370,10 +416,13 @@ void save_file_action(qwi::state *state) {
     }
 }
 
-void enter_key(qwi::state *state) {
+undo_killring_handled enter_key(qwi::state *state) {
     if (!state->status_prompt.has_value()) {
-        insert_char(&state->buf, '\n');
+        insert_result res = insert_char(&state->buf, '\n');
+        return note_action(state, &state->buf, res);
     } else {
+        // end undo/kill ring stuff -- undo redundant because we're destructing the buf.
+        undo_killring_handled ret = note_action(state, &state->status_prompt->buf, noundo_killring_action{});
         // TODO: Of course, handle errors, such as if directory doesn't exist.
         std::string text = state->status_prompt->buf.copy_to_string();
         // TODO: Implement displaying errors to the user.
@@ -383,22 +432,25 @@ void enter_key(qwi::state *state) {
             save_buf_to_married_file(state->buf);
             state->buf.name = buf_name_from_file_path(fs::path(text));
         }
+        return ret;
     }
 }
 
-void delete_backward_word(qwi::state *state, qwi::buffer *buf) {
+undo_killring_handled delete_backward_word(qwi::state *state, qwi::buffer *buf) {
     size_t d = backward_word_distance(buf);
     delete_result delres = delete_left(buf, d);
     record_yank(&state->clipboard, std::move(delres.deletedText), qwi::yank_side::left);
+    return undo_will_need_handling();
 }
 
-void delete_forward_word(qwi::state *state, qwi::buffer *buf) {
+undo_killring_handled delete_forward_word(qwi::state *state, qwi::buffer *buf) {
     size_t d = forward_word_distance(buf);
     delete_result delres = delete_right(buf, d);
     record_yank(&state->clipboard, std::move(delres.deletedText), qwi::yank_side::right);
+    return undo_will_need_handling();
 }
 
-void kill_line(qwi::state *state, qwi::buffer *buf) {
+undo_killring_handled kill_line(qwi::state *state, qwi::buffer *buf) {
     size_t eolDistance = qwi::distance_to_eol(*buf, buf->cursor());
 
     delete_result delres;
@@ -408,12 +460,14 @@ void kill_line(qwi::state *state, qwi::buffer *buf) {
         delres = delete_right(buf, eolDistance);
     }
     record_yank(&state->clipboard, std::move(delres.deletedText), qwi::yank_side::right);
+    return undo_will_need_handling();
 }
 
-void kill_region(qwi::state *state, qwi::buffer *buf) {
+undo_killring_handled kill_region(qwi::state *state, qwi::buffer *buf) {
     if (!buf->mark.has_value()) {
         // TODO: Display error
-        return;
+        // (We do NOT want no_yank here.)  I think we do want to disrupt the undo action chain.
+        return undo_will_need_handling();
     }
     // TODO: Copy to clipboard.
     size_t mark = *buf->mark;
@@ -421,40 +475,54 @@ void kill_region(qwi::state *state, qwi::buffer *buf) {
     if (mark > cursor) {
         delete_result delres = delete_right(buf, mark - cursor);
         record_yank(&state->clipboard, std::move(delres.deletedText), qwi::yank_side::right);
+        return undo_will_need_handling();
     } else if (mark < cursor) {
         delete_result delres = delete_left(buf, cursor - mark);
         record_yank(&state->clipboard, std::move(delres.deletedText), qwi::yank_side::left);
+        return undo_will_need_handling();
     } else {
         // Do nothing (no clipboard actions either).
+        // (We do NOT want no_yank here.)  I think we do want to disrupt the undo action chain.
+        return undo_will_need_handling();
     }
 }
 
+undo_killring_handled delete_keypress(qwi::state *state, qwi::buffer *buf) {
+    delete_result res = delete_char(buf);
+    return note_action(state, buf, res);
+}
 
-
-void yank_from_clipboard(qwi::state *state, qwi::buffer *activeBuf) {
+undo_killring_handled yank_from_clipboard(qwi::state *state, qwi::buffer *activeBuf) {
     // TODO: Implement (after we actually copy stuff to the clipboard).
     std::optional<const qwi::buffer_string *> text = qwi::do_yank(&state->clipboard);
     if (text.has_value()) {
         // TODO: insert_chars is assumed to handle undo info here.
-        insert_chars(activeBuf, (*text)->data(), (*text)->size());
+        insert_result res = insert_chars(activeBuf, (*text)->data(), (*text)->size());
+        (void)res;
+        return undo_will_need_handling();
+    } else {
+        // This might be a nop_keypress for undo purposes; I'm unsure.
+        return undo_will_need_handling();
     }
     // Note that this gets called directly by C-y and by alt_yank_from_clipboard as a
     // helper.  Possibly false-DRY (someday).
 }
 
-void alt_yank_from_clipboard(qwi::state *state, qwi::buffer *activeBuf) {
+undo_killring_handled alt_yank_from_clipboard(qwi::state *state, qwi::buffer *activeBuf) {
     if (state->clipboard.justYanked.has_value()) {
         // TODO: we assume here that delete_left handles undo info.
-        delete_left(activeBuf, *state->clipboard.justYanked);
+        // TODO: this code will be wrong with undo impled -- the deletion and insertion should be a single undo chunk.
+        delete_result res = delete_left(activeBuf, *state->clipboard.justYanked);
         state->clipboard.stepPasteNumber();
-        yank_from_clipboard(state, activeBuf);
+        return yank_from_clipboard(state, activeBuf);
     } else {
         // Otherwise, a no-op, a non-keypress.
+        return nop_keypress();
     }
 }
 
 
-void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
+undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
     // TODO: When term is non-blocking, we'll need to wait for readiness...?
     char ch;
     check_read_tty_char(term, &ch);
@@ -463,12 +531,14 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
 
     // TODO: Named constants for these keyboard keys and such.
     if (ch == 13) {
-        enter_key(state);
+        return enter_key(state);
     } else if (ch == '\t' || (ch >= 32 && ch < 127)) {
-        insert_char(active_buf, ch);
+        insert_result res = insert_char(active_buf, ch);
+        return note_action(state, active_buf, res);
     } else if (ch == 28) {
         // Ctrl+backslash
         *exit_loop = true;
+        return undo_killring_handled{};
         // TODO: Drop exit var and just break; here?  We have a spurious redraw.  Or just abort?
     } else if (ch == 27) {
         std::string chars_read;
@@ -481,30 +551,29 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
 
             if (ch == 'C') {
                 move_right(active_buf);
-                chars_read.clear();
+                return note_action(state, active_buf, navigation_action{});
             } else if (ch == 'D') {
                 move_left(active_buf);
-                chars_read.clear();
+                return note_action(state, active_buf, navigation_action{});
             } else if (ch == 'A') {
                 move_up(active_buf);
-                chars_read.clear();
+                return note_action(state, active_buf, navigation_action{});
             } else if (ch == 'B') {
                 move_down(active_buf);
-                chars_read.clear();
+                return note_action(state, active_buf, navigation_action{});
             } else if (ch == 'H') {
                 move_home(active_buf);
-                chars_read.clear();
+                return note_action(state, active_buf, navigation_action{});
             } else if (ch == 'F') {
                 move_end(active_buf);
-                chars_read.clear();
+                return note_action(state, active_buf, navigation_action{});
             } else if (isdigit(ch)) {
                 // TODO: Generic parsing of numeric/~ escape codes.
                 if (ch == '3') {
                     check_read_tty_char(term, &ch);
                     chars_read.push_back(ch);
                     if (ch == '~') {
-                        delete_char(active_buf);
-                        chars_read.clear();
+                        return delete_keypress(state, active_buf);
                     } else if (ch == ';') {
                         check_read_tty_char(term, &ch);
                         chars_read.push_back(ch);
@@ -514,6 +583,7 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
                             if (ch == '~') {
                                 // TODO: Handle Shift+Del key.
                                 chars_read.clear();
+                                return unimplemented_keypress();
                             }
                         }
                     }
@@ -522,92 +592,105 @@ void read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
                     chars_read.push_back(ch);
                     if (ch == '~') {
                         // TODO: Handle Insert key.
-                        chars_read.clear();
+                        return unimplemented_keypress();
                     }
                 }
             }
         } else if (ch == 'f') {
             // M-f
             move_forward_word(active_buf);
-            chars_read.clear();
+            return note_action(state, active_buf, navigation_action{});
         } else if (ch == 'b') {
             // M-b
             move_backward_word(active_buf);
-            chars_read.clear();
+            return note_action(state, active_buf, navigation_action{});
         } else if (ch == 'y') {
-            alt_yank_from_clipboard(state, active_buf);
-            chars_read.clear();
+            return alt_yank_from_clipboard(state, active_buf);
         } else if (ch == 'd') {
-            delete_forward_word(state, active_buf);
-            chars_read.clear();
+            return delete_forward_word(state, active_buf);
         } else if (ch == ('?' ^ CTRL_XOR_MASK)) {
             // M-backspace
-            delete_backward_word(state, active_buf);
-            chars_read.clear();
+            return delete_backward_word(state, active_buf);
         }
         // Insert for the user (the developer, me) unrecognized escape codes.
-        if (!chars_read.empty()) {
-            insert_char(active_buf, '\\');
-            insert_char(active_buf, 'e');
+        logic_check(!chars_read.empty(), "chars_read expected empty");
+        {
+            qwi::buffer_string str;
+            str.push_back(buffer_char::from_char('\\'));
+            str.push_back(buffer_char::from_char('e'));
             for (char c : chars_read) {
-                insert_char(active_buf, c);
+                str.push_back(buffer_char::from_char(c));
             }
+
+            insert_result res = insert_chars(active_buf, str.data(), str.size());
+            return note_action(state, active_buf, res);
         }
     } else if (ch == 8) {
         // Ctrl+Backspace
-        delete_backward_word(state, active_buf);
+        return delete_backward_word(state, active_buf);
     } else if (uint8_t(ch) <= 127) {
         switch (ch ^ CTRL_XOR_MASK) {
         case 'A':
             move_home(active_buf);
+            return note_action(state, active_buf, navigation_action{});
             break;
         case 'B':
             move_left(active_buf);
+            return note_action(state, active_buf, navigation_action{});
             break;
-        case 'D':
-            delete_char(active_buf);
-            break;
+        case 'D': {
+            delete_result res = delete_char(active_buf);
+            return note_action(state, active_buf, res);
+        } break;
         case 'E':
             move_end(active_buf);
+            return note_action(state, active_buf, navigation_action{});
             break;
         case 'F':
             move_right(active_buf);
+            return note_action(state, active_buf, navigation_action{});
             break;
         case 'N':
             move_down(active_buf);
+            return note_action(state, active_buf, navigation_action{});
             break;
         case 'P':
             move_up(active_buf);
+            return note_action(state, active_buf, navigation_action{});
             break;
         case 'S':
             // May prompt if the buf isn't married to a file.
             save_file_action(state);
+            return note_action(state, active_buf, noundo_killring_action{});
             break;
-        case '?':
-            backspace_char(active_buf);
-            break;
+        case '?': {
+            delete_result res = backspace_char(active_buf);
+            return note_action(state, active_buf, res);
+        } break;
         case 'K':
-            kill_line(state, active_buf);
+            return kill_line(state, active_buf);
             break;
         case 'W':
-            kill_region(state, active_buf);
+            return kill_region(state, active_buf);
             break;
         case 'Y':
-            yank_from_clipboard(state, active_buf);
+            return yank_from_clipboard(state, active_buf);
             break;
         case '@':
             // Ctrl+Space same as C-@
             set_mark(active_buf);
+            // TODO: We want this?
+            return note_action(state, active_buf, noundo_killring_action{});
             break;
         default:
             // For now we do push the printable repr for any unhandled chars, for debugging purposes.
             // TODO: Handle other possible control chars.
-            insert_printable_repr(active_buf, ch);
+            return insert_printable_repr(state, active_buf, ch);
         }
     } else {
         // TODO: Handle high characters -- do we just insert them, or do we validate
         // UTF-8, or what?
-        insert_printable_repr(active_buf, ch);
+        return insert_printable_repr(state, active_buf, ch);
     }
 }
 
@@ -619,7 +702,12 @@ void main_loop(int term, const command_line_args& args) {
 
     bool exit = false;
     for (; !exit; ) {
-        read_and_process_tty_input(term, &state, &exit);
+        undo_killring_handled handled = read_and_process_tty_input(term, &state, &exit);
+        {
+            // Undo and killring behavior has been handled exhaustively in all branches of
+            // read_and_process_tty_input -- here's where we consume that fact.
+            (void)handled;
+        }
 
         // TODO: Use SIGWINCH.  Procrastinating this for as long as possible.
         terminal_size new_window = get_terminal_size(term);
