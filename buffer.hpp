@@ -43,18 +43,9 @@ inline void move_left(qwi::buffer *buf) {
     move_left_by(buf, 1);
 }
 
-// TODO: These functions below are too non-primitive for buffer.cpp.
-size_t forward_word_distance(const qwi::buffer *buf);
-size_t backward_word_distance(const qwi::buffer *buf);
-
-void move_forward_word(qwi::buffer *buf);
-void move_backward_word(qwi::buffer *buf);
-
-void move_up(qwi::buffer *buf);
-void move_down(qwi::buffer *buf);
-void move_home(qwi::buffer *buf);
-void move_end(qwi::buffer *buf);
 void set_mark(qwi::buffer *buf);
+
+// See movement.hpp for more.
 
 #endif  // QWERTILLION_BUFFER_HPP_
 

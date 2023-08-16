@@ -14,6 +14,7 @@
 #include "buffer.hpp"
 #include "error.hpp"
 #include "io.hpp"
+#include "movement.hpp"
 #include "state.hpp"
 #include "term_ui.hpp"
 #include "terminal.hpp"
