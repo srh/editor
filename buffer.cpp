@@ -16,7 +16,7 @@
 using qwi::buffer_char;
 
 insert_result insert_chars(qwi::buffer *buf, const buffer_char *chs, size_t count) {
-    size_t og_cursor = buf->cursor();
+    const size_t og_cursor = buf->cursor();
     buf->bef.append(chs, count);
     if (buf->mark.has_value()) {
         *buf->mark += (*buf->mark > og_cursor ? count : 0);
@@ -25,7 +25,21 @@ insert_result insert_chars(qwi::buffer *buf, const buffer_char *chs, size_t coun
     buf->virtual_column = current_column(*buf);
     buf->first_visible_offset += (buf->first_visible_offset > og_cursor ? count : 0);
     recenter_cursor_if_offscreen(buf);
-    return insert_result{};
+    return { .new_cursor = buf->cursor(), .insertedText = qwi::buffer_string(chs, count), .side = qwi::Side::left };
+}
+
+insert_result insert_chars_right(qwi::buffer *buf, const buffer_char *chs, size_t count) {
+    const size_t og_cursor = buf->cursor();
+    buf->aft.insert(0, chs, count);
+    if (buf->mark.has_value()) {
+        // TODO: Is ">= og_cursor" (unlike insert_chars) what we want here?  (Seems like it.)
+        *buf->mark += (*buf->mark >= og_cursor ? count : 0);
+    }
+    buf->virtual_column = current_column(*buf);
+    // TODO: Do we want ">= og_cursor" here?  Seems very context-dependent.
+    buf->first_visible_offset += (buf->first_visible_offset >= og_cursor ? count : 0);
+    recenter_cursor_if_offscreen(buf);
+    return { .new_cursor = buf->cursor(), .insertedText = qwi::buffer_string(chs, count), .side = qwi::Side::right };
 }
 
 void update_offset_for_delete_range(size_t *offset, size_t range_beg, size_t range_end) {
@@ -40,8 +54,12 @@ delete_result delete_left(qwi::buffer *buf, size_t count) {
     count = std::min<size_t>(count, buf->bef.size());
     size_t og_cursor = buf->bef.size();
     size_t new_cursor = og_cursor - count;
+
     delete_result ret;
+    ret.new_cursor = new_cursor;
     ret.deletedText.assign(buf->bef, new_cursor, count);
+    ret.side = qwi::Side::left;
+
     buf->bef.resize(new_cursor);
     if (buf->mark.has_value()) {
         update_offset_for_delete_range(&*buf->mark, new_cursor, og_cursor);
@@ -56,8 +74,12 @@ delete_result delete_left(qwi::buffer *buf, size_t count) {
 delete_result delete_right(qwi::buffer *buf, size_t count) {
     size_t cursor = buf->cursor();
     count = std::min<size_t>(count, buf->aft.size());
+
     delete_result ret;
+    ret.new_cursor = cursor;
     ret.deletedText.assign(buf->aft, 0, count);
+    ret.side = qwi::Side::right;
+
     buf->aft.erase(0, count);
     if (buf->mark.has_value()) {
         update_offset_for_delete_range(&*buf->mark, cursor, cursor + count);

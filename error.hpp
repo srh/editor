@@ -37,6 +37,11 @@ struct runtime_check_failure { };
         } \
     } while (false)
 
+#if 0
+#define debugf(fmt, ...) fprintf(stderr, fmt "\n", ##__VA_ARGS__)
+#else
+#define debugf(fmt, ...) [](...){}(fmt, ##__VA_ARGS__)
+#endif
 
 
 #endif  // QWERTILLION_ERROR_HPP_

@@ -1,9 +1,15 @@
 #include "state.hpp"
 
+#include "arith.hpp"
+#include "buffer.hpp"  // for insert_result and delete_result in undo logic
 #include "error.hpp"
 // TODO: We don't want this dependency exactly -- we kind of want ui info to be separate from state.
 #include "terminal.hpp"
 #include "term_ui.hpp"
+
+// TODO: Decl somewhere, move from main.cpp.
+qwi::undo_item make_reverse_action(insert_result&& i_res);
+qwi::undo_item make_reverse_action(delete_result&& i_res);
 
 namespace qwi {
 
@@ -74,19 +80,19 @@ void resize_window(state *st, const terminal_size& new_window) {
     // TODO: Resize prompt window.
 }
 
-void record_yank(clip_board *clb, buffer_string&& deletedText, yank_side side) {
+void record_yank(clip_board *clb, const buffer_string& deletedText, yank_side side) {
     if (clb->justRecorded) {
         runtime_check(!clb->clips.empty(), "justRecorded true, clips empty");
         switch (side) {
         case yank_side::left:
-            clb->clips.back() = std::move(deletedText) + clb->clips.back();
+            clb->clips.back() = deletedText + clb->clips.back();
             break;
         case yank_side::right:
             clb->clips.back() += deletedText;
             break;
         }
     } else {
-        clb->clips.push_back(std::move(deletedText));
+        clb->clips.push_back(deletedText);
     }
     clb->pasteNumber = 0;
     clb->justRecorded = true;
@@ -110,5 +116,117 @@ void no_yank(clip_board *clb) {
     clb->justYanked = std::nullopt;
 }
 
+// Starts a new branch to undo history, but without any edits yet.
+void add_nop_edit(undo_history *history) {
+    if (!history->future.empty()) {
+        history->past.push_back({
+                .type = undo_item::Type::mountain,
+                .history = std::move(history->future)
+            });
+        history->future.clear();
+    }
+}
+
+void add_edit(undo_history *history, undo_item&& item) {
+    add_nop_edit(history);
+    history->past.push_back(std::move(item));
+}
+
+void reverse_add_edit(undo_history *history, undo_item&& item) {
+    history->future.push_back(std::move(item));
+}
+
+void atomic_undo(buffer *buf, undo_item&& item) {
+    switch (item.action) {
+    case undo_item::Action::insert: {
+        buf->set_cursor(item.beg);
+        insert_result res;
+        switch (item.side) {
+        case Side::left:
+            res = insert_chars(buf, item.text.data(), item.text.size());
+            break;
+        case Side::right:
+            res = insert_chars_right(buf, item.text.data(), item.text.size());
+            break;
+        }
+
+        buf->undo_info.future.push_back(make_reverse_action(std::move(res)));
+
+    } break;
+    case undo_item::Action::del:
+        buf->set_cursor(item.beg);
+        delete_result res;
+        // jsmacs's delete_left/delete_right branching with the item.beg+item.text.size()
+        // logic is replicated here, but it seems unnecessary -- all it does is construct
+        // the delete_result which produces the correct undo info -- with the right .side
+        // field.
+        switch (item.side) {
+        case Side::left:
+            res = delete_left(buf, item.text.size());
+            break;
+        case Side::right:
+            res = delete_right(buf, item.text.size());
+            break;
+        }
+        logic_check(res.deletedText == item.text, "undo deletion action expecting text to match deleted text");
+        buf->undo_info.future.push_back(make_reverse_action(std::move(res)));
+        break;
+    }
+
+    // TODO: Must impl.
+}
+
+undo_item opposite(const undo_item &item) {
+    logic_check(item.type == undo_item::Type::atomic, "opposite expecting atomic undo item");
+    // TODO: Is .beg value right in jsmacs?
+
+    size_t beg = item.beg;
+    undo_item::Action act;
+    switch (item.action) {
+    case undo_item::Action::insert:
+        act = undo_item::Action::del;
+        if (item.side == Side::left) {
+            beg = size_add(beg, item.text.size());
+        }
+        break;
+    case undo_item::Action::del:
+        act = undo_item::Action::insert;
+        if (item.side == Side::left) {
+            beg = size_sub(beg, item.text.size());
+        }
+        break;
+    }
+
+    undo_item ret = {
+        .type = undo_item::Type::atomic,
+        .beg = beg,
+        .text = item.text,
+        .action = act,
+        .side = item.side,
+    };
+    return ret;
+}
+
+void perform_undo(buffer *buf) {
+    if (buf->undo_info.past.empty()) {
+        return;
+    }
+    undo_item item = std::move(buf->undo_info.past.back());
+    buf->undo_info.past.pop_back();
+    switch (item.type) {
+    case undo_item::Type::atomic: {
+        atomic_undo(buf, std::move(item));
+    } break;
+    case undo_item::Type::mountain: {
+        undo_item it = std::move(item.history.back());
+        item.history.pop_back();
+        buf->undo_info.past.push_back(opposite(it));
+        if (!item.history.empty()) {
+            buf->undo_info.past.push_back(std::move(item));
+        }
+        atomic_undo(buf, std::move(it));
+    } break;
+    }
+}
 
 }  // namespace qwi

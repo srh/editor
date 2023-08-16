@@ -41,22 +41,73 @@ undo_killring_handled nop_keypress() {
     return undo_killring_handled{};
 }
 
-// Callers will need to handle undo.  // TODO: fix callers and remove this.
+// Callers will need to handle undo.
+#if 0
 undo_killring_handled undo_will_need_handling() {
     return undo_killring_handled{};
 }
+#endif
 
-undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, const insert_result&) {
+qwi::undo_item make_reverse_action(insert_result&& i_res) {
+    using qwi::undo_item;
+
+    undo_item item = {
+        .type = undo_item::Type::atomic,
+        .beg = i_res.new_cursor,
+        .text = std::move(i_res.insertedText),
+        .action = undo_item::Action::del,
+        .side = i_res.side,  // We inserted on left (right), hence we delete on left (right)
+    };
+
+    return item;
+}
+
+void note_undo(qwi::buffer *buf, insert_result&& i_res) {
+    using qwi::undo_item;
+
+    // Make and add the _reverse_ action in the undo items.
+    // (Why the reverse action?  Because jsmacs did it that way.)
+
+    // TODO: Of course, in some cases we have reverseAddEdit -- but that's only when
+    // actually undoing, so there are none yet.
+    add_edit(&buf->undo_info, make_reverse_action(std::move(i_res)));
+}
+
+void note_nop_undo(qwi::buffer *buf) {
+    add_nop_edit(&buf->undo_info);
+}
+
+undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, insert_result&& i_res) {
     // TODO: Do ... undo stuff.
     no_yank(&state->clipboard);
-    (void)buf;
+
+    note_undo(buf, std::move(i_res));
     return undo_killring_handled{};
 }
 
-undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, const delete_result&) {
-    // TODO: Do ... undo stuff.
+qwi::undo_item make_reverse_action(delete_result&& d_res) {
+    using qwi::undo_item;
+
+    // Make reverse action.
+    undo_item item = {
+        .type = undo_item::Type::atomic,
+        .beg = d_res.new_cursor,
+        .text = std::move(d_res.deletedText),
+        .action = undo_item::Action::insert,
+        .side = d_res.side,  // We deleted on left (right), hence we insert on left (right)
+    };
+
+    return item;
+}
+
+void note_undo(qwi::buffer *buf, delete_result&& d_res) {
+    add_edit(&buf->undo_info, make_reverse_action(std::move(d_res)));
+}
+
+undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, delete_result&& d_res) {
     no_yank(&state->clipboard);
-    (void)buf;
+
+    note_undo(buf, std::move(d_res));
     return undo_killring_handled{};
 }
 
@@ -361,7 +412,7 @@ undo_killring_handled insert_printable_repr(qwi::state *state, qwi::buffer *buf,
     std::basic_string<buffer_char> str;
     push_printable_repr(&str, sch);
     insert_result res = insert_chars(buf, str.data(), str.size());
-    return note_action(state, buf, res);
+    return note_action(state, buf, std::move(res));
 }
 
 bool read_tty_char(int term_fd, char *out) {
@@ -420,9 +471,9 @@ void save_file_action(qwi::state *state) {
 undo_killring_handled enter_key(qwi::state *state) {
     if (!state->status_prompt.has_value()) {
         insert_result res = insert_char(&state->buf, '\n');
-        return note_action(state, &state->buf, res);
+        return note_action(state, &state->buf, std::move(res));
     } else {
-        // end undo/kill ring stuff -- undo redundant because we're destructing the buf.
+        // end undo/kill ring stuff -- undo n/a because we're destructing the buf and haven't made changes.
         undo_killring_handled ret = note_action(state, &state->status_prompt->buf, noundo_killring_action{});
         // TODO: Of course, handle errors, such as if directory doesn't exist.
         std::string text = state->status_prompt->buf.copy_to_string();
@@ -440,15 +491,17 @@ undo_killring_handled enter_key(qwi::state *state) {
 undo_killring_handled delete_backward_word(qwi::state *state, qwi::buffer *buf) {
     size_t d = backward_word_distance(buf);
     delete_result delres = delete_left(buf, d);
-    record_yank(&state->clipboard, std::move(delres.deletedText), qwi::yank_side::left);
-    return undo_will_need_handling();
+    record_yank(&state->clipboard, delres.deletedText, qwi::yank_side::left);
+    note_undo(buf, std::move(delres));
+    return undo_killring_handled{};
 }
 
 undo_killring_handled delete_forward_word(qwi::state *state, qwi::buffer *buf) {
     size_t d = forward_word_distance(buf);
     delete_result delres = delete_right(buf, d);
-    record_yank(&state->clipboard, std::move(delres.deletedText), qwi::yank_side::right);
-    return undo_will_need_handling();
+    record_yank(&state->clipboard, delres.deletedText, qwi::yank_side::right);
+    note_undo(buf, std::move(delres));
+    return undo_killring_handled{};
 }
 
 undo_killring_handled kill_line(qwi::state *state, qwi::buffer *buf) {
@@ -460,50 +513,52 @@ undo_killring_handled kill_line(qwi::state *state, qwi::buffer *buf) {
     } else {
         delres = delete_right(buf, eolDistance);
     }
-    record_yank(&state->clipboard, std::move(delres.deletedText), qwi::yank_side::right);
-    return undo_will_need_handling();
+    record_yank(&state->clipboard, delres.deletedText, qwi::yank_side::right);
+    note_undo(buf, std::move(delres));
+    return undo_killring_handled{};
 }
 
 undo_killring_handled kill_region(qwi::state *state, qwi::buffer *buf) {
     if (!buf->mark.has_value()) {
         // TODO: Display error
-        // (We do NOT want no_yank here.)  I think we do want to disrupt the undo action chain.
-        return undo_will_need_handling();
+        // (We do NOT want no_yank here.)  We do want to disrupt the undo action chain (if only because Emacs does that).
+        note_nop_undo(buf);
+        return undo_killring_handled{};
     }
-    // TODO: Copy to clipboard.
     size_t mark = *buf->mark;
     size_t cursor = buf->cursor();
     if (mark > cursor) {
         delete_result delres = delete_right(buf, mark - cursor);
-        record_yank(&state->clipboard, std::move(delres.deletedText), qwi::yank_side::right);
-        return undo_will_need_handling();
+        record_yank(&state->clipboard, delres.deletedText, qwi::yank_side::right);
+        note_undo(buf, std::move(delres));
+        return undo_killring_handled{};
     } else if (mark < cursor) {
         delete_result delres = delete_left(buf, cursor - mark);
-        record_yank(&state->clipboard, std::move(delres.deletedText), qwi::yank_side::left);
-        return undo_will_need_handling();
+        record_yank(&state->clipboard, delres.deletedText, qwi::yank_side::left);
+        note_undo(buf, std::move(delres));
+        return undo_killring_handled{};
     } else {
         // Do nothing (no clipboard actions either).
-        // (We do NOT want no_yank here.)  I think we do want to disrupt the undo action chain.
-        return undo_will_need_handling();
+        // Same as above when there is no mark.
+        note_nop_undo(buf);
+        return undo_killring_handled{};
     }
 }
 
 undo_killring_handled delete_keypress(qwi::state *state, qwi::buffer *buf) {
     delete_result res = delete_char(buf);
-    return note_action(state, buf, res);
+    return note_action(state, buf, std::move(res));
 }
 
 undo_killring_handled yank_from_clipboard(qwi::state *state, qwi::buffer *activeBuf) {
-    // TODO: Implement (after we actually copy stuff to the clipboard).
     std::optional<const qwi::buffer_string *> text = qwi::do_yank(&state->clipboard);
     if (text.has_value()) {
-        // TODO: insert_chars is assumed to handle undo info here.
         insert_result res = insert_chars(activeBuf, (*text)->data(), (*text)->size());
-        (void)res;
-        return undo_will_need_handling();
+        note_undo(activeBuf, std::move(res));
+        return undo_killring_handled{};
     } else {
-        // This might be a nop_keypress for undo purposes; I'm unsure.
-        return undo_will_need_handling();
+        note_nop_undo(activeBuf);
+        return undo_killring_handled{};
     }
     // Note that this gets called directly by C-y and by alt_yank_from_clipboard as a
     // helper.  Possibly false-DRY (someday).
@@ -511,14 +566,14 @@ undo_killring_handled yank_from_clipboard(qwi::state *state, qwi::buffer *active
 
 undo_killring_handled alt_yank_from_clipboard(qwi::state *state, qwi::buffer *activeBuf) {
     if (state->clipboard.justYanked.has_value()) {
-        // TODO: we assume here that delete_left handles undo info.
-        // TODO: this code will be wrong with undo impled -- the deletion and insertion should be a single undo chunk.
+        // TODO: this code will be wrong with undo impled -- the deletion and insertion should be a single undo chunk -- not a problem here but is this a bug in jsmacs?
         delete_result res = delete_left(activeBuf, *state->clipboard.justYanked);
+        note_undo(activeBuf, std::move(res));
         state->clipboard.stepPasteNumber();
         return yank_from_clipboard(state, activeBuf);
     } else {
-        // Otherwise, a no-op, a non-keypress.
-        return nop_keypress();
+        note_nop_undo(activeBuf);
+        return undo_killring_handled{};
     }
 }
 
@@ -535,7 +590,7 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
         return enter_key(state);
     } else if (ch == '\t' || (ch >= 32 && ch < 127)) {
         insert_result res = insert_char(active_buf, ch);
-        return note_action(state, active_buf, res);
+        return note_action(state, active_buf, std::move(res));
     } else if (ch == 28) {
         // Ctrl+backslash
         *exit_loop = true;
@@ -624,7 +679,7 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
             }
 
             insert_result res = insert_chars(active_buf, str.data(), str.size());
-            return note_action(state, active_buf, res);
+            return note_action(state, active_buf, std::move(res));
         }
     } else if (ch == 8) {
         // Ctrl+Backspace
@@ -641,7 +696,7 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
             break;
         case 'D': {
             delete_result res = delete_char(active_buf);
-            return note_action(state, active_buf, res);
+            return note_action(state, active_buf, std::move(res));
         } break;
         case 'E':
             move_end(active_buf);
@@ -666,7 +721,7 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
             break;
         case '?': {
             delete_result res = backspace_char(active_buf);
-            return note_action(state, active_buf, res);
+            return note_action(state, active_buf, std::move(res));
         } break;
         case 'K':
             return kill_line(state, active_buf);
@@ -683,6 +738,9 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
             // TODO: We want this?
             return note_action(state, active_buf, noundo_killring_action{});
             break;
+        case '_':
+            perform_undo(active_buf);
+            return undo_killring_handled{};
         default:
             // For now we do push the printable repr for any unhandled chars, for debugging purposes.
             // TODO: Handle other possible control chars.

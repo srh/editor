@@ -20,6 +20,33 @@ struct buffer_char {
 
 using buffer_string = std::basic_string<buffer_char>;
 
+enum class Side { left, right, };
+
+struct undo_item {
+    // This duplicates the jsmacs undo implementation.
+    // TODO: Figure out how we want to capitalize types.
+    enum class Action { insert, del, };
+    enum class Type { atomic, mountain, };
+
+    // TODO: This should be a variant or something.
+    Type type;
+    // Type::atomic:
+    // The cursor _before_ we apply this undo action.  This departs from jsmacs, where it's the cursor after the action, or something incoherent and broken.
+    size_t beg = 0;
+    buffer_string text{};
+    Action action = Action::insert;
+    Side side = Side::left;
+
+    // Type::mountain:
+    std::vector<undo_item> history{};
+};
+
+struct undo_history {
+    // TODO: There are no limits on undo history size.
+    std::vector<undo_item> past;
+    std::vector<undo_item> future;
+};
+
 struct buffer {
     // Used to choose in the list of buffers, unique to the buffer.  Program logic should
     // not allow empty or overlong values.
@@ -43,8 +70,14 @@ struct buffer {
         return i < bef.size() ? bef[i] : aft[i - bef.size()];
     }
 
-    // Column that is maintained as we press up and down arrow keys past shorter lines.
+    /* Undo info -- tracked per-buffer, apparently.  In principle, undo history could be a
+       global ordered bag of past actions (including undo actions) but instead it's per
+       buffer. */
+    undo_history undo_info;
+
     /* UI-specific stuff -- this could get factored out of buffer at some point */
+
+    // Column that is maintained as we press up and down arrow keys past shorter lines.
     // For now, this assumes a monospace font (maybe with 2x-width glyphs) on all GUIs.
     size_t virtual_column = 0;
 
@@ -69,6 +102,7 @@ struct prompt {
 };
 
 struct clip_board {
+    // TODO: There are no limits on kill ring size.
     // A list of strings stored in the clipboard.
     std::vector<std::basic_string<buffer_char>> clips;
     // Did we just record some text?  Future text recordings will be appended to the
@@ -104,10 +138,16 @@ window_size main_buf_window_from_terminal_window(const terminal_size& term_windo
 size_t distance_to_eol(const qwi::buffer& buf, size_t pos);
 size_t distance_to_beginning_of_line(const qwi::buffer& buf, size_t pos);
 
-void record_yank(clip_board *clb, buffer_string&& deletedText, yank_side side);
+void record_yank(clip_board *clb, const buffer_string& deletedText, yank_side side);
 std::optional<const buffer_string *> do_yank(clip_board *clb);
 
 void no_yank(clip_board *clb);
+
+void add_edit(undo_history *history, undo_item&& item);
+void reverse_add_edit(undo_history *history, undo_item&& item);
+void add_nop_edit(undo_history *history);
+
+void perform_undo(buffer *buf);
 
 }  // namespace qwi
 

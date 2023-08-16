@@ -3,7 +3,13 @@
 
 #include "state.hpp"
 
-struct [[nodiscard]] insert_result { };
+struct [[nodiscard]] insert_result {
+    // Cursor position _after_ insertion
+    size_t new_cursor;
+    // Returned only to make implementing opposite(const undo_info&) easier.
+    qwi::buffer_string insertedText;
+    qwi::Side side;
+};
 
 insert_result insert_chars(qwi::buffer *buf, const qwi::buffer_char *chs, size_t count);
 
@@ -15,9 +21,14 @@ inline insert_result insert_char(qwi::buffer *buf, char sch) {
     return insert_chars(buf, &ch, 1);
 }
 
+insert_result insert_chars_right(qwi::buffer *buf, const qwi::buffer_char *chs, size_t count);
+
 // TODO: Maximal efficiency: don't construct a delete_result on exactly the funcalls that don't use it.
 struct [[nodiscard]] delete_result {
+    // Cursor position _after_ deletion.
+    size_t new_cursor;
     qwi::buffer_string deletedText;
+    qwi::Side side;
 };
 delete_result delete_left(qwi::buffer *buf, size_t count);
 
