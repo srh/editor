@@ -571,10 +571,27 @@ undo_killring_handled yank_from_clipboard(qwi::state *state, qwi::buffer *active
 undo_killring_handled alt_yank_from_clipboard(qwi::state *state, qwi::buffer *activeBuf) {
     if (state->clipboard.justYanked.has_value()) {
         // TODO: this code will be wrong with undo impled -- the deletion and insertion should be a single undo chunk -- not a problem here but is this a bug in jsmacs?
-        delete_result res = delete_left(activeBuf, *state->clipboard.justYanked);
-        note_undo(activeBuf, std::move(res));
+        size_t amount_to_delete = *state->clipboard.justYanked;
         state->clipboard.stepPasteNumber();
-        return yank_from_clipboard(state, activeBuf);
+        std::optional<const qwi::buffer_string *> text = qwi::do_yank(&state->clipboard);
+        logic_check(text.has_value(), "with justYanked non-null, do_yank returns null");
+
+        delete_result delres = delete_left(activeBuf, amount_to_delete);
+        insert_result insres = insert_chars(activeBuf, (*text)->data(), (*text)->size());
+
+        // Add the reverse action to undo history.
+        using qwi::undo_item;
+        undo_item item = {
+            .type = undo_item::Type::atomic,
+            .atomic = {
+                .beg = insres.new_cursor,
+                .text_inserted = std::move(delres.deletedText),
+                .text_deleted = std::move(insres.insertedText),
+                .side = qwi::Side::left,
+            },
+        };
+        add_edit(&activeBuf->undo_info, std::move(item));
+        return undo_killring_handled{};
     } else {
         note_nop_undo(activeBuf);
         return undo_killring_handled{};
