@@ -22,6 +22,15 @@ using buffer_string = std::basic_string<buffer_char>;
 
 enum class Side { left, right, };
 
+struct atomic_undo_item {
+    // The cursor _before_ we apply this undo action.  This departs from jsmacs, where
+    // it's the cursor after the action, or something incoherent and broken.
+    size_t beg = 0;
+    buffer_string text_inserted{};
+    buffer_string text_deleted{};
+    Side side = Side::left;
+};
+
 struct undo_item {
     // This duplicates the jsmacs undo implementation.
     // TODO: Figure out how we want to capitalize types.
@@ -30,22 +39,16 @@ struct undo_item {
     // TODO: This should be a variant or something.
     Type type;
     // Type::atomic:
-
-    // The cursor _before_ we apply this undo action.  This departs from jsmacs, where
-    // it's the cursor after the action, or something incoherent and broken.
-    size_t beg = 0;
-    buffer_string text_inserted{};
-    buffer_string text_deleted{};
-    Side side = Side::left;
+    atomic_undo_item atomic;
 
     // Type::mountain:
-    std::vector<undo_item> history{};
+    std::vector<atomic_undo_item> history{};
 };
 
 struct undo_history {
     // TODO: There are no limits on undo history size.
     std::vector<undo_item> past;
-    std::vector<undo_item> future;
+    std::vector<atomic_undo_item> future;
 };
 
 struct buffer {
@@ -145,7 +148,6 @@ std::optional<const buffer_string *> do_yank(clip_board *clb);
 void no_yank(clip_board *clb);
 
 void add_edit(undo_history *history, undo_item&& item);
-void reverse_add_edit(undo_history *history, undo_item&& item);
 void add_nop_edit(undo_history *history);
 
 void perform_undo(buffer *buf);

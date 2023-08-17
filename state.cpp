@@ -121,6 +121,7 @@ void add_nop_edit(undo_history *history) {
     if (!history->future.empty()) {
         history->past.push_back({
                 .type = undo_item::Type::mountain,
+                .atomic = {},
                 .history = std::move(history->future)
             });
         history->future.clear();
@@ -132,13 +133,17 @@ void add_edit(undo_history *history, undo_item&& item) {
     history->past.push_back(std::move(item));
 }
 
-void reverse_add_edit(undo_history *history, undo_item&& item) {
-    history->future.push_back(std::move(item));
+atomic_undo_item opposite(const atomic_undo_item &item) {
+    // TODO: Is .beg value right in jsmacs?
+    atomic_undo_item ret = item;
+    if (item.side == Side::left) {
+        ret.beg = size_sub(size_add(ret.beg, item.text_inserted.size()), item.text_deleted.size());
+    }
+    std::swap(ret.text_inserted, ret.text_deleted);
+    return ret;
 }
 
-undo_item opposite(const undo_item &item);
-
-void atomic_undo(buffer *buf, undo_item&& item) {
+void atomic_undo(buffer *buf, atomic_undo_item&& item) {
     buf->set_cursor(item.beg);
 
     if (!item.text_deleted.empty()) {
@@ -170,18 +175,6 @@ void atomic_undo(buffer *buf, undo_item&& item) {
     buf->undo_info.future.push_back(opposite(item));
 }
 
-undo_item opposite(const undo_item &item) {
-    logic_check(item.type == undo_item::Type::atomic, "opposite expecting atomic undo item");
-
-    // TODO: Is .beg value right in jsmacs?
-    undo_item ret = item;
-    if (item.side == Side::left) {
-        ret.beg = size_sub(size_add(ret.beg, item.text_inserted.size()), item.text_deleted.size());
-    }
-    std::swap(ret.text_inserted, ret.text_deleted);
-    return ret;
-}
-
 void perform_undo(buffer *buf) {
     if (buf->undo_info.past.empty()) {
         return;
@@ -190,12 +183,15 @@ void perform_undo(buffer *buf) {
     buf->undo_info.past.pop_back();
     switch (item.type) {
     case undo_item::Type::atomic: {
-        atomic_undo(buf, std::move(item));
+        atomic_undo(buf, std::move(item.atomic));
     } break;
     case undo_item::Type::mountain: {
-        undo_item it = std::move(item.history.back());
+        atomic_undo_item it = std::move(item.history.back());
         item.history.pop_back();
-        buf->undo_info.past.push_back(opposite(it));
+        buf->undo_info.past.push_back({
+                .type = undo_item::Type::atomic,
+                .atomic = opposite(it)
+            });
         if (!item.history.empty()) {
             buf->undo_info.past.push_back(std::move(item));
         }
