@@ -54,8 +54,8 @@ qwi::undo_item make_reverse_action(insert_result&& i_res) {
     undo_item item = {
         .type = undo_item::Type::atomic,
         .beg = i_res.new_cursor,
-        .text = std::move(i_res.insertedText),
-        .action = undo_item::Action::del,
+        .text_inserted = qwi::buffer_string{},
+        .text_deleted = std::move(i_res.insertedText),
         .side = i_res.side,  // We inserted on left (right), hence we delete on left (right)
     };
 
@@ -92,8 +92,8 @@ qwi::undo_item make_reverse_action(delete_result&& d_res) {
     undo_item item = {
         .type = undo_item::Type::atomic,
         .beg = d_res.new_cursor,
-        .text = std::move(d_res.deletedText),
-        .action = undo_item::Action::insert,
+        .text_inserted = std::move(d_res.deletedText),
+        .text_deleted = qwi::buffer_string{},
         .side = d_res.side,  // We deleted on left (right), hence we insert on left (right)
     };
 

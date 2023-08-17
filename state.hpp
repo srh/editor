@@ -25,16 +25,17 @@ enum class Side { left, right, };
 struct undo_item {
     // This duplicates the jsmacs undo implementation.
     // TODO: Figure out how we want to capitalize types.
-    enum class Action { insert, del, };
     enum class Type { atomic, mountain, };
 
     // TODO: This should be a variant or something.
     Type type;
     // Type::atomic:
-    // The cursor _before_ we apply this undo action.  This departs from jsmacs, where it's the cursor after the action, or something incoherent and broken.
+
+    // The cursor _before_ we apply this undo action.  This departs from jsmacs, where
+    // it's the cursor after the action, or something incoherent and broken.
     size_t beg = 0;
-    buffer_string text{};
-    Action action = Action::insert;
+    buffer_string text_inserted{};
+    buffer_string text_deleted{};
     Side side = Side::left;
 
     // Type::mountain:

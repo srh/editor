@@ -136,74 +136,49 @@ void reverse_add_edit(undo_history *history, undo_item&& item) {
     history->future.push_back(std::move(item));
 }
 
+undo_item opposite(const undo_item &item);
+
 void atomic_undo(buffer *buf, undo_item&& item) {
-    switch (item.action) {
-    case undo_item::Action::insert: {
-        buf->set_cursor(item.beg);
+    buf->set_cursor(item.beg);
+
+    if (!item.text_deleted.empty()) {
+        delete_result res;
+        switch (item.side) {
+        case Side::left:
+            res = delete_left(buf, item.text_deleted.size());
+            break;
+        case Side::right:
+            res = delete_right(buf, item.text_deleted.size());
+            break;
+        }
+        logic_check(res.deletedText == item.text_deleted, "undo deletion action expecting text to match deleted text");
+    }
+
+    if (!item.text_inserted.empty()) {
         insert_result res;
         switch (item.side) {
         case Side::left:
-            res = insert_chars(buf, item.text.data(), item.text.size());
+            res = insert_chars(buf, item.text_inserted.data(), item.text_inserted.size());
             break;
         case Side::right:
-            res = insert_chars_right(buf, item.text.data(), item.text.size());
+            res = insert_chars_right(buf, item.text_inserted.data(), item.text_inserted.size());
             break;
         }
-
-        buf->undo_info.future.push_back(make_reverse_action(std::move(res)));
-
-    } break;
-    case undo_item::Action::del:
-        buf->set_cursor(item.beg);
-        delete_result res;
-        // jsmacs's delete_left/delete_right branching with the item.beg+item.text.size()
-        // logic is replicated here, but it seems unnecessary -- all it does is construct
-        // the delete_result which produces the correct undo info -- with the right .side
-        // field.
-        switch (item.side) {
-        case Side::left:
-            res = delete_left(buf, item.text.size());
-            break;
-        case Side::right:
-            res = delete_right(buf, item.text.size());
-            break;
-        }
-        logic_check(res.deletedText == item.text, "undo deletion action expecting text to match deleted text");
-        buf->undo_info.future.push_back(make_reverse_action(std::move(res)));
-        break;
     }
 
-    // TODO: Must impl.
+    // TODO: opposite with std::move.
+    buf->undo_info.future.push_back(opposite(item));
 }
 
 undo_item opposite(const undo_item &item) {
     logic_check(item.type == undo_item::Type::atomic, "opposite expecting atomic undo item");
+
     // TODO: Is .beg value right in jsmacs?
-
-    size_t beg = item.beg;
-    undo_item::Action act;
-    switch (item.action) {
-    case undo_item::Action::insert:
-        act = undo_item::Action::del;
-        if (item.side == Side::left) {
-            beg = size_add(beg, item.text.size());
-        }
-        break;
-    case undo_item::Action::del:
-        act = undo_item::Action::insert;
-        if (item.side == Side::left) {
-            beg = size_sub(beg, item.text.size());
-        }
-        break;
+    undo_item ret = item;
+    if (item.side == Side::left) {
+        ret.beg = size_sub(size_add(ret.beg, item.text_inserted.size()), item.text_deleted.size());
     }
-
-    undo_item ret = {
-        .type = undo_item::Type::atomic,
-        .beg = beg,
-        .text = item.text,
-        .action = act,
-        .side = item.side,
-    };
+    std::swap(ret.text_inserted, ret.text_deleted);
     return ret;
 }
 
