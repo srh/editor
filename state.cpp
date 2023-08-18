@@ -39,6 +39,21 @@ std::string buffer::copy_to_string() const {
     return ret;
 }
 
+buffer_string buffer::copy_substr(size_t beg, size_t end) const {
+    logic_check(beg <= end && end <= size(), "buffer::copy_substr requires valid range, got [%zu, %zu) with size %zu",
+                beg, end, size());
+    buffer_string ret;
+    ret.reserve(end - beg);
+    if (end <= bef.size()) {
+        ret = bef.substr(beg, end - beg);
+    } else if (beg < bef.size()) {
+        ret = bef.substr(beg, bef.size() - beg) + aft.substr(0, end - bef.size());
+    } else {
+        ret = aft.substr(beg - bef.size(), end - beg);
+    }
+    return ret;
+}
+
 size_t distance_to_eol(const qwi::buffer& buf, size_t pos) {
     size_t p = pos;
     for (size_t e = buf.size(); p < e; ++p) {
@@ -90,12 +105,25 @@ void record_yank(clip_board *clb, const buffer_string& deletedText, yank_side si
         case yank_side::right:
             clb->clips.back() += deletedText;
             break;
+        case yank_side::none:
+            clb->clips.push_back(deletedText);
+            break;
         }
     } else {
         clb->clips.push_back(deletedText);
     }
+    switch (side) {
+    case yank_side::left:
+        clb->justRecorded = true;
+        break;
+    case yank_side::right:
+        clb->justRecorded = true;
+        break;
+    case yank_side::none:
+        clb->justRecorded = false;
+        break;
+    }
     clb->pasteNumber = 0;
-    clb->justRecorded = true;
     clb->justYanked = std::nullopt;
 }
 

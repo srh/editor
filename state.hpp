@@ -107,6 +107,8 @@ struct buffer {
     void set_window(const window_size& win) { window = win; }
 
     std::string copy_to_string() const;
+
+    buffer_string copy_substr(size_t beg, size_t end) const;
 };
 
 struct prompt {
@@ -132,7 +134,7 @@ struct clip_board {
     void stepPasteNumber() { pasteNumber += 1; }
 };
 
-enum class yank_side { left, right, };
+enum class yank_side { left, right, none, };
 
 struct state {
     // Sorted in order from least-recently-used -- `buf` is the active buffer and should

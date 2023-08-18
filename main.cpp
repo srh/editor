@@ -550,11 +550,32 @@ undo_killring_handled kill_region(qwi::state *state, qwi::buffer *buf) {
         note_undo(buf, std::move(delres));
         return handled_undo_killring(state, buf);
     } else {
-        // Do nothing (no clipboard actions either).
-        // Same as above when there is no mark.
+        // We actually do want to yank, and combine yanks with successive yanks.  Right or
+        // left yank side doesn't matter except for string concatenation efficiency.  Note
+        // that we can't "do nothing" -- if state->clipboard.justRecorded is false, we
+        // need to create an empty string clipboard entry.  That's what this record_yank
+        // call does.
+        record_yank(&state->clipboard, qwi::buffer_string{}, qwi::yank_side::right);
         note_nop_undo(buf);
         return handled_undo_killring(state, buf);
     }
+}
+
+undo_killring_handled copy_region(qwi::state *state, qwi::buffer *buf) {
+    if (!buf->mark.has_value()) {
+        // TODO: Display error
+        // (We do NOT want no_yank here.)  We do want to disrupt the undo action chain (if only because Emacs does that).
+        note_nop_undo(buf);
+        return handled_undo_killring(state, buf);
+    }
+    size_t mark = *buf->mark;
+    size_t cursor = buf->cursor();
+    size_t region_beg = std::min(mark, cursor);
+    size_t region_end = std::max(mark, cursor);
+
+    note_nop_undo(buf);
+    record_yank(&state->clipboard, buf->copy_substr(region_beg, region_end), qwi::yank_side::none);
+    return handled_undo_killring(state, buf);
 }
 
 undo_killring_handled delete_keypress(qwi::state *state, qwi::buffer *buf) {
@@ -687,12 +708,17 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
             move_backward_word(active_buf);
             return note_navigation_action(state, active_buf);
         } else if (ch == 'y') {
+            // M-y
             return alt_yank_from_clipboard(state, active_buf);
         } else if (ch == 'd') {
+            // M-d
             return delete_forward_word(state, active_buf);
         } else if (ch == ('?' ^ CTRL_XOR_MASK)) {
             // M-backspace
             return delete_backward_word(state, active_buf);
+        } else if (ch == 'w') {
+            // M-w
+            return copy_region(state, active_buf);
         }
         // Insert for the user (the developer, me) unrecognized escape codes.
         logic_check(!chars_read.empty(), "chars_read expected empty");
