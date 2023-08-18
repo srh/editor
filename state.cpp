@@ -116,8 +116,13 @@ void no_yank(clip_board *clb) {
     clb->justYanked = std::nullopt;
 }
 
+void break_coalescence(undo_history *history) {
+    history->coalescence = undo_history::char_coalescence::none;
+}
+
 // Starts a new branch to undo history, but without any edits yet.
 void add_nop_edit(undo_history *history) {
+    break_coalescence(history);
     if (!history->future.empty()) {
         history->past.push_back({
                 .type = undo_item::Type::mountain,

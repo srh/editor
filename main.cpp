@@ -127,10 +127,9 @@ undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, const nou
 }
 
 // Possibly a useless categorization -- maybe useful for refactoring later.
-struct [[nodiscard]] navigation_action { };
-undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, const navigation_action&) {
+undo_killring_handled note_navigation_action(qwi::state *state, qwi::buffer *buf) {
     no_yank(&state->clipboard);
-    (void)buf;
+    add_nop_edit(&buf->undo_info);
     return undo_killring_handled{};
 }
 
@@ -631,22 +630,22 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
 
             if (ch == 'C') {
                 move_right(active_buf);
-                return note_action(state, active_buf, navigation_action{});
+                return note_navigation_action(state, active_buf);
             } else if (ch == 'D') {
                 move_left(active_buf);
-                return note_action(state, active_buf, navigation_action{});
+                return note_navigation_action(state, active_buf);
             } else if (ch == 'A') {
                 move_up(active_buf);
-                return note_action(state, active_buf, navigation_action{});
+                return note_navigation_action(state, active_buf);
             } else if (ch == 'B') {
                 move_down(active_buf);
-                return note_action(state, active_buf, navigation_action{});
+                return note_navigation_action(state, active_buf);
             } else if (ch == 'H') {
                 move_home(active_buf);
-                return note_action(state, active_buf, navigation_action{});
+                return note_navigation_action(state, active_buf);
             } else if (ch == 'F') {
                 move_end(active_buf);
-                return note_action(state, active_buf, navigation_action{});
+                return note_navigation_action(state, active_buf);
             } else if (isdigit(ch)) {
                 // TODO: Generic parsing of numeric/~ escape codes.
                 if (ch == '3') {
@@ -679,11 +678,11 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
         } else if (ch == 'f') {
             // M-f
             move_forward_word(active_buf);
-            return note_action(state, active_buf, navigation_action{});
+            return note_navigation_action(state, active_buf);
         } else if (ch == 'b') {
             // M-b
             move_backward_word(active_buf);
-            return note_action(state, active_buf, navigation_action{});
+            return note_navigation_action(state, active_buf);
         } else if (ch == 'y') {
             return alt_yank_from_clipboard(state, active_buf);
         } else if (ch == 'd') {
@@ -712,11 +711,11 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
         switch (ch ^ CTRL_XOR_MASK) {
         case 'A':
             move_home(active_buf);
-            return note_action(state, active_buf, navigation_action{});
+            return note_navigation_action(state, active_buf);
             break;
         case 'B':
             move_left(active_buf);
-            return note_action(state, active_buf, navigation_action{});
+            return note_navigation_action(state, active_buf);
             break;
         case 'D': {
             delete_result res = delete_char(active_buf);
@@ -724,19 +723,19 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
         } break;
         case 'E':
             move_end(active_buf);
-            return note_action(state, active_buf, navigation_action{});
+            return note_navigation_action(state, active_buf);
             break;
         case 'F':
             move_right(active_buf);
-            return note_action(state, active_buf, navigation_action{});
+            return note_navigation_action(state, active_buf);
             break;
         case 'N':
             move_down(active_buf);
-            return note_action(state, active_buf, navigation_action{});
+            return note_navigation_action(state, active_buf);
             break;
         case 'P':
             move_up(active_buf);
-            return note_action(state, active_buf, navigation_action{});
+            return note_navigation_action(state, active_buf);
             break;
         case 'S':
             // May prompt if the buf isn't married to a file.

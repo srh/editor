@@ -49,6 +49,16 @@ struct undo_history {
     // TODO: There are no limits on undo history size.
     std::vector<undo_item> past;
     std::vector<atomic_undo_item> future;
+
+    // If the last typed action is a sequence of characters, delete keypresses, or
+    // backspace keypresses, we combine those events into a single undo operation.
+    enum class char_coalescence {
+        none,
+        insert_char,
+        delete_right,
+        delete_left,
+    };
+    char_coalescence coalescence = char_coalescence::none;
 };
 
 struct buffer {
@@ -147,8 +157,10 @@ std::optional<const buffer_string *> do_yank(clip_board *clb);
 
 void no_yank(clip_board *clb);
 
-void add_edit(undo_history *history, undo_item&& item);
+void break_coalescence(undo_history *history);
 void add_nop_edit(undo_history *history);
+void add_edit(undo_history *history, undo_item&& item);
+
 
 void perform_undo(buffer *buf);
 
