@@ -159,7 +159,8 @@ void no_yank(clip_board *clb);
 
 void break_coalescence(undo_history *history);
 void add_nop_edit(undo_history *history);
-void add_edit(undo_history *history, undo_item&& item);
+void add_edit(undo_history *history, atomic_undo_item&& item);
+void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_history::char_coalescence coalescence);
 
 
 void perform_undo(buffer *buf);

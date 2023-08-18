@@ -116,13 +116,7 @@ void no_yank(clip_board *clb) {
     clb->justYanked = std::nullopt;
 }
 
-void break_coalescence(undo_history *history) {
-    history->coalescence = undo_history::char_coalescence::none;
-}
-
-// Starts a new branch to undo history, but without any edits yet.
-void add_nop_edit(undo_history *history) {
-    break_coalescence(history);
+void move_future_to_mountain(undo_history *history) {
     if (!history->future.empty()) {
         history->past.push_back({
                 .type = undo_item::Type::mountain,
@@ -133,10 +127,69 @@ void add_nop_edit(undo_history *history) {
     }
 }
 
-void add_edit(undo_history *history, undo_item&& item) {
-    add_nop_edit(history);
-    history->past.push_back(std::move(item));
+// Starts a new branch to undo history, but without any edits yet.
+void add_nop_edit(undo_history *history) {
+    history->coalescence = undo_history::char_coalescence::none;
+    move_future_to_mountain(history);
 }
+
+void add_edit(undo_history *history, atomic_undo_item&& item) {
+    history->coalescence = undo_history::char_coalescence::none;
+    move_future_to_mountain(history);
+    history->past.push_back({
+            .type = undo_item::Type::atomic,
+            .atomic = std::move(item),
+        });
+}
+
+void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_history::char_coalescence coalescence) {
+    move_future_to_mountain(history);
+    if (history->coalescence == coalescence && !history->past.empty()) {
+        undo_item& back_item = history->past.back();
+        if (back_item.type != undo_item::Type::mountain) {
+            atomic_undo_item& back = back_item.atomic;
+
+            /* This code is annoying because undo history contains the _reverse_ actions
+               but char_coalescence refers to the user actions that are getting coalesced. */
+            switch (coalescence) {
+            case undo_history::char_coalescence::none:
+                break;
+            case undo_history::char_coalescence::insert_char:
+                logic_check(back.side == Side::left && item.side == Side::left, "incompatible insert_char coalescence");
+                logic_check(back.text_inserted.empty() && item.text_inserted.empty(), "incompatible insert_char coalescence");
+                logic_check(back.beg == size_sub(item.beg, item.text_deleted.size()), "incompatible insert_char coalescence");
+                back.text_deleted += item.text_deleted;
+                back.beg = item.beg;
+                {
+                    return;
+                }
+            case undo_history::char_coalescence::delete_left:
+                logic_check(back.side == Side::left && item.side == Side::left, "incompatible delete_left coalescence");
+                logic_check(back.text_deleted.empty() && item.text_deleted.empty(), "incompatible delete_left coalescence");
+                logic_check(size_add(item.beg, item.text_inserted.size()) == back.beg, "incompatible delete_left coalescence");
+                back.text_inserted = std::move(item.text_inserted) + back.text_inserted;
+                back.beg = item.beg;
+                {
+                    return;
+                }
+            case undo_history::char_coalescence::delete_right:
+                logic_check(back.side == Side::right && item.side == Side::right, "incompatible delete_right coalescence");
+                logic_check(back.text_deleted.empty() && item.text_deleted.empty(), "incompatible delete_right coalescence");
+                logic_check(back.beg == item.beg, "incompatible delete_right coalescence");
+                back.text_inserted += item.text_inserted;
+                {
+                    return;
+                }
+            }
+        }
+    }
+    history->coalescence = coalescence;
+    history->past.push_back({
+            .type = undo_item::Type::atomic,
+            .atomic = std::move(item),
+        });
+}
+
 
 atomic_undo_item opposite(const atomic_undo_item &item) {
     // TODO: Is .beg value right in jsmacs?

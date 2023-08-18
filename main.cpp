@@ -53,17 +53,12 @@ undo_killring_handled handled_undo_killring(qwi::state *state, qwi::buffer *buf)
     return undo_killring_handled{};
 }
 
-qwi::undo_item make_reverse_action(insert_result&& i_res) {
-    using qwi::undo_item;
-
-    undo_item item = {
-        .type = undo_item::Type::atomic,
-        .atomic = {
-            .beg = i_res.new_cursor,
-            .text_inserted = qwi::buffer_string{},
-            .text_deleted = std::move(i_res.insertedText),
-            .side = i_res.side,  // We inserted on left (right), hence we delete on left (right)
-        },
+qwi::atomic_undo_item make_reverse_action(insert_result&& i_res) {
+    qwi::atomic_undo_item item = {
+        .beg = i_res.new_cursor,
+        .text_inserted = qwi::buffer_string{},
+        .text_deleted = std::move(i_res.insertedText),
+        .side = i_res.side,  // We inserted on left (right), hence we delete on left (right)
     };
 
     return item;
@@ -91,18 +86,19 @@ undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, insert_re
     return undo_killring_handled{};
 }
 
-qwi::undo_item make_reverse_action(delete_result&& d_res) {
-    using qwi::undo_item;
+undo_killring_handled note_coalescent_action(qwi::state *state, qwi::buffer *buf, insert_result&& i_res) {
+    no_yank(&state->clipboard);
 
-    // Make reverse action.
-    undo_item item = {
-        .type = undo_item::Type::atomic,
-        .atomic = {
-            .beg = d_res.new_cursor,
-            .text_inserted = std::move(d_res.deletedText),
-            .text_deleted = qwi::buffer_string{},
-            .side = d_res.side,  // We deleted on left (right), hence we insert on left (right)
-        },
+    add_coalescent_edit(&buf->undo_info, make_reverse_action(std::move(i_res)), qwi::undo_history::char_coalescence::insert_char);
+    return undo_killring_handled{};
+}
+
+qwi::atomic_undo_item make_reverse_action(delete_result&& d_res) {
+    qwi::atomic_undo_item item = {
+        .beg = d_res.new_cursor,
+        .text_inserted = std::move(d_res.deletedText),
+        .text_deleted = qwi::buffer_string{},
+        .side = d_res.side,  // We deleted on left (right), hence we insert on left (right)
     };
 
     return item;
@@ -116,6 +112,16 @@ undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, delete_re
     no_yank(&state->clipboard);
 
     note_undo(buf, std::move(d_res));
+    return undo_killring_handled{};
+}
+
+undo_killring_handled note_coalescent_action(qwi::state *state, qwi::buffer *buf, delete_result&& d_res) {
+    no_yank(&state->clipboard);
+
+    qwi::Side side = d_res.side;
+    using char_coalescence = qwi::undo_history::char_coalescence;
+    add_coalescent_edit(&buf->undo_info, make_reverse_action(std::move(d_res)),
+                        side == qwi::Side::left ? char_coalescence::delete_left : char_coalescence::delete_right);
     return undo_killring_handled{};
 }
 
@@ -477,7 +483,7 @@ void save_file_action(qwi::state *state) {
 undo_killring_handled enter_key(qwi::state *state) {
     if (!state->status_prompt.has_value()) {
         insert_result res = insert_char(&state->buf, '\n');
-        return note_action(state, &state->buf, std::move(res));
+        return note_coalescent_action(state, &state->buf, std::move(res));
     } else {
         // end undo/kill ring stuff -- undo n/a because we're destructing the buf and haven't made changes.
         undo_killring_handled ret = note_action(state, &state->status_prompt->buf, noundo_killring_action{});
@@ -553,7 +559,8 @@ undo_killring_handled kill_region(qwi::state *state, qwi::buffer *buf) {
 
 undo_killring_handled delete_keypress(qwi::state *state, qwi::buffer *buf) {
     delete_result res = delete_char(buf);
-    return note_action(state, buf, std::move(res));
+    // TODO: Here, and perhaps in general, handle cases where no characters were actually deleted.
+    return note_coalescent_action(state, buf, std::move(res));
 }
 
 undo_killring_handled yank_from_clipboard(qwi::state *state, qwi::buffer *buf) {
@@ -582,15 +589,11 @@ undo_killring_handled alt_yank_from_clipboard(qwi::state *state, qwi::buffer *bu
         insert_result insres = insert_chars(buf, (*text)->data(), (*text)->size());
 
         // Add the reverse action to undo history.
-        using qwi::undo_item;
-        undo_item item = {
-            .type = undo_item::Type::atomic,
-            .atomic = {
-                .beg = insres.new_cursor,
-                .text_inserted = std::move(delres.deletedText),
-                .text_deleted = std::move(insres.insertedText),
-                .side = qwi::Side::left,
-            },
+        qwi::atomic_undo_item item = {
+            .beg = insres.new_cursor,
+            .text_inserted = std::move(delres.deletedText),
+            .text_deleted = std::move(insres.insertedText),
+            .side = qwi::Side::left,
         };
         add_edit(&buf->undo_info, std::move(item));
         return handled_undo_killring(state, buf);
@@ -613,7 +616,7 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
         return enter_key(state);
     } else if (ch == '\t' || (ch >= 32 && ch < 127)) {
         insert_result res = insert_char(active_buf, ch);
-        return note_action(state, active_buf, std::move(res));
+        return note_coalescent_action(state, active_buf, std::move(res));
     } else if (ch == 28) {
         // Ctrl+backslash
         *exit_loop = true;
@@ -717,10 +720,8 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
             move_left(active_buf);
             return note_navigation_action(state, active_buf);
             break;
-        case 'D': {
-            delete_result res = delete_char(active_buf);
-            return note_action(state, active_buf, std::move(res));
-        } break;
+        case 'D':
+            return delete_keypress(state, active_buf);
         case 'E':
             move_end(active_buf);
             return note_navigation_action(state, active_buf);
@@ -743,8 +744,9 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
             return note_action(state, active_buf, noundo_killring_action{});
             break;
         case '?': {
+            // TODO: Here, and perhaps elsewhere, handle undo where no characters were actually deleted.
             delete_result res = backspace_char(active_buf);
-            return note_action(state, active_buf, std::move(res));
+            return note_coalescent_action(state, active_buf, std::move(res));
         } break;
         case 'K':
             return kill_line(state, active_buf);

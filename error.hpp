@@ -32,7 +32,14 @@ struct runtime_check_failure { };
 
 #define logic_check(pred, fmt, ...) do { \
         if (!(pred)) { \
-            fprintf(stderr, "Logic error! " fmt "\n", ##__VA_ARGS__); \
+            fprintf(stderr, "Logic error! (%s) " fmt "\n", #pred, ##__VA_ARGS__); \
+            throw runtime_check_failure{}; \
+        } \
+    } while (false)
+
+#define logic_checkg(pred) do { \
+        if (!(pred)) { \
+            fprintf(stderr, "Logic error! (%s): \n", #pred); \
             throw runtime_check_failure{}; \
         } \
     } while (false)
