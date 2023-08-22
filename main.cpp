@@ -706,17 +706,20 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
     qwi::buffer *active_buf = state->status_prompt.has_value() ? &state->status_prompt->buf : &state->buf;
 
     // TODO: Named constants for these keyboard keys and such.
-    if (ch == 13) {
-        return enter_key(state);
-    } else if (ch == '\t' || (ch >= 32 && ch < 127)) {
+    if (ch == '\t' || (ch >= 32 && ch < 127)) {
         insert_result res = insert_char(active_buf, ch);
         return note_coalescent_action(state, active_buf, std::move(res));
-    } else if (ch == 28) {
+    }
+    if (ch == 13) {
+        return enter_key(state);
+    }
+    if (ch == 28) {
         // Ctrl+backslash
         *exit_loop = true;
         return undo_killring_handled{};
         // TODO: Drop exit var and just break; here?  We have a spurious redraw.  Or just abort?
-    } else if (ch == 27) {
+    }
+    if (ch == 27) {
         std::string chars_read;
         check_read_tty_char(term, &ch);
         chars_read.push_back(ch);
@@ -735,10 +738,16 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
                         case 2:
                             // TODO: Handle Insert key.
                             return unimplemented_keypress();
-                        case 15:
-                            return f5_keypress(state, active_buf);
-                        case 17:
-                            return f6_keypress(state, active_buf);
+
+                        // TODO: Implement F5 and F6... or designate these unimplemented.
+                        // (Yes, the escape codes aren't as contiguous as you'd expect.)
+                        case 15: return f5_keypress(state, active_buf);
+                        case 17: return f6_keypress(state, active_buf);
+                        case 18: return unimplemented_keypress();  // F7
+                        case 19: return unimplemented_keypress();  // F8
+                        case 20: return unimplemented_keypress();  // F9
+                        case 21: return unimplemented_keypress();  // F10
+                        case 24: return unimplemented_keypress();  // F12
                         default:
                             break;
                         }
@@ -750,63 +759,82 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
                         }
                     }
                 }
-            } else if (ch == 'C') {
-                move_right(active_buf);
-                return note_navigation_action(state, active_buf);
-            } else if (ch == 'D') {
-                move_left(active_buf);
-                return note_navigation_action(state, active_buf);
-            } else if (ch == 'A') {
-                move_up(active_buf);
-                return note_navigation_action(state, active_buf);
-            } else if (ch == 'B') {
-                move_down(active_buf);
-                return note_navigation_action(state, active_buf);
-            } else if (ch == 'H') {
-                move_home(active_buf);
-                return note_navigation_action(state, active_buf);
-            } else if (ch == 'F') {
-                move_end(active_buf);
-                return note_navigation_action(state, active_buf);
+            } else {
+                switch (ch) {
+                case 'C':
+                    move_right(active_buf);
+                    return note_navigation_action(state, active_buf);
+                case 'D':
+                    move_left(active_buf);
+                    return note_navigation_action(state, active_buf);
+                case 'A':
+                    move_up(active_buf);
+                    return note_navigation_action(state, active_buf);
+                case 'B':
+                    move_down(active_buf);
+                    return note_navigation_action(state, active_buf);
+                case 'H':
+                    move_home(active_buf);
+                    return note_navigation_action(state, active_buf);
+                case 'F':
+                    move_end(active_buf);
+                    return note_navigation_action(state, active_buf);
+                default:
+                    break;
+                }
             }
-        } else if (ch == 'f') {
-            // M-f
-            move_forward_word(active_buf);
-            return note_navigation_action(state, active_buf);
-        } else if (ch == 'b') {
-            // M-b
-            move_backward_word(active_buf);
-            return note_navigation_action(state, active_buf);
-        } else if (ch == 'y') {
-            // M-y
-            return alt_yank_from_clipboard(state, active_buf);
-        } else if (ch == 'd') {
-            // M-d
-            return delete_forward_word(state, active_buf);
-        } else if (ch == ('?' ^ CTRL_XOR_MASK)) {
-            // M-backspace
-            return delete_backward_word(state, active_buf);
-        } else if (ch == 'w') {
-            // M-w
-            return copy_region(state, active_buf);
+        } else {
+            switch (ch) {
+            case 'f':
+                // M-f
+                move_forward_word(active_buf);
+                return note_navigation_action(state, active_buf);
+            case 'b':
+                move_backward_word(active_buf);
+                return note_navigation_action(state, active_buf);
+            case 'y':
+                return alt_yank_from_clipboard(state, active_buf);
+            case 'd':
+                return delete_forward_word(state, active_buf);
+            case ('?' ^ CTRL_XOR_MASK):
+                return delete_backward_word(state, active_buf);
+            case 'w':
+                return copy_region(state, active_buf);
+            case 'O': {
+                check_read_tty_char(term, &ch);
+                chars_read.push_back(ch);
+                switch (ch) {
+                case 'P': return unimplemented_keypress();  // F1
+                case 'Q': return unimplemented_keypress();  // F2
+                case 'R': return unimplemented_keypress();  // F3
+                case 'S': return unimplemented_keypress();  // F4
+                default:
+                    break;
+                }
+            } break;
+            default:
+                break;
+            }
         }
-        // Insert for the user (the developer, me) unrecognized escape codes.
-        logic_check(!chars_read.empty(), "chars_read expected empty");
-        {
-            qwi::buffer_string str;
-            str.push_back(buffer_char::from_char('\\'));
-            str.push_back(buffer_char::from_char('e'));
-            for (char c : chars_read) {
-                str.push_back(buffer_char::from_char(c));
-            }
 
-            insert_result res = insert_chars(active_buf, str.data(), str.size());
-            return note_action(state, active_buf, std::move(res));
+        // Insert for the user (the developer, me) unrecognized escape codes.
+        qwi::buffer_string str;
+        str.push_back(buffer_char::from_char('\\'));
+        str.push_back(buffer_char::from_char('e'));
+        for (char c : chars_read) {
+            str.push_back(buffer_char::from_char(c));
         }
-    } else if (ch == 8) {
+
+        insert_result res = insert_chars(active_buf, str.data(), str.size());
+        return note_action(state, active_buf, std::move(res));
+    }
+
+    if (ch == 8) {
         // Ctrl+Backspace
         return delete_backward_word(state, active_buf);
-    } else if (uint8_t(ch) <= 127) {
+    }
+
+    if (uint8_t(ch) <= 127) {
         switch (ch ^ CTRL_XOR_MASK) {
         case 'A':
             move_home(active_buf);
