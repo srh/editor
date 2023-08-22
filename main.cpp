@@ -305,36 +305,21 @@ std::string buf_name_from_file_path(const fs::path& path) {
     return path.filename().string();
 }
 
+// Caller needs to call set_window on the buf, generally, or other ui-specific stuff.
+qwi::buffer open_file_into_detached_buffer(const std::string& dirty_path) {
+    fs::path path = dirty_path;
+    qwi::buffer_string data = read_file(path);
+    std::string name = buf_name_from_file_path(path);
 
+    qwi::buffer ret;
+    ret.name = std::move(name);
+    ret.married_file = path.string();
+    ret.aft = std::move(data);
+    return ret;
+}
 
 qwi::state initial_state(const command_line_args& args, const terminal_size& window) {
     const size_t n_files = args.files.size();
-
-    std::vector<std::basic_string<buffer_char>> file_content;
-    file_content.reserve(n_files);
-    std::vector<std::string> bufNames;
-    bufNames.reserve(n_files);
-    /* TODO: Figure out the "correct" way to refer to a path.
-         - we want to handle situations where the full path can't be resolved
-     */
-    std::vector<fs::path> og_paths;
-    og_paths.reserve(n_files);
-    for (const std::string& spath : args.files) {
-        fs::path path = spath;
-        og_paths.push_back(path);
-        file_content.push_back(read_file(path));
-        bufNames.push_back(buf_name_from_file_path(path));
-    }
-
-    std::vector<std::string> sortedNames = bufNames;
-    std::sort(sortedNames.begin(), sortedNames.end());
-    {
-        auto it = std::adjacent_find(sortedNames.begin(), sortedNames.end());
-        if (it != sortedNames.end()) {
-            // TODO: Stupid.
-            runtime_fail("duplicate filenames '%s' not allowed", it->c_str());
-        }
-    }
 
     qwi::window_size buf_window = qwi::main_buf_window_from_terminal_window(window);
 
@@ -343,19 +328,17 @@ qwi::state initial_state(const command_line_args& args, const terminal_size& win
         state.buf.set_window(buf_window);
         state.buf.name = "*scratch*";
     } else {
+        state.buf = open_file_into_detached_buffer(args.files.at(0));
         state.buf.set_window(buf_window);
-        state.buf.name = bufNames.at(0);
-        state.buf.married_file = og_paths.at(0).string();
-        state.buf.aft = std::move(file_content.at(0));
 
         state.bufs.reserve(n_files - 1);
         for (size_t i = 1; i < n_files; ++i) {
-            state.bufs.emplace_back();
-            auto& buf = state.bufs.back();
-            buf.set_window(buf_window);
-            buf.name = bufNames.at(i);
-            buf.married_file = og_paths.at(i).string();
-            buf.aft = std::move(file_content.at(i));
+            state.bufs.push_back(open_file_into_detached_buffer(args.files.at(i)));
+            state.bufs.back().set_window(buf_window);
+            // TODO: How do we handle duplicate file names?  Just allow identical buffer
+            // names, but make selecting them in the UI different?  Only allow identical
+            // buffer names when there are married files?  Disallow the concept of a
+            // "buffer name" when there's a married file?
         }
     }
     return state;
