@@ -208,13 +208,42 @@ int main(int argc, const char **argv) {
     }
 }
 
+void append_mask_difference(std::string *buf, uint8_t old_mask, uint8_t new_mask) {
+    static_assert(std::is_same<decltype(old_mask), decltype(terminal_style::mask)>::value);
+
+    // Right now this code is non-general -- it assumes there is _only_ a bold bit.
+    switch (int(new_mask & terminal_style::BOLD_BIT) - int(old_mask & terminal_style::BOLD_BIT)) {
+    case 0: break;
+    case terminal_style::BOLD_BIT: {
+        *buf += TESC(1m);
+
+    } break;
+    case -terminal_style::BOLD_BIT: {
+        *buf += TESC(0m);
+    } break;
+    }
+
+}
+
 void write_frame(int fd, const terminal_frame& frame) {
+    uint8_t mask = 0;
+    static_assert(std::is_same<decltype(mask), decltype(terminal_style::mask)>::value);
+
     std::string buf;
     buf += TESC(?25l);
     buf += TESC(H);
     for (size_t i = 0; i < frame.window.rows; ++i) {
         for (size_t j = 0; j < frame.window.cols; ++j) {
-            buf += frame.data[i * frame.window.cols + j].as_char();
+            size_t offset = i * frame.window.cols + j;
+            if (mask != frame.style_data[offset].mask) {
+                append_mask_difference(&buf, mask, frame.style_data[offset].mask);
+                mask = frame.style_data[offset].mask;
+            }
+            buf += frame.data[offset].as_char();
+        }
+        if (mask != 0) {
+            append_mask_difference(&buf, mask, 0);
+            mask = 0;
         }
         if (i < frame.window.rows - 1) {
             buf += "\r\n";
@@ -343,7 +372,7 @@ std::optional<terminal_coord> add(const terminal_coord& window_topleft, const st
     }
 }
 
-void render_string(terminal_frame *frame, const terminal_coord& coord, const std::string& str) {
+void render_string(terminal_frame *frame, const terminal_coord& coord, const std::string& str, terminal_style style_mask = terminal_style{}) {
     uint32_t col = coord.col;  // <= frame->window.cols
     runtime_check(col <= frame->window.cols, "render_string: coord out of range");
     size_t line_col = 0;
@@ -354,7 +383,9 @@ void render_string(terminal_frame *frame, const terminal_coord& coord, const std
             return;
         }
         size_t to_copy = std::min<size_t>(rend.count, frame->window.cols - col);
-        std::copy(rend.buf, rend.buf + to_copy, &frame->data[coord.row * frame->window.cols + col]);
+        size_t offset = coord.row * frame->window.cols + col;
+        std::copy(rend.buf, rend.buf + to_copy, &frame->data[offset]);
+        std::fill(&frame->style_data[offset], &frame->style_data[offset + to_copy], style_mask);
         col += to_copy;
     }
 }
@@ -368,7 +399,7 @@ void render_status_area(terminal_frame *frame, qwi::state& state) {
         case qwi::prompt::type::file_open: message = "file to open: "; break;
         case qwi::prompt::type::file_save: message = "file to save: "; break;
         }
-        render_string(frame, {.row = last_row, .col = 0}, message);
+        render_string(frame, {.row = last_row, .col = 0}, message, terminal_style::bold());
 
         std::vector<render_coord> coords = { {state.status_prompt->buf.cursor(), std::nullopt} };
         terminal_coord prompt_topleft = {.row = last_row, .col = uint32_t(message.size())};
@@ -379,7 +410,7 @@ void render_status_area(terminal_frame *frame, qwi::state& state) {
         // TODO: This is super-hacky -- we overwrite the main buffer's cursor.
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
     } else {
-        render_string(frame, {.row = last_row, .col = 0}, state.buf.name);
+        render_string(frame, {.row = last_row, .col = 0}, state.buf.name, terminal_style::bold());
     }
 }
 

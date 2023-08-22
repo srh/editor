@@ -64,7 +64,9 @@ char_rendering compute_char_rendering(const buffer_char bch, size_t *line_col) {
 terminal_frame init_frame(const terminal_size& window) {
     terminal_frame ret;
     static_assert(INIT_FRAME_INITIALIZES_WITH_SPACES);
-    ret.data.resize(u32_mul(window.rows, window.cols), terminal_char{' '});
+    uint32_t area = u32_mul(window.rows, window.cols);
+    ret.data.resize(area, terminal_char{' '});
+    ret.style_data.resize(area, terminal_style());
     ret.window = window;
     return ret;
 }

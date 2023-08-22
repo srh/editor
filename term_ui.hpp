@@ -29,6 +29,15 @@ inline const char *as_chars(const terminal_char *p) {
     return reinterpret_cast<const char *>(p);
 }
 
+struct terminal_style {
+    // Zero means normal.
+    static constexpr uint8_t BOLD_BIT = 1 << 0;
+    // static constexpr WHITE_ON_RED_BIT = 1 << 1;
+    static terminal_style bold() { return terminal_style{BOLD_BIT}; }
+
+    uint8_t mask = 0;
+};
+
 // A coordinate relative to the terminal frame (as opposed to some smaller buffer window).
 struct terminal_coord { uint32_t row = 0, col = 0; };
 struct terminal_frame {
@@ -41,6 +50,9 @@ struct terminal_frame {
 
     // data.size() = u32_mul(window.rows, window.cols).
     std::vector<terminal_char> data;
+
+    // Same length and dimensions as `data`.
+    std::vector<terminal_style> style_data;
 };
 
 struct window_coord { uint32_t row = 0, col = 0; };
