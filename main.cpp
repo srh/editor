@@ -42,11 +42,9 @@ undo_killring_handled nop_keypress() {
 }
 
 // Callers will need to handle undo.
-#if 0
 undo_killring_handled undo_will_need_handling() {
     return undo_killring_handled{};
 }
-#endif
 
 undo_killring_handled handled_undo_killring(qwi::state *state, qwi::buffer *buf) {
     (void)state, (void)buf;
@@ -611,6 +609,16 @@ undo_killring_handled delete_keypress(qwi::state *state, qwi::buffer *buf) {
     return note_coalescent_action(state, buf, std::move(res));
 }
 
+undo_killring_handled f5_keypress(qwi::state *state, qwi::buffer *buf) {
+    (void)state, (void)buf;
+    return undo_will_need_handling();
+}
+
+undo_killring_handled f6_keypress(qwi::state *state, qwi::buffer *buf) {
+    (void)state, (void)buf;
+    return undo_will_need_handling();
+}
+
 undo_killring_handled yank_from_clipboard(qwi::state *state, qwi::buffer *buf) {
     std::optional<const qwi::buffer_string *> text = qwi::do_yank(&state->clipboard);
     if (text.has_value()) {
@@ -723,6 +731,24 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
                     if (ch == '~') {
                         // TODO: Handle Insert key.
                         return unimplemented_keypress();
+                    }
+                } else if (ch == '1') {
+                    check_read_tty_char(term, &ch);
+                    chars_read.push_back(ch);
+                    if (ch == '5') {
+                        // F5
+                        check_read_tty_char(term, &ch);
+                        chars_read.push_back(ch);
+                        if (ch == '~') {
+                            return f5_keypress(state, active_buf);
+                        }
+                    } else if (ch == '7') {
+                        // F6
+                        check_read_tty_char(term, &ch);
+                        chars_read.push_back(ch);
+                        if (ch == '~') {
+                            return f6_keypress(state, active_buf);
+                        }
                     }
                 }
             }
