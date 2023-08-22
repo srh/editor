@@ -19,6 +19,14 @@
 // statement in main.cpp input processing.
 constexpr uint8_t CTRL_XOR_MASK = 64;
 
+struct terminal_char {
+    uint8_t value;
+};
+
+inline const char *as_chars(const terminal_char *p) {
+    static_assert(sizeof(terminal_char) == 1);
+    return reinterpret_cast<const char *>(p);
+}
 
 // A coordinate relative to the terminal frame (as opposed to some smaller buffer window).
 struct terminal_coord { uint32_t row = 0, col = 0; };
@@ -31,7 +39,7 @@ struct terminal_frame {
     std::optional<terminal_coord> cursor;
 
     // data.size() = u32_mul(window.rows, window.cols).
-    std::vector<char> data;
+    std::vector<terminal_char> data;
 };
 
 struct window_coord { uint32_t row = 0, col = 0; };
@@ -41,7 +49,7 @@ struct render_coord {
 };
 
 struct char_rendering {
-    char buf[8];
+    terminal_char buf[8];
     size_t count;  // SIZE_MAX means newline
 };
 

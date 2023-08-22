@@ -213,7 +213,7 @@ void write_frame(int fd, const terminal_frame& frame) {
     write_cstring(fd, TESC(?25l));
     write_cstring(fd, TESC(H));
     for (size_t i = 0; i < frame.window.rows; ++i) {
-        write_data(fd, &frame.data[i * frame.window.cols], frame.window.cols);
+        write_data(fd, as_chars(&frame.data[i * frame.window.cols]), frame.window.cols);
         if (i < frame.window.rows - 1) {
             write_cstring(fd, "\r\n");
         }
@@ -232,7 +232,7 @@ void draw_empty_frame_for_exit(int fd, const terminal_size& window) {
     terminal_frame frame = init_frame(window);
     if (!INIT_FRAME_INITIALIZES_WITH_SPACES) {
         for (size_t i = 0; i < frame.data.size(); ++i) {
-            frame.data[i] = ' ';
+            frame.data[i] = terminal_char{' '};
         }
     }
     // TODO: Ensure cursor is restored on non-happy-paths.
@@ -350,7 +350,7 @@ void render_string(terminal_frame *frame, const terminal_coord& coord, const std
             return;
         }
         size_t to_copy = std::min<size_t>(rend.count, frame->window.cols - col);
-        memcpy(&frame->data[coord.row * frame->window.cols + col], rend.buf, to_copy);
+        std::copy(rend.buf, rend.buf + to_copy, &frame->data[coord.row * frame->window.cols + col]);
         col += to_copy;
     }
 }

@@ -40,16 +40,20 @@ char_rendering compute_char_rendering(const buffer_char bch, size_t *line_col) {
         if (ch == '\t') {
             size_t next_line_col = size_add((*line_col) | TAB_MOD_MASK, 1);
             //             12345678
-            char buf[8] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
-            memcpy(ret.buf, buf, sizeof(ret.buf));
+            terminal_char buf[8] = { { ' ' }, { ' ' }, { ' ' }, { ' ' },
+                                     { ' ' }, { ' ' }, { ' ' }, { ' ' } };
+            std::copy(buf, buf + 8, ret.buf);
             ret.count = next_line_col - *line_col;
         } else if (ch < 32 || ch == 127) {
-            ret.buf[0] = '^';
-            ret.buf[1] = char(ch ^ CTRL_XOR_MASK);
+            ret.buf[0] = { '^' };
+            // x declared on a separate line because we get some crazy warning even though
+            // CTRL_XOR_MASK and ch are uint8_t's, and so is terminal_char::value.
+            uint8_t x = ch ^ CTRL_XOR_MASK;
+            ret.buf[1] = { x };
             ret.count = 2;
         } else {
             // I guess 128-255 get rendered verbatim.
-            ret.buf[0] = char(ch);
+            ret.buf[0] = { ch };
             ret.count = 1;
         }
         *line_col += ret.count;
@@ -60,7 +64,7 @@ char_rendering compute_char_rendering(const buffer_char bch, size_t *line_col) {
 terminal_frame init_frame(const terminal_size& window) {
     terminal_frame ret;
     static_assert(INIT_FRAME_INITIALIZES_WITH_SPACES);
-    ret.data.resize(u32_mul(window.rows, window.cols), ' ');
+    ret.data.resize(u32_mul(window.rows, window.cols), terminal_char{' '});
     ret.window = window;
     return ret;
 }
@@ -87,7 +91,7 @@ void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
     // TODO: We actually don't want to re-render a whole line
     size_t i = buf.first_visible_offset - distance_to_beginning_of_line(buf, buf.first_visible_offset);
 
-    std::vector<char> render_row(window.cols, 0);
+    std::vector<terminal_char> render_row(window.cols, terminal_char{0});
     size_t render_coords_begin = 0;
     size_t render_coords_end = 0;
     size_t line_col = 0;
@@ -102,7 +106,8 @@ void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
             // It simplifies code to throw in this (row < window.rows) check here, instead
             // of carefully calculating where we might need to check it.
             if (row < window.rows) {
-                memcpy(&frame.data[(window_topleft.row + row) * frame.window.cols + window_topleft.col], render_row.data(), window.cols);
+                std::copy(render_row.begin(), render_row.end(),
+                          &frame.data[(window_topleft.row + row) * frame.window.cols + window_topleft.col]);
 
                 while (render_coords_begin < render_coords_end) {
                     (*render_coords)[render_coords_begin].rendered_pos->row = row;
@@ -148,7 +153,7 @@ void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
             // TODO: We could use '\x1bK'
             // clear to EOL
             do {
-                render_row[col] = ' ';
+                render_row[col] = terminal_char{' '};
                 ++col;
             } while (col < window.cols);
             ++i;
@@ -166,10 +171,11 @@ void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
     // the remaining screen.
     while (row < window.rows) {
         do {
-            render_row[col] = ' ';
+            render_row[col] = terminal_char{' '};
             ++col;
         } while (col < window.cols);
-        memcpy(&frame.data[(window_topleft.row + row) * frame.window.cols + window_topleft.col], render_row.data(), window.cols);
+        std::copy(render_row.begin(), render_row.end(),
+                  &frame.data[(window_topleft.row + row) * frame.window.cols + window_topleft.col]);
         while (render_coords_begin < render_coords_end) {
             (*render_coords)[render_coords_begin].rendered_pos->row = row;
             ++render_coords_begin;
