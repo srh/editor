@@ -225,6 +225,8 @@ void append_mask_difference(std::string *buf, uint8_t old_mask, uint8_t new_mask
 
 }
 
+// Notably, this function does not write any ansi color or style escape sequences if the
+// style is uninital
 void write_frame(int fd, const terminal_frame& frame) {
     uint8_t mask = 0;
     static_assert(std::is_same<decltype(mask), decltype(terminal_style::mask)>::value);
@@ -434,6 +436,13 @@ void redraw_state(int term, const terminal_size& window, qwi::state& state) {
         frame.cursor = add(window_topleft, coords[0].rendered_pos);
 
         render_status_area(&frame, state);
+    }
+
+    if (!state.ui_config.ansi_terminal) {
+        // Wipe out styling.
+        for (terminal_style& style  : frame.style_data) {
+            style = terminal_style();
+        }
     }
 
     write_frame(term, frame);

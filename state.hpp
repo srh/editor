@@ -136,6 +136,10 @@ struct clip_board {
 
 enum class yank_side { left, right, none, };
 
+struct ui_mode {
+    bool ansi_terminal = true;
+};
+
 struct state {
     // Sorted in order from least-recently-used -- `buf` is the active buffer and should
     // get pushed onto the end of bufs after some other buf takes its place.
@@ -145,6 +149,8 @@ struct state {
     std::optional<prompt> status_prompt;
 
     clip_board clipboard;
+
+    ui_mode ui_config;
 };
 
 constexpr uint32_t STATUS_AREA_HEIGHT = 1;
