@@ -209,23 +209,27 @@ int main(int argc, const char **argv) {
 }
 
 void write_frame(int fd, const terminal_frame& frame) {
-    // TODO: Either single buffered write or some minimal diff write.
-    write_cstring(fd, TESC(?25l));
-    write_cstring(fd, TESC(H));
+    std::string buf;
+    buf += TESC(?25l);
+    buf += TESC(H);
     for (size_t i = 0; i < frame.window.rows; ++i) {
-        write_data(fd, as_chars(&frame.data[i * frame.window.cols]), frame.window.cols);
+        for (size_t j = 0; j < frame.window.cols; ++j) {
+            buf += frame.data[i * frame.window.cols + j].as_char();
+        }
         if (i < frame.window.rows - 1) {
-            write_cstring(fd, "\r\n");
+            buf += "\r\n";
         }
     }
     if (frame.cursor.has_value()) {
-        std::string cursor_string = TERMINAL_ESCAPE_SEQUENCE + std::to_string(frame.cursor->row + 1) + ';';
-        cursor_string += std::to_string(frame.cursor->col + 1);
-        cursor_string += 'H';
-        write_data(fd, cursor_string.data(), cursor_string.size());
+        buf += TERMINAL_ESCAPE_SEQUENCE;
+        buf += std::to_string(frame.cursor->row + 1);
+        buf += ';';
+        buf += std::to_string(frame.cursor->col + 1);
+        buf += 'H';
         // TODO: Make cursor visible when exiting program.
-        write_cstring(fd, TESC(?25h));
+        buf += TESC(?25h);
     }
+    write_data(fd, buf.data(), buf.size());
 }
 
 void draw_empty_frame_for_exit(int fd, const terminal_size& window) {

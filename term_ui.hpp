@@ -21,6 +21,7 @@ constexpr uint8_t CTRL_XOR_MASK = 64;
 
 struct terminal_char {
     uint8_t value;
+    char as_char() const { return char(value); }
 };
 
 inline const char *as_chars(const terminal_char *p) {
