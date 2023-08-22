@@ -30,6 +30,13 @@ struct runtime_check_failure { };
         } \
     } while (false)
 
+// So far there is no logic_check_failure type.
+
+#define logic_fail(fmt, ...) do { \
+        fprintf(stderr, "Logic error! " fmt "\n", ##__VA_ARGS__); \
+        throw runtime_check_failure{}; \
+    } while (false)
+
 #define logic_check(pred, fmt, ...) do { \
         if (!(pred)) { \
             fprintf(stderr, "Logic error! (%s) " fmt "\n", #pred, ##__VA_ARGS__); \

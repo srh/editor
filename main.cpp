@@ -659,6 +659,44 @@ undo_killring_handled alt_yank_from_clipboard(qwi::state *state, qwi::buffer *bu
     }
 }
 
+// Reads remainder of "\e[\d+(;\d+)?~" character escapes after the first digit was read.
+bool read_tty_numeric_escape(int term, std::string *chars_read, char firstDigit, std::pair<uint8_t, std::optional<uint8_t>> *out) {
+    logic_checkg(isdigit(firstDigit));
+    uint32_t number = firstDigit - '0';
+    std::optional<uint8_t> first_number;
+
+    for (;;) {
+        char ch;
+        check_read_tty_char(term, &ch);
+        chars_read->push_back(ch);
+        if (isdigit(ch)) {
+            uint32_t new_number = number * 10 + (ch - '0');
+            if (new_number > UINT8_MAX) {
+                // TODO: We'd probably want to report this to the user somehow, or still
+                // consume the entire escape code (for now we just render its characters.
+                return false;
+            }
+            number = new_number;
+        } else if (ch == '~') {
+            if (first_number.has_value()) {
+                out->first = *first_number;
+                out->second = number;
+            } else {
+                out->first = number;
+                out->second = std::nullopt;
+            }
+            return true;
+        } else if (ch == ';') {
+            if (first_number.has_value()) {
+                // TODO: We want to consume the whole keyboard escape code and ignore it together.
+                return false;
+            }
+            // TODO: Should we enforce a digit after the first semicolon, or allow "\e[\d+;~" as the code does now?
+            first_number = number;
+            number = 0;
+        }
+    }
+}
 
 undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
     // TODO: When term is non-blocking, we'll need to wait for readiness...?
@@ -687,7 +725,32 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
             check_read_tty_char(term, &ch);
             chars_read.push_back(ch);
 
-            if (ch == 'C') {
+            if (isdigit(ch)) {
+                std::pair<uint8_t, std::optional<uint8_t>> numbers;
+                if (read_tty_numeric_escape(term, &chars_read, ch, &numbers)) {
+                    if (!numbers.second.has_value()) {
+                        switch (numbers.first) {
+                        case 3:
+                            return delete_keypress(state, active_buf);
+                        case 2:
+                            // TODO: Handle Insert key.
+                            return unimplemented_keypress();
+                        case 15:
+                            return f5_keypress(state, active_buf);
+                        case 17:
+                            return f6_keypress(state, active_buf);
+                        default:
+                            break;
+                        }
+                    } else {
+                        uint8_t numbers_second = *numbers.second;
+                        if (numbers.first == 3 && numbers_second == 2) {
+                            // TODO: Handle Shift+Del key.
+                            return unimplemented_keypress();
+                        }
+                    }
+                }
+            } else if (ch == 'C') {
                 move_right(active_buf);
                 return note_navigation_action(state, active_buf);
             } else if (ch == 'D') {
@@ -705,52 +768,6 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
             } else if (ch == 'F') {
                 move_end(active_buf);
                 return note_navigation_action(state, active_buf);
-            } else if (isdigit(ch)) {
-                // TODO: Generic parsing of numeric/~ escape codes.
-                if (ch == '3') {
-                    check_read_tty_char(term, &ch);
-                    chars_read.push_back(ch);
-                    if (ch == '~') {
-                        return delete_keypress(state, active_buf);
-                    } else if (ch == ';') {
-                        check_read_tty_char(term, &ch);
-                        chars_read.push_back(ch);
-                        if (ch == '2') {
-                            check_read_tty_char(term, &ch);
-                            chars_read.push_back(ch);
-                            if (ch == '~') {
-                                // TODO: Handle Shift+Del key.
-                                chars_read.clear();
-                                return unimplemented_keypress();
-                            }
-                        }
-                    }
-                } else if (ch == '2') {
-                    check_read_tty_char(term, &ch);
-                    chars_read.push_back(ch);
-                    if (ch == '~') {
-                        // TODO: Handle Insert key.
-                        return unimplemented_keypress();
-                    }
-                } else if (ch == '1') {
-                    check_read_tty_char(term, &ch);
-                    chars_read.push_back(ch);
-                    if (ch == '5') {
-                        // F5
-                        check_read_tty_char(term, &ch);
-                        chars_read.push_back(ch);
-                        if (ch == '~') {
-                            return f5_keypress(state, active_buf);
-                        }
-                    } else if (ch == '7') {
-                        // F6
-                        check_read_tty_char(term, &ch);
-                        chars_read.push_back(ch);
-                        if (ch == '~') {
-                            return f6_keypress(state, active_buf);
-                        }
-                    }
-                }
             }
         } else if (ch == 'f') {
             // M-f
