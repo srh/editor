@@ -147,6 +147,7 @@ struct state {
     std::vector<buffer> bufs;
 
     std::optional<prompt> status_prompt;
+    bool is_normal() const { return !status_prompt.has_value(); }
 
     clip_board clipboard;
 

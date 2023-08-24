@@ -137,6 +137,12 @@ undo_killring_handled note_navigation_action(qwi::state *state, qwi::buffer *buf
     return undo_killring_handled{};
 }
 
+// Currently a nop, we might need a generic action or code adjustments in the future.
+// (Current callers also invoke note_navigation_action.)
+void note_navigate_away_from_buf(qwi::buffer *buf) {
+    (void)buf;
+}
+
 bool parse_command_line(FILE *err_fp, int argc, const char **argv, command_line_args *out) {
     // TODO: We could check for duplicate or conflicting args (like --help and --version
     // used together with other args).
@@ -609,14 +615,44 @@ undo_killring_handled delete_keypress(qwi::state *state, qwi::buffer *buf) {
     return note_coalescent_action(state, buf, std::move(res));
 }
 
-undo_killring_handled f5_keypress(qwi::state *state, qwi::buffer *buf) {
-    (void)state, (void)buf;
-    return undo_will_need_handling();
+undo_killring_handled rotate_buf_right(qwi::state *state, qwi::buffer *activeBuf) {
+    undo_killring_handled ret = note_navigation_action(state, activeBuf);
+    if (!state->is_normal()) {
+        return ret;
+    }
+
+    note_navigate_away_from_buf(activeBuf);
+
+    if (state->bufs.empty()) {
+        return ret;
+    }
+
+    qwi::buffer lastBuf = std::move(state->buf);
+    state->buf = std::move(state->bufs.front());
+    state->bufs.erase(state->bufs.begin());
+    state->bufs.push_back(std::move(lastBuf));
+
+    return ret;
 }
 
-undo_killring_handled f6_keypress(qwi::state *state, qwi::buffer *buf) {
-    (void)state, (void)buf;
-    return undo_will_need_handling();
+undo_killring_handled rotate_buf_left(qwi::state *state, qwi::buffer *activeBuf) {
+    undo_killring_handled ret = note_navigation_action(state, activeBuf);
+    if (!state->is_normal()) {
+        return ret;
+    }
+
+    note_navigate_away_from_buf(activeBuf);
+
+    if (state->bufs.empty()) {
+        return ret;
+    }
+
+    qwi::buffer lastBuf = std::move(state->buf);
+    state->buf = std::move(state->bufs.back());
+    state->bufs.pop_back();
+    state->bufs.insert(state->bufs.begin(), std::move(lastBuf));
+
+    return ret;
 }
 
 undo_killring_handled yank_from_clipboard(qwi::state *state, qwi::buffer *buf) {
@@ -739,10 +775,9 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
                             // TODO: Handle Insert key.
                             return unimplemented_keypress();
 
-                        // TODO: Implement F5 and F6... or designate these unimplemented.
                         // (Yes, the escape codes aren't as contiguous as you'd expect.)
-                        case 15: return f5_keypress(state, active_buf);
-                        case 17: return f6_keypress(state, active_buf);
+                        case 15: return rotate_buf_right(state, active_buf);  // F5
+                        case 17: return rotate_buf_left(state, active_buf);  // F6
                         case 18: return unimplemented_keypress();  // F7
                         case 19: return unimplemented_keypress();  // F8
                         case 20: return unimplemented_keypress();  // F9
