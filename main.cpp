@@ -524,15 +524,15 @@ undo_killring_handled enter_key(qwi::state *state) {
     } else {
         // end undo/kill ring stuff -- undo n/a because we're destructing the buf and haven't made changes.
         undo_killring_handled ret = note_action(state, &state->status_prompt->buf, noundo_killring_action{});
-        // TODO: Of course, handle errors, such as if directory doesn't exist.
+        // TODO: Of course, handle errors, such as if directory doesn't exist, permissions.
         std::string text = state->status_prompt->buf.copy_to_string();
         // TODO: Implement displaying errors to the user.
         if (text != "") {
-            state->status_prompt = std::nullopt;
             state->buf.married_file = text;
             save_buf_to_married_file(state->buf);
             state->buf.name = buf_name_from_file_path(fs::path(text));
         }
+        close_status_prompt(state);
         return ret;
     }
 }
