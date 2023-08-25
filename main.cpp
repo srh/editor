@@ -42,9 +42,11 @@ undo_killring_handled nop_keypress() {
 }
 
 // Callers will need to handle undo.
+#if 0
 undo_killring_handled undo_will_need_handling() {
     return undo_killring_handled{};
 }
+#endif
 
 undo_killring_handled handled_undo_killring(qwi::state *state, qwi::buffer *buf) {
     (void)state, (void)buf;
