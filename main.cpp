@@ -796,11 +796,11 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
                         // (Yes, the escape codes aren't as contiguous as you'd expect.)
                         case 15: return rotate_buf_right(state, active_buf);  // F5
                         case 17: return rotate_buf_left(state, active_buf);  // F6
-                        case 18: return unimplemented_keypress();  // F7
-                        case 19: return unimplemented_keypress();  // F8
-                        case 20: return unimplemented_keypress();  // F9
-                        case 21: return unimplemented_keypress();  // F10
-                        case 24: return unimplemented_keypress();  // F12
+                        case 18: return nop_keypress();  // F7
+                        case 19: return nop_keypress();  // F8
+                        case 20: return nop_keypress();  // F9
+                        case 21: return nop_keypress();  // F10
+                        case 24: return nop_keypress();  // F12
                         default:
                             break;
                         }
@@ -857,10 +857,10 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
                 check_read_tty_char(term, &ch);
                 chars_read.push_back(ch);
                 switch (ch) {
-                case 'P': return unimplemented_keypress();  // F1
-                case 'Q': return unimplemented_keypress();  // F2
-                case 'R': return unimplemented_keypress();  // F3
-                case 'S': return unimplemented_keypress();  // F4
+                case 'P': return nop_keypress();  // F1
+                case 'Q': return nop_keypress();  // F2
+                case 'R': return nop_keypress();  // F3
+                case 'S': return nop_keypress();  // F4
                 default:
                     break;
                 }
