@@ -395,6 +395,7 @@ void render_status_area(terminal_frame *frame, qwi::state& state) {
         switch (state.status_prompt->typ) {
         case qwi::prompt::type::file_open: message = "file to open: "; break;
         case qwi::prompt::type::file_save: message = "file to save: "; break;
+        case qwi::prompt::type::buffer_switch: message = "switch to buffer: "; break;
         }
         render_string(frame, {.row = last_row, .col = 0}, message, terminal_style::bold());
 
@@ -523,7 +524,9 @@ undo_killring_handled enter_key(qwi::state *state) {
     if (!state->status_prompt.has_value()) {
         insert_result res = insert_char(&state->buf, '\n');
         return note_coalescent_action(state, &state->buf, std::move(res));
-    } else {
+    }
+    switch (state->status_prompt->typ) {
+    case qwi::prompt::type::file_save: {
         // end undo/kill ring stuff -- undo n/a because we're destructing the buf and haven't made changes.
         undo_killring_handled ret = note_action(state, &state->status_prompt->buf, noundo_killring_action{});
         // TODO: Of course, handle errors, such as if directory doesn't exist, permissions.
@@ -536,6 +539,18 @@ undo_killring_handled enter_key(qwi::state *state) {
         }
         close_status_prompt(state);
         return ret;
+    } break;
+    case qwi::prompt::type::file_open: {
+        // Unreachable code because we don't have the file open key implemented.
+        logic_fail("file open prompt not implemented");
+    } break;
+    case qwi::prompt::type::buffer_switch: {
+        // Unreachable code because we don't have the buffer switch (by name) key implemented.
+        logic_fail("buffer switch prompt not implemented");
+    } break;
+    default:
+        logic_fail("status prompt unreachable default case");
+        break;
     }
 }
 

@@ -112,7 +112,7 @@ struct buffer {
 };
 
 struct prompt {
-    enum class type { file_open, file_save, };
+    enum class type { file_open, file_save, buffer_switch };
     type typ;
     buffer buf;
 };
