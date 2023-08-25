@@ -130,11 +130,17 @@ undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, const nou
     return undo_killring_handled{};
 }
 
-// Possibly a useless categorization -- maybe useful for refactoring later.
-undo_killring_handled note_navigation_action(qwi::state *state, qwi::buffer *buf) {
+// An action that backs out of the yank sequence or some undo sequence.  C-g typed into a
+// buffer, for example.
+undo_killring_handled note_backout_action(qwi::state *state, qwi::buffer *buf) {
     no_yank(&state->clipboard);
     add_nop_edit(&buf->undo_info);
     return undo_killring_handled{};
+}
+
+// Possibly a useless categorization -- maybe useful for refactoring later.
+inline undo_killring_handled note_navigation_action(qwi::state *state, qwi::buffer *buf) {
+    return note_backout_action(state, buf);
 }
 
 // Currently a nop, we might need a generic action or code adjustments in the future.
@@ -531,6 +537,18 @@ undo_killring_handled enter_key(qwi::state *state) {
     }
 }
 
+undo_killring_handled cancel_key(qwi::state *state, qwi::buffer *buf) {
+    // We break the yank and undo sequence in `buf` -- of course, when creating the status
+    // prompt, we already broke the yank and undo sequence in the _original_ buf.
+    undo_killring_handled ret = note_backout_action(state, buf);
+
+    if (state->status_prompt.has_value()) {
+        close_status_prompt(state);
+    }
+
+    return ret;
+}
+
 undo_killring_handled delete_backward_word(qwi::state *state, qwi::buffer *buf) {
     size_t d = backward_word_distance(buf);
     delete_result delres = delete_left(buf, d);
@@ -889,6 +907,8 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
             move_right(active_buf);
             return note_navigation_action(state, active_buf);
             break;
+        case 'G':
+            return cancel_key(state, active_buf);
         case 'N':
             move_down(active_buf);
             return note_navigation_action(state, active_buf);

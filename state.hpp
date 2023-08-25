@@ -158,6 +158,10 @@ constexpr uint32_t STATUS_AREA_HEIGHT = 1;
 void resize_window(state *st, const terminal_size& new_window);
 window_size main_buf_window_from_terminal_window(const terminal_size& term_window);
 
+inline void close_status_prompt(state *st) {
+    st->status_prompt = std::nullopt;
+}
+
 size_t distance_to_eol(const qwi::buffer& buf, size_t pos);
 size_t distance_to_beginning_of_line(const qwi::buffer& buf, size_t pos);
 
