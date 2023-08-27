@@ -288,13 +288,13 @@ void draw_empty_frame_for_exit(int fd, const terminal_size& window) {
     write_frame(fd, frame);
 }
 
-std::basic_string<buffer_char> read_file(const fs::path& path) {
+qwi::buffer_string read_file(const fs::path& path) {
     if (!fs::is_regular_file(path)) {
         runtime_fail("Tried opening non-regular file %s", path.c_str());
     }
 
     static_assert(sizeof(buffer_char) == 1);
-    std::basic_string<buffer_char> ret;
+    qwi::buffer_string ret;
     // TODO: Use system lib at some point (like, when we care, if ever).
     std::ifstream f{path, std::ios::binary};
     f.seekg(0, std::ios::end);
@@ -445,7 +445,7 @@ void redraw_state(int term, const terminal_size& window, qwi::state& state) {
 }
 
 // Cheap fn for debugging purposes.
-void push_printable_repr(std::basic_string<buffer_char> *str, char sch) {
+void push_printable_repr(qwi::buffer_string *str, char sch) {
     uint8_t ch = uint8_t(sch);
     if (ch == '\n' || ch == '\t') {
         str->push_back(buffer_char{ch});
@@ -461,7 +461,7 @@ void push_printable_repr(std::basic_string<buffer_char> *str, char sch) {
 }
 
 undo_killring_handled insert_printable_repr(qwi::state *state, qwi::buffer *buf, char sch) {
-    std::basic_string<buffer_char> str;
+    qwi::buffer_string str;
     push_printable_repr(&str, sch);
     insert_result res = insert_chars(buf, str.data(), str.size());
     return note_action(state, buf, std::move(res));

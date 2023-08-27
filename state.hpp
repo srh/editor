@@ -68,8 +68,8 @@ struct buffer {
     std::optional<std::string> married_file;
 
     // We just have strings for text before/after the cursor.  Very bad perf.
-    std::basic_string<buffer_char> bef;
-    std::basic_string<buffer_char> aft;
+    buffer_string bef;
+    buffer_string aft;
 
     // Absolute position of the mark, if there is one.
     std::optional<size_t> mark;
@@ -120,7 +120,7 @@ struct prompt {
 struct clip_board {
     // TODO: There are no limits on kill ring size.
     // A list of strings stored in the clipboard.
-    std::vector<std::basic_string<buffer_char>> clips;
+    std::vector<buffer_string> clips;
     // Did we just record some text?  Future text recordings will be appended to the
     // previous.  For example, if we typed C-k C-k C-k, we'd want those contiguous
     // cuttings to be concatenated into one.
