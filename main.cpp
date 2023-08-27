@@ -399,12 +399,12 @@ std::optional<terminal_coord> add(const terminal_coord& window_topleft, const st
     }
 }
 
-void render_string(terminal_frame *frame, const terminal_coord& coord, const std::string& str, terminal_style style_mask = terminal_style{}) {
+void render_string(terminal_frame *frame, const terminal_coord& coord, const qwi::buffer_string& str, terminal_style style_mask = terminal_style{}) {
     uint32_t col = coord.col;  // <= frame->window.cols
     runtime_check(col <= frame->window.cols, "render_string: coord out of range");
     size_t line_col = 0;
     for (size_t i = 0; i < str.size() && col < frame->window.cols; ++i) {
-        char_rendering rend = compute_char_rendering(buffer_char::from_char(str[i]), &line_col);
+        char_rendering rend = compute_char_rendering(str[i], &line_col);
         if (rend.count == SIZE_MAX) {
             // Newline...(?)
             return;
@@ -427,7 +427,8 @@ void render_status_area(terminal_frame *frame, qwi::state& state) {
         case qwi::prompt::type::file_save: message = "file to save: "; break;
         case qwi::prompt::type::buffer_switch: message = "switch to buffer: "; break;
         }
-        render_string(frame, {.row = last_row, .col = 0}, message, terminal_style::bold());
+
+        render_string(frame, {.row = last_row, .col = 0}, qwi::to_buffer_string(message), terminal_style::bold());
 
         std::vector<render_coord> coords = { {state.status_prompt->buf.cursor(), std::nullopt} };
         terminal_coord prompt_topleft = {.row = last_row, .col = uint32_t(message.size())};
@@ -439,7 +440,7 @@ void render_status_area(terminal_frame *frame, qwi::state& state) {
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
     } else {
         // TODO: Rendering logic.
-        render_string(frame, {.row = last_row, .col = 0}, state.topbuf().name_str, terminal_style::bold());
+        render_string(frame, {.row = last_row, .col = 0}, buffer_name(&state, qwi::buffer_number{qwi::state::topbuf_index_is_0}), terminal_style::bold());
     }
 }
 
@@ -540,7 +541,7 @@ void set_save_prompt(qwi::state *state) {
 
 void set_buffer_switch_prompt(qwi::state *state) {
     logic_check(!state->status_prompt.has_value(), "set_buffer_switch_prompt with existing prompt");
-    qwi::buffer_string data = qwi::to_buffer_string(state->buf.name);
+    qwi::buffer_string data = buffer_name(state, qwi::buffer_number{qwi::state::topbuf_index_is_0});
     state->status_prompt = {qwi::prompt::type::buffer_switch, qwi::buffer::from_data(std::move(data))};
 }
 
@@ -574,6 +575,18 @@ undo_killring_handled buffer_switch_action(qwi::state *state, qwi::buffer *activ
     return ret;
 }
 
+bool find_buffer_by_name(const qwi::state *state, const std::string& text, qwi::buffer_number *out) {
+    for (size_t i = 0, e = state->buflist.size(); i < e; ++i) {
+        if (buffer_name_str(state, qwi::buffer_number{i}) == text) {
+            *out = qwi::buffer_number{i};
+            return true;
+        }
+    }
+    return false;
+}
+
+void rotate_to_buffer(qwi::state *state, qwi::buffer_number buf_number);
+
 undo_killring_handled enter_key(qwi::state *state) {
     if (!state->status_prompt.has_value()) {
         insert_result res = insert_char(&state->topbuf(), '\n');
@@ -585,13 +598,14 @@ undo_killring_handled enter_key(qwi::state *state) {
         undo_killring_handled ret = note_action(state, &state->status_prompt->buf, noundo_killring_action{});
         // TODO: Of course, handle errors, such as if directory doesn't exist, permissions.
         std::string text = state->status_prompt->buf.copy_to_string();
-        // TODO: Implement displaying errors to the user.
         if (text != "") {
             state->topbuf().married_file = text;
             save_buf_to_married_file(state->topbuf());
             state->topbuf().name_str = buf_name_from_file_path(fs::path(text));
             state->topbuf().name_number = 0;
             apply_number_to_buf(state, qwi::state::topbuf_index_is_0);
+        } else {
+            // TODO: Implement displaying errors to the user.
         }
         close_status_prompt(state);
         return ret;
@@ -601,11 +615,23 @@ undo_killring_handled enter_key(qwi::state *state) {
         logic_fail("file open prompt not implemented");
     } break;
     case qwi::prompt::type::buffer_switch: {
-        
+        // end undo/kill ring stuff -- undo n/a because we're destructing the buf and haven't made changes.
+        undo_killring_handled ret = note_navigation_action(state, &state->status_prompt->buf);
+        std::string text = state->status_prompt->buf.copy_to_string();
+        // TODO: Implement displaying errors to the user.
+        if (text != "") {
+            qwi::buffer_number buf_number;
+            if (find_buffer_by_name(state, text, &buf_number)) {
+                rotate_to_buffer(state, buf_number);
+            } else {
+                // TODO: Display error.
+            }
+        } else {
+            // TODO: Display error.
+        }
 
-
-        // Unreachable code because we don't have the buffer switch (by name) key implemented.
-        logic_fail("buffer switch prompt not implemented");
+        close_status_prompt(state);
+        return ret;
     } break;
     default:
         logic_fail("status prompt unreachable default case");
@@ -707,6 +733,14 @@ undo_killring_handled delete_keypress(qwi::state *state, qwi::buffer *buf) {
     delete_result res = delete_char(buf);
     // TODO: Here, and perhaps in general, handle cases where no characters were actually deleted.
     return note_coalescent_action(state, buf, std::move(res));
+}
+
+// TODO: This rotation is stupid and makes no sense for multi-window, tabs, etc. -- use a
+// buffer_number to point at the buf instead.
+void rotate_to_buffer(qwi::state *state, qwi::buffer_number buf_number) {
+    logic_check(buf_number.value < state->buflist.size(), "rotate_to_buffer with out-of-range buffer number %zu", buf_number.value);
+
+    std::rotate(state->buflist.begin(), state->buflist.begin() + buf_number.value, state->buflist.end());
 }
 
 // I guess we're rotating our _pointer_ into the buf list to the right, by rotating the

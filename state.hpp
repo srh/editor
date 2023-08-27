@@ -176,11 +176,18 @@ struct state {
 
 // An unstable pointer.
 inline qwi::buffer *buffer_ptr(qwi::state *state, buffer_number buf_number) {
-    logic_checkg(buf_number.value <= state->bufs.size());
-    return buf_number.value == 0 ? &state->buf : &state->bufs[buf_number.value - 1];
+    logic_checkg(buf_number.value < state->buflist.size());
+    return &state->buflist[buf_number.value];
 }
 
-qwi::buffer_string buffer_name(qwi::state *state, buffer_number buf_number);
+inline const qwi::buffer *buffer_ptr(const qwi::state *state, buffer_number buf_number) {
+    logic_checkg(buf_number.value < state->buflist.size());
+    return &state->buflist[buf_number.value];
+}
+
+// TODO: Rename to be buffer_name_linear_time
+std::string buffer_name_str(const qwi::state *state, buffer_number buf_number);
+qwi::buffer_string buffer_name(const qwi::state *state, buffer_number buf_number);
 
 
 constexpr uint32_t STATUS_AREA_HEIGHT = 1;

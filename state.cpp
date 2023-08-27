@@ -65,11 +65,27 @@ buffer buffer::from_data(buffer_string&& data) {
     return ret;
 }
 
-qwi::buffer_string buffer_name(qwi::state *state, buffer_number buf_number) {
-    // TODO: Add more state, some kind of rank ordering for buffers, so we can have
-    // consistent buffer names.
-    // TODO: Implement for real.
-    return to_buffer_string(buffer_ptr(state, buf_number)->name);
+std::string buffer_name_str(const qwi::state *state, buffer_number buf_number) {
+    // TODO: Eventually, make this not be O(n), or even, make this not allocate.
+    const qwi::buffer *buf = buffer_ptr(state, buf_number);
+
+    bool seen = false;
+    for (size_t i = 0, e = state->buflist.size(); i < e; ++i) {
+        if (i != buf_number.value && state->buflist[i].name_str == buf->name_str) {
+            seen = true;
+            break;
+        }
+    }
+
+    if (seen) {
+        return buf->name_str + "<" + std::to_string(buf->name_number) + ">";
+    } else {
+        return buf->name_str;
+    }
+}
+
+qwi::buffer_string buffer_name(const qwi::state *state, buffer_number buf_number) {
+    return to_buffer_string(buffer_name_str(state, buf_number));
 }
 
 size_t distance_to_eol(const qwi::buffer& buf, size_t pos) {
