@@ -531,13 +531,14 @@ undo_killring_handled open_file_action(state *state, buffer *activeBuf) {
     return ret;
 }
 
-void save_file_action(state *state) {
+undo_killring_handled save_file_action(state *state, buffer *activeBuf) {
+    undo_killring_handled ret = note_action(state, activeBuf, noundo_killring_action{});
     if (state->status_prompt.has_value()) {
         // TODO: We'll have to handle M-x C-s or C-x C-s somehow -- probably by generic
         // logic at the keypress level.
 
         // Ignore keypress.
-        return;
+        return ret;
     }
 
     if (state->topbuf().married_file.has_value()) {
@@ -545,6 +546,7 @@ void save_file_action(state *state) {
     } else {
         set_save_prompt(state);
     }
+    return ret;
 }
 
 undo_killring_handled buffer_switch_action(state *state, buffer *activeBuf) {
@@ -1032,8 +1034,7 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
             return note_navigation_action(state, active_buf);
         case 'S':
             // May prompt if the buf isn't married to a file.
-            save_file_action(state);
-            return note_action(state, active_buf, noundo_killring_action{});
+            return save_file_action(state, active_buf);
         case '?': {
             // TODO: Here, and perhaps elsewhere, handle undo where no characters were actually deleted.
             delete_result res = backspace_char(active_buf);
