@@ -10,10 +10,10 @@ Only supports ASCII (with move forward/backward word logic).
 
 BUILDING AND RUNNING
 
-./build.sh
-./qwi
-./qwi <files>
-./qwi -- <files>
+./make.sh
+./build/qwi
+./build/qwi <files>
+./build/qwi -- <files>
 
 KEYBOARD SHORTCUTS
 
