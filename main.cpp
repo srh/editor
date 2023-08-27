@@ -976,36 +976,29 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
         case 'A':
             move_home(active_buf);
             return note_navigation_action(state, active_buf);
-            break;
         case 'B':
             move_left(active_buf);
             return note_navigation_action(state, active_buf);
-            break;
         case 'D':
             return delete_keypress(state, active_buf);
         case 'E':
             move_end(active_buf);
             return note_navigation_action(state, active_buf);
-            break;
         case 'F':
             move_right(active_buf);
             return note_navigation_action(state, active_buf);
-            break;
         case 'G':
             return cancel_key(state, active_buf);
         case 'N':
             move_down(active_buf);
             return note_navigation_action(state, active_buf);
-            break;
         case 'P':
             move_up(active_buf);
             return note_navigation_action(state, active_buf);
-            break;
         case 'S':
             // May prompt if the buf isn't married to a file.
             save_file_action(state);
             return note_action(state, active_buf, noundo_killring_action{});
-            break;
         case '?': {
             // TODO: Here, and perhaps elsewhere, handle undo where no characters were actually deleted.
             delete_result res = backspace_char(active_buf);
@@ -1013,19 +1006,15 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
         } break;
         case 'K':
             return kill_line(state, active_buf);
-            break;
         case 'W':
             return kill_region(state, active_buf);
-            break;
         case 'Y':
             return yank_from_clipboard(state, active_buf);
-            break;
         case '@':
             // Ctrl+Space same as C-@
             set_mark(active_buf);
             // TODO: We want this?
             return note_action(state, active_buf, noundo_killring_action{});
-            break;
         case '_':
             perform_undo(active_buf);
             return undo_killring_handled{};
