@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "error.hpp"
+
 struct terminal_size;
 
 namespace qwi {
@@ -143,8 +145,13 @@ struct ui_mode {
 struct state {
     // Sorted in order from least-recently-used -- `buf` is the active buffer and should
     // get pushed onto the end of bufs after some other buf takes its place.
-    buffer buf;
-    std::vector<buffer> bufs;
+    //
+    // Is never empty (after initial_state() returns).
+    std::vector<buffer> buflist;
+    buffer& topbuf() {
+        logic_checkg(!buflist.empty());
+        return buflist.front();
+    }
 
     std::optional<prompt> status_prompt;
     bool is_normal() const { return !status_prompt.has_value(); }

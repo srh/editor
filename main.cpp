@@ -337,16 +337,16 @@ qwi::state initial_state(const command_line_args& args, const terminal_size& win
 
     qwi::state state;
     if (n_files == 0) {
-        state.buf.set_window(buf_window);
-        state.buf.name = "*scratch*";
+        state.buflist.push_back(qwi::buffer{});
+        state.topbuf().set_window(buf_window);
+        state.topbuf().name = "*scratch*";
     } else {
-        state.buf = open_file_into_detached_buffer(args.files.at(0));
-        state.buf.set_window(buf_window);
+        state.buflist.reserve(n_files);
 
-        state.bufs.reserve(n_files - 1);
-        for (size_t i = 1; i < n_files; ++i) {
-            state.bufs.push_back(open_file_into_detached_buffer(args.files.at(i)));
-            state.bufs.back().set_window(buf_window);
+        state.buflist.clear();
+        for (size_t i = 0; i < n_files; ++i) {
+            state.buflist.push_back(open_file_into_detached_buffer(args.files.at(i)));
+            state.buflist.back().set_window(buf_window);
             // TODO: How do we handle duplicate file names?  Just allow identical buffer
             // names, but make selecting them in the UI different?  Only allow identical
             // buffer names when there are married files?  Disallow the concept of a
@@ -408,7 +408,7 @@ void render_status_area(terminal_frame *frame, qwi::state& state) {
         // TODO: This is super-hacky -- we overwrite the main buffer's cursor.
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
     } else {
-        render_string(frame, {.row = last_row, .col = 0}, state.buf.name, terminal_style::bold());
+        render_string(frame, {.row = last_row, .col = 0}, state.topbuf().name, terminal_style::bold());
     }
 }
 
@@ -416,14 +416,14 @@ void render_status_area(terminal_frame *frame, qwi::state& state) {
 void redraw_state(int term, const terminal_size& window, qwi::state& state) {
     terminal_frame frame = init_frame(window);
 
-    if (!too_small_to_render(state.buf.window)) {
+    if (!too_small_to_render(state.topbuf().window)) {
         // TODO: Support resizing.
-        runtime_check(window.cols == state.buf.window.cols, "window cols changed");
-        runtime_check(window.rows == state.buf.window.rows + qwi::STATUS_AREA_HEIGHT, "window rows changed");
+        runtime_check(window.cols == state.topbuf().window.cols, "window cols changed");
+        runtime_check(window.rows == state.topbuf().window.rows + qwi::STATUS_AREA_HEIGHT, "window rows changed");
 
-        std::vector<render_coord> coords = { {state.buf.cursor(), std::nullopt} };
+        std::vector<render_coord> coords = { {state.topbuf().cursor(), std::nullopt} };
         terminal_coord window_topleft = {0, 0};
-        render_into_frame(&frame, window_topleft, state.buf, &coords);
+        render_into_frame(&frame, window_topleft, state.topbuf(), &coords);
 
         // TODO: This is super-hacky -- this gets overwritten if the status area has a
         // prompt.  With multiple buffers, we need some concept of an active buffer, with
@@ -513,8 +513,8 @@ void save_file_action(qwi::state *state) {
         return;
     }
 
-    if (state->buf.married_file.has_value()) {
-        save_buf_to_married_file(state->buf);
+    if (state->topbuf().married_file.has_value()) {
+        save_buf_to_married_file(state->topbuf());
     } else {
         set_save_prompt(state);
     }
@@ -522,8 +522,8 @@ void save_file_action(qwi::state *state) {
 
 undo_killring_handled enter_key(qwi::state *state) {
     if (!state->status_prompt.has_value()) {
-        insert_result res = insert_char(&state->buf, '\n');
-        return note_coalescent_action(state, &state->buf, std::move(res));
+        insert_result res = insert_char(&state->topbuf(), '\n');
+        return note_coalescent_action(state, &state->topbuf(), std::move(res));
     }
     switch (state->status_prompt->typ) {
     case qwi::prompt::type::file_save: {
@@ -533,9 +533,9 @@ undo_killring_handled enter_key(qwi::state *state) {
         std::string text = state->status_prompt->buf.copy_to_string();
         // TODO: Implement displaying errors to the user.
         if (text != "") {
-            state->buf.married_file = text;
-            save_buf_to_married_file(state->buf);
-            state->buf.name = buf_name_from_file_path(fs::path(text));
+            state->topbuf().married_file = text;
+            save_buf_to_married_file(state->topbuf());
+            state->topbuf().name = buf_name_from_file_path(fs::path(text));
         }
         close_status_prompt(state);
         return ret;
@@ -650,6 +650,8 @@ undo_killring_handled delete_keypress(qwi::state *state, qwi::buffer *buf) {
     return note_coalescent_action(state, buf, std::move(res));
 }
 
+// I guess we're rotating our _pointer_ into the buf list to the right, by rotating the
+// bufs to the left.
 undo_killring_handled rotate_buf_right(qwi::state *state, qwi::buffer *activeBuf) {
     undo_killring_handled ret = note_navigation_action(state, activeBuf);
     if (!state->is_normal()) {
@@ -658,18 +660,17 @@ undo_killring_handled rotate_buf_right(qwi::state *state, qwi::buffer *activeBuf
 
     note_navigate_away_from_buf(activeBuf);
 
-    if (state->bufs.empty()) {
-        return ret;
-    }
+    logic_checkg(!state->buflist.empty());
 
-    qwi::buffer lastBuf = std::move(state->buf);
-    state->buf = std::move(state->bufs.front());
-    state->bufs.erase(state->bufs.begin());
-    state->bufs.push_back(std::move(lastBuf));
+    qwi::buffer lastBuf = std::move(state->buflist.front());
+    state->buflist.erase(state->buflist.begin());
+    state->buflist.push_back(std::move(lastBuf));
 
     return ret;
 }
 
+// I guess we're rotating our _pointer_ into the buf list to the left, by rotating the
+// bufs to the right.
 undo_killring_handled rotate_buf_left(qwi::state *state, qwi::buffer *activeBuf) {
     undo_killring_handled ret = note_navigation_action(state, activeBuf);
     if (!state->is_normal()) {
@@ -678,14 +679,11 @@ undo_killring_handled rotate_buf_left(qwi::state *state, qwi::buffer *activeBuf)
 
     note_navigate_away_from_buf(activeBuf);
 
-    if (state->bufs.empty()) {
-        return ret;
-    }
+    logic_checkg(!state->buflist.empty());
 
-    qwi::buffer lastBuf = std::move(state->buf);
-    state->buf = std::move(state->bufs.back());
-    state->bufs.pop_back();
-    state->bufs.insert(state->bufs.begin(), std::move(lastBuf));
+    qwi::buffer nextBuf = std::move(state->buflist.back());
+    state->buflist.pop_back();
+    state->buflist.insert(state->buflist.begin(), std::move(nextBuf));
 
     return ret;
 }
@@ -774,7 +772,7 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
     char ch;
     check_read_tty_char(term, &ch);
 
-    qwi::buffer *active_buf = state->status_prompt.has_value() ? &state->status_prompt->buf : &state->buf;
+    qwi::buffer *active_buf = state->status_prompt.has_value() ? &state->status_prompt->buf : &state->topbuf();
 
     // TODO: Named constants for these keyboard keys and such.
     if (ch == '\t' || (ch >= 32 && ch < 127)) {

@@ -87,8 +87,7 @@ window_size main_buf_window_from_terminal_window(const terminal_size& term_windo
 
 void resize_window(state *st, const terminal_size& new_window) {
     window_size buf_window = main_buf_window_from_terminal_window(new_window);
-    resize_buf_window(&st->buf, buf_window);
-    for (qwi::buffer& buf : st->bufs) {
+    for (qwi::buffer& buf : st->buflist) {
         resize_buf_window(&buf, buf_window);
     }
 
