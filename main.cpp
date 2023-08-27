@@ -521,6 +521,16 @@ void set_buffer_switch_prompt(state *state) {
     state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(std::move(data))};
 }
 
+undo_killring_handled open_file_action(state *state, buffer *activeBuf) {
+    undo_killring_handled ret = note_navigation_action(state, activeBuf);
+    if (state->status_prompt.has_value()) {
+        return ret;
+    }
+
+    state->status_prompt = {prompt::type::file_open, buffer{}};
+    return ret;
+}
+
 void save_file_action(state *state) {
     if (state->status_prompt.has_value()) {
         // TODO: We'll have to handle M-x C-s or C-x C-s somehow -- probably by generic
@@ -563,7 +573,7 @@ bool find_buffer_by_name(const state *state, const std::string& text, buffer_num
 
 void rotate_to_buffer(state *state, buffer_number buf_number);
 
-undo_killring_handled enter_key(state *state) {
+undo_killring_handled enter_key(int term, state *state) {
     if (!state->status_prompt.has_value()) {
         insert_result res = insert_char(&state->topbuf(), '\n');
         return note_coalescent_action(state, &state->topbuf(), std::move(res));
@@ -587,8 +597,29 @@ undo_killring_handled enter_key(state *state) {
         return ret;
     } break;
     case prompt::type::file_open: {
-        // Unreachable code because we don't have the file open key implemented.
-        logic_fail("file open prompt not implemented");
+        undo_killring_handled ret = note_navigation_action(state, &state->status_prompt->buf);
+        std::string text = state->status_prompt->buf.copy_to_string();
+        // TODO: Implement displaying errors to the user.
+
+        if (text != "") {
+            // TODO: Handle error!
+            buffer buf = open_file_into_detached_buffer(text);
+
+            // TODO: Gross!  So gross.
+            terminal_size window = get_terminal_size(term);
+            window_size buf_window = main_buf_window_from_terminal_window(window);
+            buf.set_window(buf_window);
+
+            static_assert(state::topbuf_index_is_0 == 0);
+            state->buflist.insert(state->buflist.begin(), std::move(buf));
+            apply_number_to_buf(state, state::topbuf_index_is_0);
+
+        } else {
+            // TODO: Display error.
+        }
+
+        close_status_prompt(state);
+        return ret;
     } break;
     case prompt::type::buffer_switch: {
         // end undo/kill ring stuff -- undo n/a because we're destructing the buf and haven't made changes.
@@ -715,6 +746,8 @@ undo_killring_handled delete_keypress(state *state, buffer *buf) {
 // buffer_number to point at the buf instead.
 void rotate_to_buffer(state *state, buffer_number buf_number) {
     logic_check(buf_number.value < state->buflist.size(), "rotate_to_buffer with out-of-range buffer number %zu", buf_number.value);
+
+    note_navigate_away_from_buf(buffer_ptr(state, buffer_number{state::topbuf_index_is_0}));
 
     std::rotate(state->buflist.begin(), state->buflist.begin() + buf_number.value, state->buflist.end());
 }
@@ -849,7 +882,7 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
         return note_coalescent_action(state, active_buf, std::move(res));
     }
     if (ch == 13) {
-        return enter_key(state);
+        return enter_key(term, state);
     }
     if (ch == 28) {
         // Ctrl+backslash
@@ -992,6 +1025,8 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
         case 'N':
             move_down(active_buf);
             return note_navigation_action(state, active_buf);
+        case 'O':
+            return open_file_action(state, active_buf);
         case 'P':
             move_up(active_buf);
             return note_navigation_action(state, active_buf);
