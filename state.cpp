@@ -194,6 +194,11 @@ void add_nop_edit(undo_history *history) {
     move_future_to_mountain(history);
 }
 
+// add_nop_edit, but without forking history -- just cuts a hole in coalescence.
+void add_coalescence_break(undo_history *history) {
+    history->coalescence = undo_history::char_coalescence::none;
+}
+
 void add_edit(undo_history *history, atomic_undo_item&& item) {
     history->coalescence = undo_history::char_coalescence::none;
     move_future_to_mountain(history);

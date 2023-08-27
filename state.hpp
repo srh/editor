@@ -206,7 +206,7 @@ std::optional<const buffer_string *> do_yank(clip_board *clb);
 
 void no_yank(clip_board *clb);
 
-void break_coalescence(undo_history *history);
+void add_coalescence_break(undo_history *history);
 void add_nop_edit(undo_history *history);
 void add_edit(undo_history *history, atomic_undo_item&& item);
 void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_history::char_coalescence coalescence);

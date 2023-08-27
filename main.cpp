@@ -125,12 +125,11 @@ undo_killring_handled note_coalescent_action(state *state, buffer *buf, delete_r
     return undo_killring_handled{};
 }
 
-// TODO: Do callers not want to break undo history?  Or was this marking stuff that had
-// done killring actions but not undo?  What is this for?
-struct [[nodiscard]] noundo_killring_action { };
-undo_killring_handled note_action(state *state, buffer *buf, const noundo_killring_action&) {
+// Callers want to back out of any killring stuff, but don't want to break undo history
+// for some reason.
+undo_killring_handled note_noundo_killring_action(state *state, buffer *buf) {
     no_yank(&state->clipboard);
-    (void)buf;
+    add_coalescence_break(&buf->undo_info);
     return undo_killring_handled{};
 }
 
@@ -532,7 +531,8 @@ undo_killring_handled open_file_action(state *state, buffer *activeBuf) {
 }
 
 undo_killring_handled save_file_action(state *state, buffer *activeBuf) {
-    undo_killring_handled ret = note_action(state, activeBuf, noundo_killring_action{});
+    // Specifically, I don't want to break the undo chain here.
+    undo_killring_handled ret = note_noundo_killring_action(state, activeBuf);
     if (state->status_prompt.has_value()) {
         // TODO: We'll have to handle M-x C-s or C-x C-s somehow -- probably by generic
         // logic at the keypress level.
@@ -582,8 +582,8 @@ undo_killring_handled enter_key(int term, state *state) {
     }
     switch (state->status_prompt->typ) {
     case prompt::type::file_save: {
-        // end undo/kill ring stuff -- undo n/a because we're destructing the buf and haven't made changes.
-        undo_killring_handled ret = note_action(state, &state->status_prompt->buf, noundo_killring_action{});
+        // killring important, undo not because we're destructing the status_prompt buf.
+        undo_killring_handled ret = note_backout_action(state, &state->status_prompt->buf);
         // TODO: Of course, handle errors, such as if directory doesn't exist, permissions.
         std::string text = state->status_prompt->buf.copy_to_string();
         if (text != "") {
@@ -599,7 +599,8 @@ undo_killring_handled enter_key(int term, state *state) {
         return ret;
     } break;
     case prompt::type::file_open: {
-        undo_killring_handled ret = note_navigation_action(state, &state->status_prompt->buf);
+        // killring important, undo not because we're destructing the status_prompt buf.
+        undo_killring_handled ret = note_backout_action(state, &state->status_prompt->buf);
         std::string text = state->status_prompt->buf.copy_to_string();
         // TODO: Implement displaying errors to the user.
 
@@ -624,8 +625,8 @@ undo_killring_handled enter_key(int term, state *state) {
         return ret;
     } break;
     case prompt::type::buffer_switch: {
-        // end undo/kill ring stuff -- undo n/a because we're destructing the buf and haven't made changes.
-        undo_killring_handled ret = note_navigation_action(state, &state->status_prompt->buf);
+        // killring important, undo not because we're destructing the status_prompt buf.
+        undo_killring_handled ret = note_backout_action(state, &state->status_prompt->buf);
         std::string text = state->status_prompt->buf.copy_to_string();
         // TODO: Implement displaying errors to the user.
         if (text != "") {
@@ -1049,8 +1050,7 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
         case '@':
             // Ctrl+Space same as C-@
             set_mark(active_buf);
-            // TODO: We want this?
-            return note_action(state, active_buf, noundo_killring_action{});
+            return note_backout_action(state, active_buf);
         case '_':
             perform_undo(active_buf);
             return undo_killring_handled{};
