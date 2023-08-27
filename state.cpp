@@ -7,11 +7,11 @@
 #include "terminal.hpp"
 #include "term_ui.hpp"
 
+namespace qwi {
+
 // TODO: Decl somewhere, move from main.cpp.
 qwi::undo_item make_reverse_action(insert_result&& i_res);
 qwi::undo_item make_reverse_action(delete_result&& i_res);
-
-namespace qwi {
 
 buffer_string to_buffer_string(const std::string& s) {
     buffer_string ret{as_buffer_chars(s.data()), s.size()};

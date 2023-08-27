@@ -10,6 +10,8 @@
 // For terminal_size.  Not happy about this include dependency.
 #include "terminal.hpp"
 
+namespace qwi {
+
 /* Generally, buffer logic that is more terminal UI-related than buffer-specific is
    located here.  Maybe move_up and move_down should be placed here.  It's not a 100%
    clean separation.  Includes terminal_frame and render_into_frame because some general
@@ -88,5 +90,7 @@ void recenter_cursor_if_offscreen(qwi::buffer *buf);
 
 // Changes buf->window; also resets virtual_column.
 void resize_buf_window(qwi::buffer *buf, const qwi::window_size& buf_window);
+
+}  // namespace qwi
 
 #endif  // QWERTILLION_TERM_UI_HPP_

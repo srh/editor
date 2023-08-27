@@ -214,8 +214,6 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
 
 void perform_undo(buffer *buf);
 
-}  // namespace qwi
-
 inline char *as_chars(qwi::buffer_char *chs) {
     static_assert(sizeof(*chs) == sizeof(char));
     return reinterpret_cast<char *>(chs);
@@ -236,5 +234,6 @@ inline const qwi::buffer_char *as_buffer_chars(const char *chs) {
     return reinterpret_cast<const qwi::buffer_char *>(chs);
 }
 
+}  // namespace qwi
 
 #endif  // QWERTILLION_STATE_HPP_

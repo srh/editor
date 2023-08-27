@@ -2,7 +2,7 @@
 
 #include "term_ui.hpp"
 
-using qwi::buffer_char;
+namespace qwi {
 
 bool is_solid(buffer_char bch) {
     uint8_t ch = bch.value;
@@ -185,4 +185,6 @@ void move_home(qwi::buffer *buf) {
 void move_end(qwi::buffer *buf) {
     size_t distance = qwi::distance_to_eol(*buf, buf->cursor());
     move_right_by(buf, distance);
+}
+
 }

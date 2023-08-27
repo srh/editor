@@ -4,7 +4,7 @@
 
 #include "arith.hpp"
 
-using qwi::buffer_char;
+namespace qwi {
 
 size_t pos_current_column(const qwi::buffer& buf, const size_t pos) {
     size_t line_col = 0;
@@ -300,3 +300,6 @@ void resize_buf_window(qwi::buffer *buf, const qwi::window_size& buf_window) {
     buf->set_window(buf_window);
     buf->virtual_column = current_column(*buf);
 }
+
+}  // namespace qwi
+

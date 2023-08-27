@@ -3,6 +3,8 @@
 
 #include "state.hpp"
 
+namespace qwi {
+
 struct [[nodiscard]] insert_result {
     // Cursor position _after_ insertion
     size_t new_cursor;
@@ -57,6 +59,8 @@ inline void move_left(qwi::buffer *buf) {
 void set_mark(qwi::buffer *buf);
 
 // See movement.hpp for more.
+
+}  // namespace qwi
 
 #endif  // QWERTILLION_BUFFER_HPP_
 

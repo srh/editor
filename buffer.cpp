@@ -13,7 +13,7 @@
 // avoid recomputing every edit, using a std::optional.
 #include "term_ui.hpp"
 
-using qwi::buffer_char;
+namespace qwi {
 
 insert_result insert_chars(qwi::buffer *buf, const buffer_char *chs, size_t count) {
     const size_t og_cursor = buf->cursor();
@@ -114,3 +114,6 @@ void move_left_by(qwi::buffer *buf, size_t count) {
 void set_mark(qwi::buffer *buf) {
     buf->mark = buf->cursor();
 }
+
+}  // namespace qwi
+

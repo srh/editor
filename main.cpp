@@ -21,7 +21,6 @@
 #include "terminal.hpp"
 
 namespace fs = std::filesystem;
-using qwi::buffer_char;
 
 struct command_line_args {
     bool version = false;
@@ -29,6 +28,8 @@ struct command_line_args {
 
     std::vector<std::string> files;
 };
+
+namespace qwi {
 
 // Generated and returned to indicate that the code exhaustively handles undo and killring behavior.
 struct [[nodiscard]] undo_killring_handled { };
@@ -154,6 +155,8 @@ void note_navigate_away_from_buf(qwi::buffer *buf) {
     (void)buf;
 }
 
+}  // namespace qwi
+
 bool parse_command_line(FILE *err_fp, int argc, const char **argv, command_line_args *out) {
     // TODO: We could check for duplicate or conflicting args (like --help and --version
     // used together with other args).
@@ -196,32 +199,7 @@ void print_help(FILE *fp) {
     fprintf(fp, "Usage: --help | --version | [files...] [-- files..]\n");
 }
 
-int run_program(const command_line_args& args);
-
-int main(int argc, const char **argv) {
-    command_line_args args;
-    if (!parse_command_line(stderr, argc, argv, &args)) {
-        return 2;
-    }
-
-    FILE *help_fp = stdout;
-    if (args.help) {
-        print_help(help_fp);
-        return 0;
-    }
-
-    if (args.version) {
-        print_version(help_fp);
-        return 0;
-    }
-
-    try {
-        return run_program(args);
-    } catch (const runtime_check_failure& exc) {
-        (void)exc;  // No info in exc.
-        return 1;
-    }
-}
+namespace qwi {
 
 void append_mask_difference(std::string *buf, uint8_t old_mask, uint8_t new_mask) {
     static_assert(std::is_same<decltype(old_mask), decltype(terminal_style::mask)>::value);
@@ -1118,4 +1096,31 @@ int run_program(const command_line_args& args) {
     term.close();
 
     return 0;
+}
+
+}  // namespace qwi
+
+int main(int argc, const char **argv) {
+    command_line_args args;
+    if (!parse_command_line(stderr, argc, argv, &args)) {
+        return 2;
+    }
+
+    FILE *help_fp = stdout;
+    if (args.help) {
+        print_help(help_fp);
+        return 0;
+    }
+
+    if (args.version) {
+        print_version(help_fp);
+        return 0;
+    }
+
+    try {
+        return qwi::run_program(args);
+    } catch (const runtime_check_failure& exc) {
+        (void)exc;  // No info in exc.
+        return 1;
+    }
 }
