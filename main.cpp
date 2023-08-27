@@ -8,6 +8,7 @@
 #include <fstream>
 #include <filesystem>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "arith.hpp"
@@ -324,10 +325,35 @@ qwi::buffer open_file_into_detached_buffer(const std::string& dirty_path) {
     std::string name = buf_name_from_file_path(path);
 
     qwi::buffer ret;
-    ret.name = std::move(name);
+    ret.name_str = std::move(name);
     ret.married_file = path.string();
     ret.aft = std::move(data);
     return ret;
+}
+
+void apply_number_to_buf(qwi::state *state, size_t buf_index) {
+    qwi::buffer& the_buf = state->buflist.at(buf_index);
+    const std::string& name = the_buf.name_str;
+    std::unordered_set<uint64_t> numbers;
+    for (size_t i = 0, e = state->buflist.size(); i < e; ++i) {
+        qwi::buffer& existing = state->buflist[i];
+        if (i != buf_index && existing.name_str == name) {
+            auto res = numbers.insert(existing.name_number);
+            logic_check(res.second,
+                        "insert_with_name_number_into_buflist seeing bufs with duplicate numbers, name = %s",
+                        the_buf.name_str.c_str());
+        }
+    }
+
+    // TODO: Consider making the numbers start at 1.  So name_number=0 means a number has
+    // not been applied.  (Aside from UI differences, the purpose is, by making zero a
+    // special value, to make the buf never have an invalid, conflicting number upon
+    // mutations of the state.)
+    uint64_t n = 0;
+    while (numbers.count(n) == 1) {
+        ++n;
+    }
+    the_buf.name_number = n;
 }
 
 qwi::state initial_state(const command_line_args& args, const terminal_size& window) {
@@ -339,14 +365,16 @@ qwi::state initial_state(const command_line_args& args, const terminal_size& win
     if (n_files == 0) {
         state.buflist.push_back(qwi::buffer{});
         state.topbuf().set_window(buf_window);
-        state.topbuf().name = "*scratch*";
+        state.topbuf().name_str = "*scratch*";
+        state.topbuf().name_number = 0;
     } else {
         state.buflist.reserve(n_files);
-
-        state.buflist.clear();
+        state.buflist.clear();  // a no-op
         for (size_t i = 0; i < n_files; ++i) {
             state.buflist.push_back(open_file_into_detached_buffer(args.files.at(i)));
             state.buflist.back().set_window(buf_window);
+            apply_number_to_buf(&state, i);
+
             // TODO: How do we handle duplicate file names?  Just allow identical buffer
             // names, but make selecting them in the UI different?  Only allow identical
             // buffer names when there are married files?  Disallow the concept of a
@@ -408,7 +436,8 @@ void render_status_area(terminal_frame *frame, qwi::state& state) {
         // TODO: This is super-hacky -- we overwrite the main buffer's cursor.
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
     } else {
-        render_string(frame, {.row = last_row, .col = 0}, state.topbuf().name, terminal_style::bold());
+        // TODO: Rendering logic.
+        render_string(frame, {.row = last_row, .col = 0}, state.topbuf().name_str, terminal_style::bold());
     }
 }
 
@@ -535,7 +564,9 @@ undo_killring_handled enter_key(qwi::state *state) {
         if (text != "") {
             state->topbuf().married_file = text;
             save_buf_to_married_file(state->topbuf());
-            state->topbuf().name = buf_name_from_file_path(fs::path(text));
+            state->topbuf().name_str = buf_name_from_file_path(fs::path(text));
+            state->topbuf().name_number = 0;
+            apply_number_to_buf(state, qwi::state::topbuf_index_is_0);
         }
         close_status_prompt(state);
         return ret;

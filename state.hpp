@@ -65,8 +65,11 @@ struct undo_history {
 
 struct buffer {
     // Used to choose in the list of buffers, unique to the buffer.  Program logic should
-    // not allow empty or overlong values.
-    std::string name;
+    // not allow empty or overlong values.  (name_str, name_number) pairs should be
+    // unique.
+    std::string name_str;
+    uint64_t name_number = 0;  // TODO: Maybe can be size_t.
+
     std::optional<std::string> married_file;
 
     // We just have strings for text before/after the cursor.  Very bad perf.
@@ -148,6 +151,7 @@ struct state {
     //
     // Is never empty (after initial_state() returns).
     std::vector<buffer> buflist;
+    static constexpr size_t topbuf_index_is_0 = 0;
     buffer& topbuf() {
         logic_checkg(!buflist.empty());
         return buflist.front();
