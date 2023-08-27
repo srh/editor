@@ -6,10 +6,10 @@
 
 namespace qwi {
 
-size_t pos_current_column(const qwi::buffer& buf, const size_t pos) {
+size_t pos_current_column(const buffer& buf, const size_t pos) {
     size_t line_col = 0;
     bool saw_newline = false;
-    for (size_t i = pos - qwi::distance_to_beginning_of_line(buf, pos); i < pos; ++i) {
+    for (size_t i = pos - distance_to_beginning_of_line(buf, pos); i < pos; ++i) {
         buffer_char ch = buf.get(i);
         char_rendering rend = compute_char_rendering(ch, &line_col);
         saw_newline |= (rend.count == SIZE_MAX);
@@ -21,7 +21,7 @@ size_t pos_current_column(const qwi::buffer& buf, const size_t pos) {
 
 // TODO: Fix this cyclic reference cleanly somehow.
 // Used in buffer.cpp
-size_t current_column(const qwi::buffer& buf) {
+size_t current_column(const buffer& buf) {
     return pos_current_column(buf, buf.cursor());
 }
 
@@ -74,9 +74,9 @@ terminal_frame init_frame(const terminal_size& window) {
 // render_coords must be sorted by buf_pos.
 // render_frame doesn't render the cursor -- that's computed with render_coords and rendered then.
 void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
-                       const qwi::buffer& buf, std::vector<render_coord> *render_coords) {
+                       const buffer& buf, std::vector<render_coord> *render_coords) {
     terminal_frame& frame = *frame_ptr;
-    const qwi::window_size window = buf.window;
+    const window_size window = buf.window;
     // Some very necessary checks for memory safety.
     runtime_check(u32_add(window_topleft.row, window.rows) <= frame.window.rows,
                   "buf window rows exceeds frame window");
@@ -191,11 +191,11 @@ void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
     }
 }
 
-bool too_small_to_render(const qwi::window_size& window) {
+bool too_small_to_render(const window_size& window) {
     return window.cols < 2 || window.rows == 0;
 }
 
-bool cursor_is_offscreen(qwi::buffer *buf, size_t cursor) {
+bool cursor_is_offscreen(buffer *buf, size_t cursor) {
     if (too_small_to_render(buf->window)) {
         // Return false?
         return false;
@@ -221,7 +221,7 @@ bool cursor_is_offscreen(qwi::buffer *buf, size_t cursor) {
 // Scrolls buf so that buf_pos is close to rowno.  (Sometimes it can't get there, e.g. we
 // can't scroll past front of buffer, or a very narrow window might force buf_pos's row <
 // rowno without equality).
-void scroll_to_row(qwi::buffer *buf, const uint32_t rowno, const size_t buf_pos) {
+void scroll_to_row(buffer *buf, const uint32_t rowno, const size_t buf_pos) {
     // We're going to back up and render one line at a time.
     const size_t window_cols = buf->window.cols;
 
@@ -231,7 +231,7 @@ void scroll_to_row(qwi::buffer *buf, const uint32_t rowno, const size_t buf_pos)
         size_t col = pos_current_column(*buf, pos);
         size_t row_in_line = col / window_cols;
         rows_stepbacked += row_in_line;
-        pos = pos - qwi::distance_to_beginning_of_line(*buf, pos);
+        pos = pos - distance_to_beginning_of_line(*buf, pos);
         if (rows_stepbacked == rowno || pos == 0) {
             // First visible offset is pos, at beginning of line.
             buf->first_visible_offset = pos;
@@ -285,17 +285,17 @@ void scroll_to_row(qwi::buffer *buf, const uint32_t rowno, const size_t buf_pos)
 // Scrolls buf so that buf_pos is close to the middle (as close as possible, e.g. if it's
 // too close to the top of the buffer, it'll be above the middle).  buf_pos is probably
 // the cursor position.
-void scroll_to_mid(qwi::buffer *buf, size_t buf_pos) {
+void scroll_to_mid(buffer *buf, size_t buf_pos) {
     scroll_to_row(buf, buf->window.rows / 2, buf_pos);
 }
 
-void recenter_cursor_if_offscreen(qwi::buffer *buf) {
+void recenter_cursor_if_offscreen(buffer *buf) {
     if (cursor_is_offscreen(buf, buf->cursor())) {
         scroll_to_mid(buf, buf->cursor());
     }
 }
 
-void resize_buf_window(qwi::buffer *buf, const qwi::window_size& buf_window) {
+void resize_buf_window(buffer *buf, const window_size& buf_window) {
     // This means the window actually changed -- we need to set the column.
     buf->set_window(buf_window);
     buf->virtual_column = current_column(*buf);

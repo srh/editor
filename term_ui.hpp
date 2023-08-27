@@ -68,28 +68,28 @@ struct char_rendering {
     size_t count;  // SIZE_MAX means newline
 };
 
-char_rendering compute_char_rendering(const qwi::buffer_char bch, size_t *line_col);
+char_rendering compute_char_rendering(const buffer_char bch, size_t *line_col);
 
 terminal_frame init_frame(const terminal_size& window);
 
 // render_coords must be sorted by buf_pos.
 // render_frame doesn't render the cursor -- that's computed with render_coords and rendered then.
 void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
-                       const qwi::buffer& buf, std::vector<render_coord> *render_coords);
+                       const buffer& buf, std::vector<render_coord> *render_coords);
 
 
-bool too_small_to_render(const qwi::window_size& window);
+bool too_small_to_render(const window_size& window);
 
 // This isn't some option you can configure.
 constexpr bool INIT_FRAME_INITIALIZES_WITH_SPACES = true;
 
 
-size_t pos_current_column(const qwi::buffer& buf, const size_t pos);
-size_t current_column(const qwi::buffer& buf);
-void recenter_cursor_if_offscreen(qwi::buffer *buf);
+size_t pos_current_column(const buffer& buf, const size_t pos);
+size_t current_column(const buffer& buf);
+void recenter_cursor_if_offscreen(buffer *buf);
 
 // Changes buf->window; also resets virtual_column.
-void resize_buf_window(qwi::buffer *buf, const qwi::window_size& buf_window);
+void resize_buf_window(buffer *buf, const window_size& buf_window);
 
 }  // namespace qwi
 

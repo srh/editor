@@ -13,7 +13,7 @@ bool is_solid(buffer_char bch) {
         (ch >= '0' && ch <= '9');
 }
 
-size_t forward_word_distance(const qwi::buffer *buf) {
+size_t forward_word_distance(const buffer *buf) {
     const size_t cursor = buf->cursor();
     size_t i = cursor;
     bool reachedSolid = false;
@@ -28,7 +28,7 @@ size_t forward_word_distance(const qwi::buffer *buf) {
     return i - cursor;
 }
 
-size_t backward_word_distance(const qwi::buffer *buf) {
+size_t backward_word_distance(const buffer *buf) {
     const size_t cursor = buf->cursor();
     size_t count = 0;
     bool reachedSolid = false;
@@ -45,18 +45,18 @@ size_t backward_word_distance(const qwi::buffer *buf) {
     return count;
 }
 
-void move_forward_word(qwi::buffer *buf) {
+void move_forward_word(buffer *buf) {
     size_t d = forward_word_distance(buf);
     move_right_by(buf, d);
 }
 
-void move_backward_word(qwi::buffer *buf) {
+void move_backward_word(buffer *buf) {
     size_t d = backward_word_distance(buf);
     move_left_by(buf, d);
 }
 
 // Maybe move_up and move_down should be in term_ui.cpp.
-void move_up(qwi::buffer *buf) {
+void move_up(buffer *buf) {
     const size_t window_cols = buf->window.cols;
     // We're not interested in virtual_column as a "line column" -- just interested in the
     // visual distance to beginning of line.
@@ -78,7 +78,7 @@ void move_up(qwi::buffer *buf) {
 
     const size_t cursor = buf->cursor();
     const size_t bol1 = cursor - buf->cursor_distance_to_beginning_of_line();
-    const size_t bol = bol1 == 0 ? 0 : (bol1 - 1) - qwi::distance_to_beginning_of_line(*buf, bol1 - 1);
+    const size_t bol = bol1 == 0 ? 0 : (bol1 - 1) - distance_to_beginning_of_line(*buf, bol1 - 1);
 
     // So we're going to render forward from bol, which is the beginning of the previous
     // "real" line.  For each row, we'll track the current proposed cursor position,
@@ -126,7 +126,7 @@ void move_up(qwi::buffer *buf) {
     recenter_cursor_if_offscreen(buf);
 }
 
-void move_down(qwi::buffer *buf) {
+void move_down(buffer *buf) {
     const size_t window_cols = buf->window.cols;
     const size_t target_column = buf->virtual_column % window_cols;
 
@@ -176,14 +176,14 @@ void move_down(qwi::buffer *buf) {
     recenter_cursor_if_offscreen(buf);
 }
 
-void move_home(qwi::buffer *buf) {
+void move_home(buffer *buf) {
     // TODO: Use uh, screen home and screen end?
     size_t distance = buf->cursor_distance_to_beginning_of_line();
     move_left_by(buf, distance);
 }
 
-void move_end(qwi::buffer *buf) {
-    size_t distance = qwi::distance_to_eol(*buf, buf->cursor());
+void move_end(buffer *buf) {
+    size_t distance = distance_to_eol(*buf, buf->cursor());
     move_right_by(buf, distance);
 }
 

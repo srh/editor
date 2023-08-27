@@ -50,15 +50,15 @@ undo_killring_handled undo_will_need_handling() {
 }
 #endif
 
-undo_killring_handled handled_undo_killring(qwi::state *state, qwi::buffer *buf) {
+undo_killring_handled handled_undo_killring(state *state, buffer *buf) {
     (void)state, (void)buf;
     return undo_killring_handled{};
 }
 
-qwi::atomic_undo_item make_reverse_action(insert_result&& i_res) {
-    qwi::atomic_undo_item item = {
+atomic_undo_item make_reverse_action(insert_result&& i_res) {
+    atomic_undo_item item = {
         .beg = i_res.new_cursor,
-        .text_inserted = qwi::buffer_string{},
+        .text_inserted = buffer_string{},
         .text_deleted = std::move(i_res.insertedText),
         .side = i_res.side,  // We inserted on left (right), hence we delete on left (right)
     };
@@ -66,9 +66,7 @@ qwi::atomic_undo_item make_reverse_action(insert_result&& i_res) {
     return item;
 }
 
-void note_undo(qwi::buffer *buf, insert_result&& i_res) {
-    using qwi::undo_item;
-
+void note_undo(buffer *buf, insert_result&& i_res) {
     // Make and add the _reverse_ action in the undo items.
     // (Why the reverse action?  Because jsmacs did it that way.)
 
@@ -77,60 +75,60 @@ void note_undo(qwi::buffer *buf, insert_result&& i_res) {
     add_edit(&buf->undo_info, make_reverse_action(std::move(i_res)));
 }
 
-void note_nop_undo(qwi::buffer *buf) {
+void note_nop_undo(buffer *buf) {
     add_nop_edit(&buf->undo_info);
 }
 
-undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, insert_result&& i_res) {
+undo_killring_handled note_action(state *state, buffer *buf, insert_result&& i_res) {
     no_yank(&state->clipboard);
 
     note_undo(buf, std::move(i_res));
     return undo_killring_handled{};
 }
 
-undo_killring_handled note_coalescent_action(qwi::state *state, qwi::buffer *buf, insert_result&& i_res) {
+undo_killring_handled note_coalescent_action(state *state, buffer *buf, insert_result&& i_res) {
     no_yank(&state->clipboard);
 
-    add_coalescent_edit(&buf->undo_info, make_reverse_action(std::move(i_res)), qwi::undo_history::char_coalescence::insert_char);
+    add_coalescent_edit(&buf->undo_info, make_reverse_action(std::move(i_res)), undo_history::char_coalescence::insert_char);
     return undo_killring_handled{};
 }
 
-qwi::atomic_undo_item make_reverse_action(delete_result&& d_res) {
-    qwi::atomic_undo_item item = {
+atomic_undo_item make_reverse_action(delete_result&& d_res) {
+    atomic_undo_item item = {
         .beg = d_res.new_cursor,
         .text_inserted = std::move(d_res.deletedText),
-        .text_deleted = qwi::buffer_string{},
+        .text_deleted = buffer_string{},
         .side = d_res.side,  // We deleted on left (right), hence we insert on left (right)
     };
 
     return item;
 }
 
-void note_undo(qwi::buffer *buf, delete_result&& d_res) {
+void note_undo(buffer *buf, delete_result&& d_res) {
     add_edit(&buf->undo_info, make_reverse_action(std::move(d_res)));
 }
 
-undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, delete_result&& d_res) {
+undo_killring_handled note_action(state *state, buffer *buf, delete_result&& d_res) {
     no_yank(&state->clipboard);
 
     note_undo(buf, std::move(d_res));
     return undo_killring_handled{};
 }
 
-undo_killring_handled note_coalescent_action(qwi::state *state, qwi::buffer *buf, delete_result&& d_res) {
+undo_killring_handled note_coalescent_action(state *state, buffer *buf, delete_result&& d_res) {
     no_yank(&state->clipboard);
 
-    qwi::Side side = d_res.side;
-    using char_coalescence = qwi::undo_history::char_coalescence;
+    Side side = d_res.side;
+    using char_coalescence = undo_history::char_coalescence;
     add_coalescent_edit(&buf->undo_info, make_reverse_action(std::move(d_res)),
-                        side == qwi::Side::left ? char_coalescence::delete_left : char_coalescence::delete_right);
+                        side == Side::left ? char_coalescence::delete_left : char_coalescence::delete_right);
     return undo_killring_handled{};
 }
 
 // TODO: Do callers not want to break undo history?  Or was this marking stuff that had
 // done killring actions but not undo?  What is this for?
 struct [[nodiscard]] noundo_killring_action { };
-undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, const noundo_killring_action&) {
+undo_killring_handled note_action(state *state, buffer *buf, const noundo_killring_action&) {
     no_yank(&state->clipboard);
     (void)buf;
     return undo_killring_handled{};
@@ -138,20 +136,20 @@ undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, const nou
 
 // An action that backs out of the yank sequence or some undo sequence.  C-g typed into a
 // buffer, for example.
-undo_killring_handled note_backout_action(qwi::state *state, qwi::buffer *buf) {
+undo_killring_handled note_backout_action(state *state, buffer *buf) {
     no_yank(&state->clipboard);
     add_nop_edit(&buf->undo_info);
     return undo_killring_handled{};
 }
 
 // Possibly a useless categorization -- maybe useful for refactoring later.
-inline undo_killring_handled note_navigation_action(qwi::state *state, qwi::buffer *buf) {
+inline undo_killring_handled note_navigation_action(state *state, buffer *buf) {
     return note_backout_action(state, buf);
 }
 
 // Currently a nop, we might need a generic action or code adjustments in the future.
 // (Current callers also invoke note_navigation_action.)
-void note_navigate_away_from_buf(qwi::buffer *buf) {
+void note_navigate_away_from_buf(buffer *buf) {
     (void)buf;
 }
 
@@ -269,13 +267,13 @@ void draw_empty_frame_for_exit(int fd, const terminal_size& window) {
     write_frame(fd, frame);
 }
 
-qwi::buffer_string read_file(const fs::path& path) {
+buffer_string read_file(const fs::path& path) {
     if (!fs::is_regular_file(path)) {
         runtime_fail("Tried opening non-regular file %s", path.c_str());
     }
 
     static_assert(sizeof(buffer_char) == 1);
-    qwi::buffer_string ret;
+    buffer_string ret;
     // TODO: Use system lib at some point (like, when we care, if ever).
     std::ifstream f{path, std::ios::binary};
     f.seekg(0, std::ios::end);
@@ -299,24 +297,24 @@ std::string buf_name_from_file_path(const fs::path& path) {
 }
 
 // Caller needs to call set_window on the buf, generally, or other ui-specific stuff.
-qwi::buffer open_file_into_detached_buffer(const std::string& dirty_path) {
+buffer open_file_into_detached_buffer(const std::string& dirty_path) {
     fs::path path = dirty_path;
-    qwi::buffer_string data = read_file(path);
+    buffer_string data = read_file(path);
     std::string name = buf_name_from_file_path(path);
 
-    qwi::buffer ret;
+    buffer ret;
     ret.name_str = std::move(name);
     ret.married_file = path.string();
     ret.aft = std::move(data);
     return ret;
 }
 
-void apply_number_to_buf(qwi::state *state, size_t buf_index) {
-    qwi::buffer& the_buf = state->buflist.at(buf_index);
+void apply_number_to_buf(state *state, size_t buf_index) {
+    buffer& the_buf = state->buflist.at(buf_index);
     const std::string& name = the_buf.name_str;
     std::unordered_set<uint64_t> numbers;
     for (size_t i = 0, e = state->buflist.size(); i < e; ++i) {
-        qwi::buffer& existing = state->buflist[i];
+        buffer& existing = state->buflist[i];
         if (i != buf_index && existing.name_str == name) {
             auto res = numbers.insert(existing.name_number);
             logic_check(res.second,
@@ -336,14 +334,14 @@ void apply_number_to_buf(qwi::state *state, size_t buf_index) {
     the_buf.name_number = n;
 }
 
-qwi::state initial_state(const command_line_args& args, const terminal_size& window) {
+state initial_state(const command_line_args& args, const terminal_size& window) {
     const size_t n_files = args.files.size();
 
-    qwi::window_size buf_window = qwi::main_buf_window_from_terminal_window(window);
+    window_size buf_window = main_buf_window_from_terminal_window(window);
 
-    qwi::state state;
+    state state;
     if (n_files == 0) {
-        state.buflist.push_back(qwi::buffer{});
+        state.buflist.push_back(buffer{});
         state.topbuf().set_window(buf_window);
         state.topbuf().name_str = "*scratch*";
         state.topbuf().name_number = 0;
@@ -377,7 +375,7 @@ std::optional<terminal_coord> add(const terminal_coord& window_topleft, const st
     }
 }
 
-void render_string(terminal_frame *frame, const terminal_coord& coord, const qwi::buffer_string& str, terminal_style style_mask = terminal_style{}) {
+void render_string(terminal_frame *frame, const terminal_coord& coord, const buffer_string& str, terminal_style style_mask = terminal_style{}) {
     uint32_t col = coord.col;  // <= frame->window.cols
     runtime_check(col <= frame->window.cols, "render_string: coord out of range");
     size_t line_col = 0;
@@ -396,17 +394,17 @@ void render_string(terminal_frame *frame, const terminal_coord& coord, const qwi
 }
 
 // TODO: Non-const reference for state param -- we set its status_prompt's buf's window.
-void render_status_area(terminal_frame *frame, qwi::state& state) {
+void render_status_area(terminal_frame *frame, state& state) {
     uint32_t last_row = u32_sub(frame->window.rows, 1);
     if (state.status_prompt.has_value()) {
         std::string message;
         switch (state.status_prompt->typ) {
-        case qwi::prompt::type::file_open: message = "file to open: "; break;
-        case qwi::prompt::type::file_save: message = "file to save: "; break;
-        case qwi::prompt::type::buffer_switch: message = "switch to buffer: "; break;
+        case prompt::type::file_open: message = "file to open: "; break;
+        case prompt::type::file_save: message = "file to save: "; break;
+        case prompt::type::buffer_switch: message = "switch to buffer: "; break;
         }
 
-        render_string(frame, {.row = last_row, .col = 0}, qwi::to_buffer_string(message), terminal_style::bold());
+        render_string(frame, {.row = last_row, .col = 0}, to_buffer_string(message), terminal_style::bold());
 
         std::vector<render_coord> coords = { {state.status_prompt->buf.cursor(), std::nullopt} };
         terminal_coord prompt_topleft = {.row = last_row, .col = uint32_t(message.size())};
@@ -418,18 +416,18 @@ void render_status_area(terminal_frame *frame, qwi::state& state) {
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
     } else {
         // TODO: Rendering logic.
-        render_string(frame, {.row = last_row, .col = 0}, buffer_name(&state, qwi::buffer_number{qwi::state::topbuf_index_is_0}), terminal_style::bold());
+        render_string(frame, {.row = last_row, .col = 0}, buffer_name(&state, buffer_number{state::topbuf_index_is_0}), terminal_style::bold());
     }
 }
 
 // TODO: non-const reference for state, passed into render_status_area
-void redraw_state(int term, const terminal_size& window, qwi::state& state) {
+void redraw_state(int term, const terminal_size& window, state& state) {
     terminal_frame frame = init_frame(window);
 
     if (!too_small_to_render(state.topbuf().window)) {
         // TODO: Support resizing.
         runtime_check(window.cols == state.topbuf().window.cols, "window cols changed");
-        runtime_check(window.rows == state.topbuf().window.rows + qwi::STATUS_AREA_HEIGHT, "window rows changed");
+        runtime_check(window.rows == state.topbuf().window.rows + STATUS_AREA_HEIGHT, "window rows changed");
 
         std::vector<render_coord> coords = { {state.topbuf().cursor(), std::nullopt} };
         terminal_coord window_topleft = {0, 0};
@@ -455,7 +453,7 @@ void redraw_state(int term, const terminal_size& window, qwi::state& state) {
 }
 
 // Cheap fn for debugging purposes.
-void push_printable_repr(qwi::buffer_string *str, char sch) {
+void push_printable_repr(buffer_string *str, char sch) {
     uint8_t ch = uint8_t(sch);
     if (ch == '\n' || ch == '\t') {
         str->push_back(buffer_char{ch});
@@ -470,8 +468,8 @@ void push_printable_repr(qwi::buffer_string *str, char sch) {
     }
 }
 
-undo_killring_handled insert_printable_repr(qwi::state *state, qwi::buffer *buf, char sch) {
-    qwi::buffer_string str;
+undo_killring_handled insert_printable_repr(state *state, buffer *buf, char sch) {
+    buffer_string str;
     push_printable_repr(&str, sch);
     insert_result res = insert_chars(buf, str.data(), str.size());
     return note_action(state, buf, std::move(res));
@@ -499,7 +497,7 @@ void check_read_tty_char(int term_fd, char *out) {
     runtime_check(success, "zero-length read from tty configured with VMIN=1");
 }
 
-void save_buf_to_married_file(const qwi::buffer& buf) {
+void save_buf_to_married_file(const buffer& buf) {
     // TODO: Display that save succeeded, somehow.
     logic_check(buf.married_file.has_value(), "save_buf_to_married_file with unmarried buf");
     std::ofstream fstream(*buf.married_file, std::ios::binary | std::ios::trunc);
@@ -511,19 +509,19 @@ void save_buf_to_married_file(const qwi::buffer& buf) {
     runtime_check(!fstream.fail(), "error writing to file %s", buf.married_file->c_str());
 }
 
-void set_save_prompt(qwi::state *state) {
+void set_save_prompt(state *state) {
     logic_check(!state->status_prompt.has_value(), "set_save_prompt with existing prompt");
-    state->status_prompt = {qwi::prompt::type::file_save, qwi::buffer()};
+    state->status_prompt = {prompt::type::file_save, buffer()};
     // TODO: How/where should we set the prompt's buf's window?
 }
 
-void set_buffer_switch_prompt(qwi::state *state) {
+void set_buffer_switch_prompt(state *state) {
     logic_check(!state->status_prompt.has_value(), "set_buffer_switch_prompt with existing prompt");
-    qwi::buffer_string data = buffer_name(state, qwi::buffer_number{qwi::state::topbuf_index_is_0});
-    state->status_prompt = {qwi::prompt::type::buffer_switch, qwi::buffer::from_data(std::move(data))};
+    buffer_string data = buffer_name(state, buffer_number{state::topbuf_index_is_0});
+    state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(std::move(data))};
 }
 
-void save_file_action(qwi::state *state) {
+void save_file_action(state *state) {
     if (state->status_prompt.has_value()) {
         // TODO: We'll have to handle M-x C-s or C-x C-s somehow -- probably by generic
         // logic at the keypress level.
@@ -539,7 +537,7 @@ void save_file_action(qwi::state *state) {
     }
 }
 
-undo_killring_handled buffer_switch_action(qwi::state *state, qwi::buffer *activeBuf) {
+undo_killring_handled buffer_switch_action(state *state, buffer *activeBuf) {
     undo_killring_handled ret = note_navigation_action(state, activeBuf);
     if (state->status_prompt.has_value()) {
         // TODO: We'll have to handle M-x C-s or C-x C-s somehow -- probably by generic
@@ -553,25 +551,25 @@ undo_killring_handled buffer_switch_action(qwi::state *state, qwi::buffer *activ
     return ret;
 }
 
-bool find_buffer_by_name(const qwi::state *state, const std::string& text, qwi::buffer_number *out) {
+bool find_buffer_by_name(const state *state, const std::string& text, buffer_number *out) {
     for (size_t i = 0, e = state->buflist.size(); i < e; ++i) {
-        if (buffer_name_str(state, qwi::buffer_number{i}) == text) {
-            *out = qwi::buffer_number{i};
+        if (buffer_name_str(state, buffer_number{i}) == text) {
+            *out = buffer_number{i};
             return true;
         }
     }
     return false;
 }
 
-void rotate_to_buffer(qwi::state *state, qwi::buffer_number buf_number);
+void rotate_to_buffer(state *state, buffer_number buf_number);
 
-undo_killring_handled enter_key(qwi::state *state) {
+undo_killring_handled enter_key(state *state) {
     if (!state->status_prompt.has_value()) {
         insert_result res = insert_char(&state->topbuf(), '\n');
         return note_coalescent_action(state, &state->topbuf(), std::move(res));
     }
     switch (state->status_prompt->typ) {
-    case qwi::prompt::type::file_save: {
+    case prompt::type::file_save: {
         // end undo/kill ring stuff -- undo n/a because we're destructing the buf and haven't made changes.
         undo_killring_handled ret = note_action(state, &state->status_prompt->buf, noundo_killring_action{});
         // TODO: Of course, handle errors, such as if directory doesn't exist, permissions.
@@ -581,24 +579,24 @@ undo_killring_handled enter_key(qwi::state *state) {
             save_buf_to_married_file(state->topbuf());
             state->topbuf().name_str = buf_name_from_file_path(fs::path(text));
             state->topbuf().name_number = 0;
-            apply_number_to_buf(state, qwi::state::topbuf_index_is_0);
+            apply_number_to_buf(state, state::topbuf_index_is_0);
         } else {
             // TODO: Implement displaying errors to the user.
         }
         close_status_prompt(state);
         return ret;
     } break;
-    case qwi::prompt::type::file_open: {
+    case prompt::type::file_open: {
         // Unreachable code because we don't have the file open key implemented.
         logic_fail("file open prompt not implemented");
     } break;
-    case qwi::prompt::type::buffer_switch: {
+    case prompt::type::buffer_switch: {
         // end undo/kill ring stuff -- undo n/a because we're destructing the buf and haven't made changes.
         undo_killring_handled ret = note_navigation_action(state, &state->status_prompt->buf);
         std::string text = state->status_prompt->buf.copy_to_string();
         // TODO: Implement displaying errors to the user.
         if (text != "") {
-            qwi::buffer_number buf_number;
+            buffer_number buf_number;
             if (find_buffer_by_name(state, text, &buf_number)) {
                 rotate_to_buffer(state, buf_number);
             } else {
@@ -617,7 +615,7 @@ undo_killring_handled enter_key(qwi::state *state) {
     }
 }
 
-undo_killring_handled cancel_key(qwi::state *state, qwi::buffer *buf) {
+undo_killring_handled cancel_key(state *state, buffer *buf) {
     // We break the yank and undo sequence in `buf` -- of course, when creating the status
     // prompt, we already broke the yank and undo sequence in the _original_ buf.
     undo_killring_handled ret = note_backout_action(state, buf);
@@ -629,24 +627,24 @@ undo_killring_handled cancel_key(qwi::state *state, qwi::buffer *buf) {
     return ret;
 }
 
-undo_killring_handled delete_backward_word(qwi::state *state, qwi::buffer *buf) {
+undo_killring_handled delete_backward_word(state *state, buffer *buf) {
     size_t d = backward_word_distance(buf);
     delete_result delres = delete_left(buf, d);
-    record_yank(&state->clipboard, delres.deletedText, qwi::yank_side::left);
+    record_yank(&state->clipboard, delres.deletedText, yank_side::left);
     note_undo(buf, std::move(delres));
     return handled_undo_killring(state, buf);
 }
 
-undo_killring_handled delete_forward_word(qwi::state *state, qwi::buffer *buf) {
+undo_killring_handled delete_forward_word(state *state, buffer *buf) {
     size_t d = forward_word_distance(buf);
     delete_result delres = delete_right(buf, d);
-    record_yank(&state->clipboard, delres.deletedText, qwi::yank_side::right);
+    record_yank(&state->clipboard, delres.deletedText, yank_side::right);
     note_undo(buf, std::move(delres));
     return handled_undo_killring(state, buf);
 }
 
-undo_killring_handled kill_line(qwi::state *state, qwi::buffer *buf) {
-    size_t eolDistance = qwi::distance_to_eol(*buf, buf->cursor());
+undo_killring_handled kill_line(state *state, buffer *buf) {
+    size_t eolDistance = distance_to_eol(*buf, buf->cursor());
 
     delete_result delres;
     if (eolDistance == 0 && buf->cursor() < buf->size()) {
@@ -654,12 +652,12 @@ undo_killring_handled kill_line(qwi::state *state, qwi::buffer *buf) {
     } else {
         delres = delete_right(buf, eolDistance);
     }
-    record_yank(&state->clipboard, delres.deletedText, qwi::yank_side::right);
+    record_yank(&state->clipboard, delres.deletedText, yank_side::right);
     note_undo(buf, std::move(delres));
     return handled_undo_killring(state, buf);
 }
 
-undo_killring_handled kill_region(qwi::state *state, qwi::buffer *buf) {
+undo_killring_handled kill_region(state *state, buffer *buf) {
     if (!buf->mark.has_value()) {
         // TODO: Display error
         // (We do NOT want no_yank here.)  We do want to disrupt the undo action chain (if only because Emacs does that).
@@ -670,12 +668,12 @@ undo_killring_handled kill_region(qwi::state *state, qwi::buffer *buf) {
     size_t cursor = buf->cursor();
     if (mark > cursor) {
         delete_result delres = delete_right(buf, mark - cursor);
-        record_yank(&state->clipboard, delres.deletedText, qwi::yank_side::right);
+        record_yank(&state->clipboard, delres.deletedText, yank_side::right);
         note_undo(buf, std::move(delres));
         return handled_undo_killring(state, buf);
     } else if (mark < cursor) {
         delete_result delres = delete_left(buf, cursor - mark);
-        record_yank(&state->clipboard, delres.deletedText, qwi::yank_side::left);
+        record_yank(&state->clipboard, delres.deletedText, yank_side::left);
         note_undo(buf, std::move(delres));
         return handled_undo_killring(state, buf);
     } else {
@@ -684,13 +682,13 @@ undo_killring_handled kill_region(qwi::state *state, qwi::buffer *buf) {
         // that we can't "do nothing" -- if state->clipboard.justRecorded is false, we
         // need to create an empty string clipboard entry.  That's what this record_yank
         // call does.
-        record_yank(&state->clipboard, qwi::buffer_string{}, qwi::yank_side::right);
+        record_yank(&state->clipboard, buffer_string{}, yank_side::right);
         note_nop_undo(buf);
         return handled_undo_killring(state, buf);
     }
 }
 
-undo_killring_handled copy_region(qwi::state *state, qwi::buffer *buf) {
+undo_killring_handled copy_region(state *state, buffer *buf) {
     if (!buf->mark.has_value()) {
         // TODO: Display error
         // (We do NOT want no_yank here.)  We do want to disrupt the undo action chain (if only because Emacs does that).
@@ -703,11 +701,11 @@ undo_killring_handled copy_region(qwi::state *state, qwi::buffer *buf) {
     size_t region_end = std::max(mark, cursor);
 
     note_nop_undo(buf);
-    record_yank(&state->clipboard, buf->copy_substr(region_beg, region_end), qwi::yank_side::none);
+    record_yank(&state->clipboard, buf->copy_substr(region_beg, region_end), yank_side::none);
     return handled_undo_killring(state, buf);
 }
 
-undo_killring_handled delete_keypress(qwi::state *state, qwi::buffer *buf) {
+undo_killring_handled delete_keypress(state *state, buffer *buf) {
     delete_result res = delete_char(buf);
     // TODO: Here, and perhaps in general, handle cases where no characters were actually deleted.
     return note_coalescent_action(state, buf, std::move(res));
@@ -715,7 +713,7 @@ undo_killring_handled delete_keypress(qwi::state *state, qwi::buffer *buf) {
 
 // TODO: This rotation is stupid and makes no sense for multi-window, tabs, etc. -- use a
 // buffer_number to point at the buf instead.
-void rotate_to_buffer(qwi::state *state, qwi::buffer_number buf_number) {
+void rotate_to_buffer(state *state, buffer_number buf_number) {
     logic_check(buf_number.value < state->buflist.size(), "rotate_to_buffer with out-of-range buffer number %zu", buf_number.value);
 
     std::rotate(state->buflist.begin(), state->buflist.begin() + buf_number.value, state->buflist.end());
@@ -723,7 +721,7 @@ void rotate_to_buffer(qwi::state *state, qwi::buffer_number buf_number) {
 
 // I guess we're rotating our _pointer_ into the buf list to the right, by rotating the
 // bufs to the left.
-undo_killring_handled rotate_buf_right(qwi::state *state, qwi::buffer *activeBuf) {
+undo_killring_handled rotate_buf_right(state *state, buffer *activeBuf) {
     undo_killring_handled ret = note_navigation_action(state, activeBuf);
     if (!state->is_normal()) {
         return ret;
@@ -733,7 +731,7 @@ undo_killring_handled rotate_buf_right(qwi::state *state, qwi::buffer *activeBuf
 
     logic_checkg(!state->buflist.empty());
 
-    qwi::buffer lastBuf = std::move(state->buflist.front());
+    buffer lastBuf = std::move(state->buflist.front());
     state->buflist.erase(state->buflist.begin());
     state->buflist.push_back(std::move(lastBuf));
 
@@ -742,7 +740,7 @@ undo_killring_handled rotate_buf_right(qwi::state *state, qwi::buffer *activeBuf
 
 // I guess we're rotating our _pointer_ into the buf list to the left, by rotating the
 // bufs to the right.
-undo_killring_handled rotate_buf_left(qwi::state *state, qwi::buffer *activeBuf) {
+undo_killring_handled rotate_buf_left(state *state, buffer *activeBuf) {
     undo_killring_handled ret = note_navigation_action(state, activeBuf);
     if (!state->is_normal()) {
         return ret;
@@ -752,15 +750,15 @@ undo_killring_handled rotate_buf_left(qwi::state *state, qwi::buffer *activeBuf)
 
     logic_checkg(!state->buflist.empty());
 
-    qwi::buffer nextBuf = std::move(state->buflist.back());
+    buffer nextBuf = std::move(state->buflist.back());
     state->buflist.pop_back();
     state->buflist.insert(state->buflist.begin(), std::move(nextBuf));
 
     return ret;
 }
 
-undo_killring_handled yank_from_clipboard(qwi::state *state, qwi::buffer *buf) {
-    std::optional<const qwi::buffer_string *> text = qwi::do_yank(&state->clipboard);
+undo_killring_handled yank_from_clipboard(state *state, buffer *buf) {
+    std::optional<const buffer_string *> text = do_yank(&state->clipboard);
     if (text.has_value()) {
         insert_result res = insert_chars(buf, (*text)->data(), (*text)->size());
         note_undo(buf, std::move(res));
@@ -773,23 +771,23 @@ undo_killring_handled yank_from_clipboard(qwi::state *state, qwi::buffer *buf) {
     // helper.  Possibly false-DRY (someday).
 }
 
-undo_killring_handled alt_yank_from_clipboard(qwi::state *state, qwi::buffer *buf) {
+undo_killring_handled alt_yank_from_clipboard(state *state, buffer *buf) {
     if (state->clipboard.justYanked.has_value()) {
         // TODO: this code will be wrong with undo impled -- the deletion and insertion should be a single undo chunk -- not a problem here but is this a bug in jsmacs?
         size_t amount_to_delete = *state->clipboard.justYanked;
         state->clipboard.stepPasteNumber();
-        std::optional<const qwi::buffer_string *> text = qwi::do_yank(&state->clipboard);
+        std::optional<const buffer_string *> text = do_yank(&state->clipboard);
         logic_check(text.has_value(), "with justYanked non-null, do_yank returns null");
 
         delete_result delres = delete_left(buf, amount_to_delete);
         insert_result insres = insert_chars(buf, (*text)->data(), (*text)->size());
 
         // Add the reverse action to undo history.
-        qwi::atomic_undo_item item = {
+        atomic_undo_item item = {
             .beg = insres.new_cursor,
             .text_inserted = std::move(delres.deletedText),
             .text_deleted = std::move(insres.insertedText),
-            .side = qwi::Side::left,
+            .side = Side::left,
         };
         add_edit(&buf->undo_info, std::move(item));
         return handled_undo_killring(state, buf);
@@ -838,12 +836,12 @@ bool read_tty_numeric_escape(int term, std::string *chars_read, char firstDigit,
     }
 }
 
-undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bool *exit_loop) {
+undo_killring_handled read_and_process_tty_input(int term, state *state, bool *exit_loop) {
     // TODO: When term is non-blocking, we'll need to wait for readiness...?
     char ch;
     check_read_tty_char(term, &ch);
 
-    qwi::buffer *active_buf = state->status_prompt.has_value() ? &state->status_prompt->buf : &state->topbuf();
+    buffer *active_buf = state->status_prompt.has_value() ? &state->status_prompt->buf : &state->topbuf();
 
     // TODO: Named constants for these keyboard keys and such.
     if (ch == '\t' || (ch >= 32 && ch < 127)) {
@@ -957,7 +955,7 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
         }
 
         // Insert for the user (the developer, me) unrecognized escape codes.
-        qwi::buffer_string str;
+        buffer_string str;
         str.push_back(buffer_char::from_char('\\'));
         str.push_back(buffer_char::from_char('e'));
         for (char c : chars_read) {
@@ -1045,7 +1043,7 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
 
 void main_loop(int term, const command_line_args& args) {
     terminal_size window = get_terminal_size(term);
-    qwi::state state = initial_state(args, window);
+    state state = initial_state(args, window);
 
     redraw_state(term, window, state);
 

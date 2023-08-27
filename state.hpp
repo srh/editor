@@ -175,19 +175,19 @@ struct state {
 };
 
 // An unstable pointer.
-inline qwi::buffer *buffer_ptr(qwi::state *state, buffer_number buf_number) {
+inline buffer *buffer_ptr(state *state, buffer_number buf_number) {
     logic_checkg(buf_number.value < state->buflist.size());
     return &state->buflist[buf_number.value];
 }
 
-inline const qwi::buffer *buffer_ptr(const qwi::state *state, buffer_number buf_number) {
+inline const buffer *buffer_ptr(const state *state, buffer_number buf_number) {
     logic_checkg(buf_number.value < state->buflist.size());
     return &state->buflist[buf_number.value];
 }
 
 // TODO: Rename to be buffer_name_linear_time
-std::string buffer_name_str(const qwi::state *state, buffer_number buf_number);
-qwi::buffer_string buffer_name(const qwi::state *state, buffer_number buf_number);
+std::string buffer_name_str(const state *state, buffer_number buf_number);
+buffer_string buffer_name(const state *state, buffer_number buf_number);
 
 
 constexpr uint32_t STATUS_AREA_HEIGHT = 1;
@@ -198,8 +198,8 @@ inline void close_status_prompt(state *st) {
     st->status_prompt = std::nullopt;
 }
 
-size_t distance_to_eol(const qwi::buffer& buf, size_t pos);
-size_t distance_to_beginning_of_line(const qwi::buffer& buf, size_t pos);
+size_t distance_to_eol(const buffer& buf, size_t pos);
+size_t distance_to_beginning_of_line(const buffer& buf, size_t pos);
 
 void record_yank(clip_board *clb, const buffer_string& deletedText, yank_side side);
 std::optional<const buffer_string *> do_yank(clip_board *clb);
@@ -214,24 +214,24 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
 
 void perform_undo(buffer *buf);
 
-inline char *as_chars(qwi::buffer_char *chs) {
+inline char *as_chars(buffer_char *chs) {
     static_assert(sizeof(*chs) == sizeof(char));
     return reinterpret_cast<char *>(chs);
 }
 
-inline const char *as_chars(const qwi::buffer_char *chs) {
+inline const char *as_chars(const buffer_char *chs) {
     static_assert(sizeof(*chs) == sizeof(char));
     return reinterpret_cast<const char *>(chs);
 }
 
-inline qwi::buffer_char *as_buffer_chars(char *chs) {
-    static_assert(sizeof(*chs) == sizeof(qwi::buffer_char));
-    return reinterpret_cast<qwi::buffer_char *>(chs);
+inline buffer_char *as_buffer_chars(char *chs) {
+    static_assert(sizeof(*chs) == sizeof(buffer_char));
+    return reinterpret_cast<buffer_char *>(chs);
 }
 
-inline const qwi::buffer_char *as_buffer_chars(const char *chs) {
-    static_assert(sizeof(*chs) == sizeof(qwi::buffer_char));
-    return reinterpret_cast<const qwi::buffer_char *>(chs);
+inline const buffer_char *as_buffer_chars(const char *chs) {
+    static_assert(sizeof(*chs) == sizeof(buffer_char));
+    return reinterpret_cast<const buffer_char *>(chs);
 }
 
 }  // namespace qwi

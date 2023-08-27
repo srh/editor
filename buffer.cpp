@@ -15,7 +15,7 @@
 
 namespace qwi {
 
-insert_result insert_chars(qwi::buffer *buf, const buffer_char *chs, size_t count) {
+insert_result insert_chars(buffer *buf, const buffer_char *chs, size_t count) {
     const size_t og_cursor = buf->cursor();
     buf->bef.append(chs, count);
     if (buf->mark.has_value()) {
@@ -25,10 +25,10 @@ insert_result insert_chars(qwi::buffer *buf, const buffer_char *chs, size_t coun
     buf->virtual_column = current_column(*buf);
     buf->first_visible_offset += (buf->first_visible_offset > og_cursor ? count : 0);
     recenter_cursor_if_offscreen(buf);
-    return { .new_cursor = buf->cursor(), .insertedText = qwi::buffer_string(chs, count), .side = qwi::Side::left };
+    return { .new_cursor = buf->cursor(), .insertedText = buffer_string(chs, count), .side = Side::left };
 }
 
-insert_result insert_chars_right(qwi::buffer *buf, const buffer_char *chs, size_t count) {
+insert_result insert_chars_right(buffer *buf, const buffer_char *chs, size_t count) {
     const size_t og_cursor = buf->cursor();
     buf->aft.insert(0, chs, count);
     if (buf->mark.has_value()) {
@@ -39,7 +39,7 @@ insert_result insert_chars_right(qwi::buffer *buf, const buffer_char *chs, size_
     // TODO: Do we want ">= og_cursor" here?  Seems very context-dependent.
     buf->first_visible_offset += (buf->first_visible_offset >= og_cursor ? count : 0);
     recenter_cursor_if_offscreen(buf);
-    return { .new_cursor = buf->cursor(), .insertedText = qwi::buffer_string(chs, count), .side = qwi::Side::right };
+    return { .new_cursor = buf->cursor(), .insertedText = buffer_string(chs, count), .side = Side::right };
 }
 
 void update_offset_for_delete_range(size_t *offset, size_t range_beg, size_t range_end) {
@@ -50,7 +50,7 @@ void update_offset_for_delete_range(size_t *offset, size_t range_beg, size_t ran
     }
 }
 
-delete_result delete_left(qwi::buffer *buf, size_t count) {
+delete_result delete_left(buffer *buf, size_t count) {
     count = std::min<size_t>(count, buf->bef.size());
     size_t og_cursor = buf->bef.size();
     size_t new_cursor = og_cursor - count;
@@ -58,7 +58,7 @@ delete_result delete_left(qwi::buffer *buf, size_t count) {
     delete_result ret;
     ret.new_cursor = new_cursor;
     ret.deletedText.assign(buf->bef, new_cursor, count);
-    ret.side = qwi::Side::left;
+    ret.side = Side::left;
 
     buf->bef.resize(new_cursor);
     if (buf->mark.has_value()) {
@@ -71,14 +71,14 @@ delete_result delete_left(qwi::buffer *buf, size_t count) {
     return ret;
 }
 
-delete_result delete_right(qwi::buffer *buf, size_t count) {
+delete_result delete_right(buffer *buf, size_t count) {
     size_t cursor = buf->cursor();
     count = std::min<size_t>(count, buf->aft.size());
 
     delete_result ret;
     ret.new_cursor = cursor;
     ret.deletedText.assign(buf->aft, 0, count);
-    ret.side = qwi::Side::right;
+    ret.side = Side::right;
 
     buf->aft.erase(0, count);
     if (buf->mark.has_value()) {
@@ -92,7 +92,7 @@ delete_result delete_right(qwi::buffer *buf, size_t count) {
     return ret;
 }
 
-void move_right_by(qwi::buffer *buf, size_t count) {
+void move_right_by(buffer *buf, size_t count) {
     count = std::min<size_t>(count, buf->aft.size());
     buf->bef.append(buf->aft, 0, count);
     buf->aft.erase(0, count);
@@ -101,7 +101,7 @@ void move_right_by(qwi::buffer *buf, size_t count) {
     recenter_cursor_if_offscreen(buf);
 }
 
-void move_left_by(qwi::buffer *buf, size_t count) {
+void move_left_by(buffer *buf, size_t count) {
     // TODO: Could both this and move_right_by be the same fn, using buf->set_cursor?
     count = std::min<size_t>(count, buf->bef.size());
     buf->aft.insert(0, buf->bef, buf->bef.size() - count, count);
@@ -111,7 +111,7 @@ void move_left_by(qwi::buffer *buf, size_t count) {
     recenter_cursor_if_offscreen(buf);
 }
 
-void set_mark(qwi::buffer *buf) {
+void set_mark(buffer *buf) {
     buf->mark = buf->cursor();
 }
 

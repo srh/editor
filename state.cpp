@@ -10,8 +10,8 @@
 namespace qwi {
 
 // TODO: Decl somewhere, move from main.cpp.
-qwi::undo_item make_reverse_action(insert_result&& i_res);
-qwi::undo_item make_reverse_action(delete_result&& i_res);
+undo_item make_reverse_action(insert_result&& i_res);
+undo_item make_reverse_action(delete_result&& i_res);
 
 buffer_string to_buffer_string(const std::string& s) {
     buffer_string ret{as_buffer_chars(s.data()), s.size()};
@@ -65,9 +65,9 @@ buffer buffer::from_data(buffer_string&& data) {
     return ret;
 }
 
-std::string buffer_name_str(const qwi::state *state, buffer_number buf_number) {
+std::string buffer_name_str(const state *state, buffer_number buf_number) {
     // TODO: Eventually, make this not be O(n), or even, make this not allocate.
-    const qwi::buffer *buf = buffer_ptr(state, buf_number);
+    const buffer *buf = buffer_ptr(state, buf_number);
 
     bool seen = false;
     for (size_t i = 0, e = state->buflist.size(); i < e; ++i) {
@@ -84,11 +84,11 @@ std::string buffer_name_str(const qwi::state *state, buffer_number buf_number) {
     }
 }
 
-qwi::buffer_string buffer_name(const qwi::state *state, buffer_number buf_number) {
+buffer_string buffer_name(const state *state, buffer_number buf_number) {
     return to_buffer_string(buffer_name_str(state, buf_number));
 }
 
-size_t distance_to_eol(const qwi::buffer& buf, size_t pos) {
+size_t distance_to_eol(const buffer& buf, size_t pos) {
     size_t p = pos;
     for (size_t e = buf.size(); p < e; ++p) {
         if (buf.get(p) == buffer_char{'\n'}) {
@@ -98,7 +98,7 @@ size_t distance_to_eol(const qwi::buffer& buf, size_t pos) {
     return p - pos;
 }
 
-size_t distance_to_beginning_of_line(const qwi::buffer& buf, size_t pos) {
+size_t distance_to_beginning_of_line(const buffer& buf, size_t pos) {
     logic_check(pos <= buf.size(), "distance_to_beginning_of_line with out of range pos");
     size_t p = pos;
     for (;;) {
@@ -121,7 +121,7 @@ window_size main_buf_window_from_terminal_window(const terminal_size& term_windo
 
 void resize_window(state *st, const terminal_size& new_window) {
     window_size buf_window = main_buf_window_from_terminal_window(new_window);
-    for (qwi::buffer& buf : st->buflist) {
+    for (buffer& buf : st->buflist) {
         resize_buf_window(&buf, buf_window);
     }
 
