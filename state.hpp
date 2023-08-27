@@ -22,6 +22,8 @@ struct buffer_char {
 
 using buffer_string = std::basic_string<buffer_char>;
 
+buffer_string to_buffer_string(const std::string& s);
+
 enum class Side { left, right, };
 
 struct atomic_undo_item {
@@ -61,6 +63,11 @@ struct undo_history {
         delete_left,
     };
     char_coalescence coalescence = char_coalescence::none;
+};
+
+struct buffer_number {
+    // 0..n-1.  So state->bufs[value - 1] is the buffer, and state->buf is the zero buffer.
+    size_t value;
 };
 
 struct buffer {
@@ -114,6 +121,8 @@ struct buffer {
     std::string copy_to_string() const;
 
     buffer_string copy_substr(size_t beg, size_t end) const;
+
+    static buffer from_data(buffer_string&& data);
 };
 
 struct prompt {
@@ -165,6 +174,15 @@ struct state {
     ui_mode ui_config;
 };
 
+// An unstable pointer.
+inline qwi::buffer *buffer_ptr(qwi::state *state, buffer_number buf_number) {
+    logic_checkg(buf_number.value <= state->bufs.size());
+    return buf_number.value == 0 ? &state->buf : &state->bufs[buf_number.value - 1];
+}
+
+qwi::buffer_string buffer_name(qwi::state *state, buffer_number buf_number);
+
+
 constexpr uint32_t STATUS_AREA_HEIGHT = 1;
 void resize_window(state *st, const terminal_size& new_window);
 window_size main_buf_window_from_terminal_window(const terminal_size& term_window);
@@ -199,6 +217,16 @@ inline char *as_chars(qwi::buffer_char *chs) {
 inline const char *as_chars(const qwi::buffer_char *chs) {
     static_assert(sizeof(*chs) == sizeof(char));
     return reinterpret_cast<const char *>(chs);
+}
+
+inline qwi::buffer_char *as_buffer_chars(char *chs) {
+    static_assert(sizeof(*chs) == sizeof(qwi::buffer_char));
+    return reinterpret_cast<qwi::buffer_char *>(chs);
+}
+
+inline const qwi::buffer_char *as_buffer_chars(const char *chs) {
+    static_assert(sizeof(*chs) == sizeof(qwi::buffer_char));
+    return reinterpret_cast<const qwi::buffer_char *>(chs);
 }
 
 

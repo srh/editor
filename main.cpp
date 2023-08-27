@@ -126,6 +126,8 @@ undo_killring_handled note_coalescent_action(qwi::state *state, qwi::buffer *buf
     return undo_killring_handled{};
 }
 
+// TODO: Do callers not want to break undo history?  Or was this marking stuff that had
+// done killring actions but not undo?  What is this for?
 struct [[nodiscard]] noundo_killring_action { };
 undo_killring_handled note_action(qwi::state *state, qwi::buffer *buf, const noundo_killring_action&) {
     no_yank(&state->clipboard);
@@ -536,8 +538,17 @@ void set_save_prompt(qwi::state *state) {
     // TODO: How/where should we set the prompt's buf's window?
 }
 
+void set_buffer_switch_prompt(qwi::state *state) {
+    logic_check(!state->status_prompt.has_value(), "set_buffer_switch_prompt with existing prompt");
+    qwi::buffer_string data = qwi::to_buffer_string(state->buf.name);
+    state->status_prompt = {qwi::prompt::type::buffer_switch, qwi::buffer::from_data(std::move(data))};
+}
+
 void save_file_action(qwi::state *state) {
     if (state->status_prompt.has_value()) {
+        // TODO: We'll have to handle M-x C-s or C-x C-s somehow -- probably by generic
+        // logic at the keypress level.
+
         // Ignore keypress.
         return;
     }
@@ -547,6 +558,20 @@ void save_file_action(qwi::state *state) {
     } else {
         set_save_prompt(state);
     }
+}
+
+undo_killring_handled buffer_switch_action(qwi::state *state, qwi::buffer *activeBuf) {
+    undo_killring_handled ret = note_navigation_action(state, activeBuf);
+    if (state->status_prompt.has_value()) {
+        // TODO: We'll have to handle M-x C-s or C-x C-s somehow -- probably by generic
+        // logic at the keypress level.
+
+        // Ignore keypress.
+        return ret;
+    }
+
+    set_buffer_switch_prompt(state);
+    return ret;
 }
 
 undo_killring_handled enter_key(qwi::state *state) {
@@ -576,6 +601,9 @@ undo_killring_handled enter_key(qwi::state *state) {
         logic_fail("file open prompt not implemented");
     } break;
     case qwi::prompt::type::buffer_switch: {
+        
+
+
         // Unreachable code because we don't have the buffer switch (by name) key implemented.
         logic_fail("buffer switch prompt not implemented");
     } break;
@@ -842,7 +870,7 @@ undo_killring_handled read_and_process_tty_input(int term, qwi::state *state, bo
                         // (Yes, the escape codes aren't as contiguous as you'd expect.)
                         case 15: return rotate_buf_right(state, active_buf);  // F5
                         case 17: return rotate_buf_left(state, active_buf);  // F6
-                        case 18: return nop_keypress();  // F7
+                        case 18: return buffer_switch_action(state, active_buf);  // F7
                         case 19: return nop_keypress();  // F8
                         case 20: return nop_keypress();  // F9
                         case 21: return nop_keypress();  // F10

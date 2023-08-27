@@ -13,6 +13,11 @@ qwi::undo_item make_reverse_action(delete_result&& i_res);
 
 namespace qwi {
 
+buffer_string to_buffer_string(const std::string& s) {
+    buffer_string ret{as_buffer_chars(s.data()), s.size()};
+    return ret;
+}
+
 size_t buffer::cursor_distance_to_beginning_of_line() const {
     size_t ix = bef.find_last_of(buffer_char{'\n'});
     // this works in the std::string::npos case too
@@ -52,6 +57,19 @@ buffer_string buffer::copy_substr(size_t beg, size_t end) const {
         ret = aft.substr(beg - bef.size(), end - beg);
     }
     return ret;
+}
+
+buffer buffer::from_data(buffer_string&& data) {
+    buffer ret;
+    ret.bef = std::move(data);
+    return ret;
+}
+
+qwi::buffer_string buffer_name(qwi::state *state, buffer_number buf_number) {
+    // TODO: Add more state, some kind of rank ordering for buffers, so we can have
+    // consistent buffer names.
+    // TODO: Implement for real.
+    return to_buffer_string(buffer_ptr(state, buf_number)->name);
 }
 
 size_t distance_to_eol(const qwi::buffer& buf, size_t pos) {
