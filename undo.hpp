@@ -1,27 +1,11 @@
 #ifndef QWERTILLION_UNDO_HPP_
 #define QWERTILLION_UNDO_HPP_
 
-#include <stdint.h>
-
-#include <string>
 #include <vector>
 
+#include "chars.hpp"
+
 namespace qwi {
-
-// TODO: buffer_string and buffer_char don't belong in this header.
-struct buffer_char {
-    uint8_t value;
-
-    static buffer_char from_char(char ch) { return buffer_char{uint8_t(ch)}; }
-    friend auto operator<=>(buffer_char, buffer_char) = default;
-};
-
-using buffer_string = std::basic_string<buffer_char>;
-
-buffer_string to_buffer_string(const std::string& s);
-
-// TODO: "Side" isn't quite undo-specific, but it's in this header.
-enum class Side { left, right, };
 
 struct modification_delta {
     // Always -1, 0, or 1.

@@ -159,27 +159,6 @@ std::optional<const buffer_string *> do_yank(clip_board *clb);
 
 void no_yank(clip_board *clb);
 
-// TODO: This should be defined in whatever header buffer_string and buffer_char get declared.
-inline char *as_chars(buffer_char *chs) {
-    static_assert(sizeof(*chs) == sizeof(char));
-    return reinterpret_cast<char *>(chs);
-}
-
-inline const char *as_chars(const buffer_char *chs) {
-    static_assert(sizeof(*chs) == sizeof(char));
-    return reinterpret_cast<const char *>(chs);
-}
-
-inline buffer_char *as_buffer_chars(char *chs) {
-    static_assert(sizeof(*chs) == sizeof(buffer_char));
-    return reinterpret_cast<buffer_char *>(chs);
-}
-
-inline const buffer_char *as_buffer_chars(const char *chs) {
-    static_assert(sizeof(*chs) == sizeof(buffer_char));
-    return reinterpret_cast<const buffer_char *>(chs);
-}
-
 }  // namespace qwi
 
 #endif  // QWERTILLION_STATE_HPP_

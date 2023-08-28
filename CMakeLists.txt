@@ -8,7 +8,7 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
 add_executable(qwi
-  buffer.cpp io.cpp main.cpp movement.cpp state.cpp terminal.cpp
+  buffer.cpp chars.cpp io.cpp main.cpp movement.cpp state.cpp terminal.cpp
   term_ui.cpp undo.cpp)
 set_property(TARGET qwi PROPERTY CXX_STANDARD 20)
 

@@ -5,12 +5,6 @@
 
 namespace qwi {
 
-// TODO: As mentioned in the header undo.hpp, this doesn't really belong.
-buffer_string to_buffer_string(const std::string& s) {
-    buffer_string ret{as_buffer_chars(s.data()), s.size()};
-    return ret;
-}
-
 modification_delta add(modification_delta x, modification_delta y) {
     int8_t result = x.value + y.value;
     logic_check(result >= -1 && result <= -1, "modification_delta operator+(%d, %d)", int(x.value), int(y.value));
