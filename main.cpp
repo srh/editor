@@ -139,7 +139,7 @@ undo_killring_handled note_backout_action(state *state, buffer *buf) {
 }
 
 // Possibly a useless categorization -- maybe useful for refactoring later.
-inline undo_killring_handled note_navigation_action(state *state, buffer *buf) {
+undo_killring_handled note_navigation_action(state *state, buffer *buf) {
     return note_backout_action(state, buf);
 }
 
@@ -924,64 +924,64 @@ undo_killring_handled f12_keypress(state *, buffer *) { return nop_keypress(); }
 
 undo_killring_handled shift_delete_keypress(state *, buffer *) { return unimplemented_keypress(); }
 
-inline undo_killring_handled character_keypress(state *state, buffer *active_buf, uint8_t uch) {
+undo_killring_handled character_keypress(state *state, buffer *active_buf, uint8_t uch) {
     insert_result res = insert_char(active_buf, uch);
     return note_coalescent_action(state, active_buf, std::move(res));
 }
 
-inline undo_killring_handled tab_keypress(state *state, buffer *active_buf) {
+undo_killring_handled tab_keypress(state *state, buffer *active_buf) {
     return character_keypress(state, active_buf, '\t');
 }
 
-inline undo_killring_handled meta_f_keypress(state *state, buffer *active_buf) {
+undo_killring_handled meta_f_keypress(state *state, buffer *active_buf) {
     move_forward_word(active_buf);
     return note_navigation_action(state, active_buf);
 }
-inline undo_killring_handled meta_b_keypress(state *state, buffer *active_buf) {
+undo_killring_handled meta_b_keypress(state *state, buffer *active_buf) {
     move_backward_word(active_buf);
     return note_navigation_action(state, active_buf);
 }
-inline undo_killring_handled meta_q_keypress(state *state, buffer *active_buf) {
+undo_killring_handled meta_q_keypress(state *state, buffer *active_buf) {
     return buffer_close_action(state, active_buf);
 }
-inline undo_killring_handled meta_y_keypress(state *state, buffer *active_buf) {
+undo_killring_handled meta_y_keypress(state *state, buffer *active_buf) {
     return alt_yank_from_clipboard(state, active_buf);
 }
-inline undo_killring_handled meta_d_keypress(state *state, buffer *active_buf) {
+undo_killring_handled meta_d_keypress(state *state, buffer *active_buf) {
     return delete_forward_word(state, active_buf);
 }
-inline undo_killring_handled meta_backspace_keypress(state *state, buffer *active_buf) {
+undo_killring_handled meta_backspace_keypress(state *state, buffer *active_buf) {
     return delete_backward_word(state, active_buf);
 }
-inline undo_killring_handled meta_w_keypress(state *state, buffer *active_buf) {
+undo_killring_handled meta_w_keypress(state *state, buffer *active_buf) {
     return copy_region(state, active_buf);
 }
-inline undo_killring_handled right_arrow_keypress(state *state, buffer *active_buf) {
+undo_killring_handled right_arrow_keypress(state *state, buffer *active_buf) {
     move_right(active_buf);
     return note_navigation_action(state, active_buf);
 }
-inline undo_killring_handled left_arrow_keypress(state *state, buffer *active_buf) {
+undo_killring_handled left_arrow_keypress(state *state, buffer *active_buf) {
     move_left(active_buf);
     return note_navigation_action(state, active_buf);
 }
-inline undo_killring_handled up_arrow_keypress(state *state, buffer *active_buf) {
+undo_killring_handled up_arrow_keypress(state *state, buffer *active_buf) {
     move_up(active_buf);
     return note_navigation_action(state, active_buf);
 }
-inline undo_killring_handled down_arrow_keypress(state *state, buffer *active_buf) {
+undo_killring_handled down_arrow_keypress(state *state, buffer *active_buf) {
     move_down(active_buf);
     return note_navigation_action(state, active_buf);
 }
-inline undo_killring_handled home_keypress(state *state, buffer *active_buf) {
+undo_killring_handled home_keypress(state *state, buffer *active_buf) {
     move_home(active_buf);
     return note_navigation_action(state, active_buf);
 }
-inline undo_killring_handled end_keypress(state *state, buffer *active_buf) {
+undo_killring_handled end_keypress(state *state, buffer *active_buf) {
     move_end(active_buf);
     return note_navigation_action(state, active_buf);
 }
 
-inline undo_killring_handled ctrl_backspace_keypress(state *state, buffer *active_buf) {
+undo_killring_handled ctrl_backspace_keypress(state *state, buffer *active_buf) {
     return delete_backward_word(state, active_buf);
 }
 
