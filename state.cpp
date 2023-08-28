@@ -18,6 +18,12 @@ buffer_string to_buffer_string(const std::string& s) {
     return ret;
 }
 
+modification_delta add(modification_delta x, modification_delta y) {
+    int8_t result = x.value + y.value;
+    logic_check(result >= -1 && result <= -1, "modification_delta operator+(%d, %d)", int(x.value), int(y.value));
+    return modification_delta{result};
+}
+
 size_t buffer::cursor_distance_to_beginning_of_line() const {
     size_t ix = bef.find_last_of(buffer_char{'\n'});
     // this works in the std::string::npos case too
@@ -225,6 +231,7 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
                 logic_check(back.text_inserted.empty() && item.text_inserted.empty(), "incompatible insert_char coalescence");
                 logic_check(back.beg == size_sub(item.beg, item.text_deleted.size()), "incompatible insert_char coalescence");
                 back.text_deleted += item.text_deleted;
+                back.mod_delta = add(back.mod_delta, item.mod_delta);
                 back.beg = item.beg;
                 {
                     return;
@@ -234,6 +241,7 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
                 logic_check(back.text_deleted.empty() && item.text_deleted.empty(), "incompatible delete_left coalescence");
                 logic_check(size_add(item.beg, item.text_inserted.size()) == back.beg, "incompatible delete_left coalescence");
                 back.text_inserted = std::move(item.text_inserted) + back.text_inserted;
+                back.mod_delta = add(back.mod_delta, item.mod_delta);
                 back.beg = item.beg;
                 {
                     return;
@@ -243,6 +251,7 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
                 logic_check(back.text_deleted.empty() && item.text_deleted.empty(), "incompatible delete_right coalescence");
                 logic_check(back.beg == item.beg, "incompatible delete_right coalescence");
                 back.text_inserted += item.text_inserted;
+                back.mod_delta = add(back.mod_delta, item.mod_delta);
                 {
                     return;
                 }
@@ -264,10 +273,12 @@ atomic_undo_item opposite(const atomic_undo_item &item) {
         ret.beg = size_sub(size_add(ret.beg, item.text_inserted.size()), item.text_deleted.size());
     }
     std::swap(ret.text_inserted, ret.text_deleted);
+    ret.mod_delta.value = -ret.mod_delta.value;
     return ret;
 }
 
 void atomic_undo(buffer *buf, atomic_undo_item&& item) {
+    const bool og_modified_flag = buf->modified_flag;
     buf->set_cursor(item.beg);
 
     if (!item.text_deleted.empty()) {
@@ -293,6 +304,19 @@ void atomic_undo(buffer *buf, atomic_undo_item&& item) {
             res = insert_chars_right(buf, item.text_inserted.data(), item.text_inserted.size());
             break;
         }
+    }
+
+    // TODO: It's kind of gross that we call insert/delete functions that touch the modified flag, then overwrite that action here.
+    if (item.mod_delta.value == 0) {
+        buf->modified_flag = og_modified_flag;
+    } else if (item.mod_delta.value == 1) {
+        logic_check(!og_modified_flag, "atomic_undo: mod_delta 1, buf modification flag is turned on");
+        buf->modified_flag = true;
+    } else if (item.mod_delta.value == -1) {
+        logic_check(og_modified_flag, "atomic_undo: mod_delta -1, buf modification flag is turned off");
+        buf->modified_flag = false;
+    } else {
+        logic_fail("atomic_undo: mod_delta invalid: %d", int(item.mod_delta.value));
     }
 
     // TODO: opposite with std::move.

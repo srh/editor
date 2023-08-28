@@ -56,10 +56,12 @@ undo_killring_handled handled_undo_killring(state *state, buffer *buf) {
 }
 
 atomic_undo_item make_reverse_action(insert_result&& i_res) {
+    int8_t rmd = - i_res.modificationFlagDelta.value;
     atomic_undo_item item = {
         .beg = i_res.new_cursor,
         .text_inserted = buffer_string{},
         .text_deleted = std::move(i_res.insertedText),
+        .mod_delta = modification_delta{ rmd },
         .side = i_res.side,  // We inserted on left (right), hence we delete on left (right)
     };
 
@@ -94,10 +96,12 @@ undo_killring_handled note_coalescent_action(state *state, buffer *buf, insert_r
 }
 
 atomic_undo_item make_reverse_action(delete_result&& d_res) {
+    int8_t rmd = - d_res.modificationFlagDelta.value;
     atomic_undo_item item = {
         .beg = d_res.new_cursor,
         .text_inserted = std::move(d_res.deletedText),
         .text_deleted = buffer_string{},
+        .mod_delta = modification_delta{ rmd },
         .side = d_res.side,  // We deleted on left (right), hence we insert on left (right)
     };
 
@@ -420,8 +424,9 @@ void render_status_area(terminal_frame *frame, state& state) {
         // TODO: This is super-hacky -- we overwrite the main buffer's cursor.
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
     } else {
-        // TODO: Rendering logic.
-        render_string(frame, {.row = last_row, .col = 0}, buffer_name(&state, buffer_number{state::topbuf_index_is_0}), terminal_style::bold());
+        buffer_string str = buffer_name(&state, buffer_number{state::topbuf_index_is_0});
+        str += to_buffer_string(state.topbuf().modified_flag ? " **" : "   ");
+        render_string(frame, {.row = last_row, .col = 0}, str, terminal_style::bold());
     }
 }
 
@@ -871,10 +876,12 @@ undo_killring_handled alt_yank_from_clipboard(state *state, buffer *buf) {
         insert_result insres = insert_chars(buf, (*text)->data(), (*text)->size());
 
         // Add the reverse action to undo history.
+        int8_t rmd = -(delres.modificationFlagDelta.value + insres.modificationFlagDelta.value);
         atomic_undo_item item = {
             .beg = insres.new_cursor,
             .text_inserted = std::move(delres.deletedText),
             .text_deleted = std::move(insres.insertedText),
+            .mod_delta = modification_delta{ rmd },
             .side = Side::left,
         };
         add_edit(&buf->undo_info, std::move(item));

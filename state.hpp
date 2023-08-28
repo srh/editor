@@ -26,12 +26,20 @@ buffer_string to_buffer_string(const std::string& s);
 
 enum class Side { left, right, };
 
+struct modification_delta {
+    // Always -1, 0, or 1.
+    int8_t value = 0;
+};
+
+modification_delta add(modification_delta x, modification_delta y);
+
 struct atomic_undo_item {
     // The cursor _before_ we apply this undo action.  This departs from jsmacs, where
     // it's the cursor after the action, or something incoherent and broken.
     size_t beg = 0;
     buffer_string text_inserted{};
     buffer_string text_deleted{};
+    modification_delta mod_delta;
     Side side = Side::left;
 };
 
@@ -82,6 +90,8 @@ struct buffer {
     // We just have strings for text before/after the cursor.  Very bad perf.
     buffer_string bef;
     buffer_string aft;
+    // TODO: Our model for modified_flag is fundamentally broken, because when a file gets saved, we'd have to traverse our undo history to fix the modification flag deltas -- and arguably, there are multiple points where we'd have to set the flag back on!
+    bool modified_flag = false;
 
     // Absolute position of the mark, if there is one.
     std::optional<size_t> mark;
