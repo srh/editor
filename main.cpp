@@ -41,6 +41,9 @@ undo_killring_handled undo_will_need_handling() {
     return undo_killring_handled{};
 }
 #endif
+undo_killring_handled killring_will_need_handling() {
+    return undo_killring_handled{};
+}
 
 undo_killring_handled handled_undo_killring(state *state, buffer *buf) {
     (void)state, (void)buf;
@@ -578,7 +581,7 @@ bool find_buffer_by_name(const state *state, const std::string& text, buffer_num
 
 void rotate_to_buffer(state *state, buffer_number buf_number);
 
-undo_killring_handled cancel_key(state *state, buffer *buf) {
+undo_killring_handled cancel_action(state *state, buffer *buf) {
     // We break the yank and undo sequence in `buf` -- of course, when creating the status
     // prompt, we already broke the yank and undo sequence in the _original_ buf.
     undo_killring_handled ret = note_backout_action(state, buf);
@@ -874,6 +877,7 @@ undo_killring_handled alt_yank_from_clipboard(state *state, buffer *buf) {
         add_edit(&buf->undo_info, std::move(item));
         return handled_undo_killring(state, buf);
     } else {
+        // TODO: Report error ("Previous command was not a yank.")
         note_nop_undo(buf);
         return handled_undo_killring(state, buf);
     }
@@ -983,6 +987,89 @@ undo_killring_handled end_keypress(state *state, buffer *active_buf) {
 
 undo_killring_handled ctrl_backspace_keypress(state *state, buffer *active_buf) {
     return delete_backward_word(state, active_buf);
+}
+
+undo_killring_handled ctrl_a_keypress(state *state, buffer *active_buf) {
+    move_home(active_buf);
+    return note_navigation_action(state, active_buf);
+}
+
+undo_killring_handled ctrl_b_keypress(state *state, buffer *active_buf) {
+    move_left(active_buf);
+    return note_navigation_action(state, active_buf);
+}
+
+undo_killring_handled ctrl_c_keypress(state *state, buffer *active_buf, bool *exit_loop) {
+    bool exit = false;
+    auto ret = exit_cleanly(state, active_buf, &exit);
+    if (exit) { *exit_loop = true; }
+    return ret;
+}
+
+undo_killring_handled ctrl_d_keypress(state *state, buffer *active_buf) {
+    return delete_keypress(state, active_buf);
+}
+
+undo_killring_handled ctrl_e_keypress(state *state, buffer *active_buf) {
+    move_end(active_buf);
+    return note_navigation_action(state, active_buf);
+}
+
+undo_killring_handled ctrl_f_keypress(state *state, buffer *active_buf) {
+    move_right(active_buf);
+    return note_navigation_action(state, active_buf);
+}
+
+undo_killring_handled ctrl_g_keypress(state *state, buffer *active_buf) {
+    return cancel_action(state, active_buf);
+}
+
+undo_killring_handled ctrl_n_keypress(state *state, buffer *active_buf) {
+    move_down(active_buf);
+    return note_navigation_action(state, active_buf);
+}
+
+undo_killring_handled ctrl_o_keypress(state *state, buffer *active_buf) {
+    return open_file_action(state, active_buf);
+}
+
+undo_killring_handled ctrl_p_keypress(state *state, buffer *active_buf) {
+    move_up(active_buf);
+    return note_navigation_action(state, active_buf);
+}
+
+undo_killring_handled ctrl_s_keypress(state *state, buffer *active_buf) {
+    // May prompt if the buf isn't married to a file.
+    return save_file_action(state, active_buf);
+}
+
+undo_killring_handled backspace_keypress(state *state, buffer *active_buf) {
+    // TODO: Here, and perhaps elsewhere, handle undo where no characters were actually deleted.
+    delete_result res = backspace_char(active_buf);
+    return note_coalescent_action(state, active_buf, std::move(res));
+}
+
+undo_killring_handled ctrl_k_keypress(state *state, buffer *active_buf) {
+    return kill_line(state, active_buf);
+}
+
+undo_killring_handled ctrl_w_keypress(state *state, buffer *active_buf) {
+    return kill_region(state, active_buf);
+}
+
+undo_killring_handled ctrl_y_keypress(state *state, buffer *active_buf) {
+    return yank_from_clipboard(state, active_buf);
+}
+
+undo_killring_handled ctrl_space_keypress(state *state, buffer *active_buf) {
+    set_mark(active_buf);
+    return note_backout_action(state, active_buf);
+}
+
+undo_killring_handled ctrl_underscore_keypress(state *state, buffer *active_buf) {
+    no_yank(&state->clipboard);
+    perform_undo(active_buf);
+    return handled_undo_killring(state, active_buf);
 }
 
 // Reads remainder of "\e[\d+(;\d+)?~" character escapes after the first digit was read.
@@ -1145,57 +1232,23 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
 
     if (uint8_t(ch) <= 127) {
         switch (ch ^ CTRL_XOR_MASK) {
-        case 'A':
-            move_home(active_buf);
-            return note_navigation_action(state, active_buf);
-        case 'B':
-            move_left(active_buf);
-            return note_navigation_action(state, active_buf);
-        case 'C': {
-            bool exit = false;
-            auto ret = exit_cleanly(state, active_buf, &exit);
-            if (exit) { *exit_loop = true; }
-            return ret;
-        } break;
-        case 'D':
-            return delete_keypress(state, active_buf);
-        case 'E':
-            move_end(active_buf);
-            return note_navigation_action(state, active_buf);
-        case 'F':
-            move_right(active_buf);
-            return note_navigation_action(state, active_buf);
-        case 'G':
-            return cancel_key(state, active_buf);
-        case 'N':
-            move_down(active_buf);
-            return note_navigation_action(state, active_buf);
-        case 'O':
-            return open_file_action(state, active_buf);
-        case 'P':
-            move_up(active_buf);
-            return note_navigation_action(state, active_buf);
-        case 'S':
-            // May prompt if the buf isn't married to a file.
-            return save_file_action(state, active_buf);
-        case '?': {
-            // TODO: Here, and perhaps elsewhere, handle undo where no characters were actually deleted.
-            delete_result res = backspace_char(active_buf);
-            return note_coalescent_action(state, active_buf, std::move(res));
-        } break;
-        case 'K':
-            return kill_line(state, active_buf);
-        case 'W':
-            return kill_region(state, active_buf);
-        case 'Y':
-            return yank_from_clipboard(state, active_buf);
-        case '@':
-            // Ctrl+Space same as C-@
-            set_mark(active_buf);
-            return note_backout_action(state, active_buf);
-        case '_':
-            perform_undo(active_buf);
-            return undo_killring_handled{};
+        case 'A': return ctrl_a_keypress(state, active_buf);
+        case 'B': return ctrl_b_keypress(state, active_buf);
+        case 'C': return ctrl_c_keypress(state, active_buf, exit_loop);
+        case 'D': return ctrl_d_keypress(state, active_buf);
+        case 'E': return ctrl_e_keypress(state, active_buf);
+        case 'F': return ctrl_f_keypress(state, active_buf);
+        case 'G': return ctrl_g_keypress(state, active_buf);
+        case 'N': return ctrl_n_keypress(state, active_buf);
+        case 'O': return ctrl_o_keypress(state, active_buf);
+        case 'P': return ctrl_p_keypress(state, active_buf);
+        case 'S': return ctrl_s_keypress(state, active_buf);
+        case '?': return backspace_keypress(state, active_buf);
+        case 'K': return ctrl_k_keypress(state, active_buf);
+        case 'W': return ctrl_w_keypress(state, active_buf);
+        case 'Y': return ctrl_y_keypress(state, active_buf);
+        case '@': return ctrl_space_keypress(state, active_buf); // Ctrl+Space same as C-@
+        case '_': return ctrl_underscore_keypress(state, active_buf);
         default:
             // For now we do push the printable repr for any unhandled chars, for debugging purposes.
             // TODO: Handle other possible control chars.
