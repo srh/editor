@@ -18,8 +18,8 @@ insert_result insert_chars(buffer *buf, const buffer_char *chs, size_t count);
 inline insert_result insert_char(buffer *buf, buffer_char sch) {
     return insert_chars(buf, &sch, 1);
 }
-inline insert_result insert_char(buffer *buf, char sch) {
-    buffer_char ch = {uint8_t(sch)};
+inline insert_result insert_char(buffer *buf, uint8_t uch) {
+    buffer_char ch = {uch};
     return insert_chars(buf, &ch, 1);
 }
 
