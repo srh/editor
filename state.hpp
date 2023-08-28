@@ -6,72 +6,14 @@
 #include <vector>
 
 #include "error.hpp"
+#include "undo.hpp"
 
+// TODO: Don't need this.
 struct terminal_size;
 
 namespace qwi {
 
 struct window_size { uint32_t rows = 0, cols = 0; };
-
-struct buffer_char {
-    uint8_t value;
-
-    static buffer_char from_char(char ch) { return buffer_char{uint8_t(ch)}; }
-    friend auto operator<=>(buffer_char, buffer_char) = default;
-};
-
-using buffer_string = std::basic_string<buffer_char>;
-
-buffer_string to_buffer_string(const std::string& s);
-
-enum class Side { left, right, };
-
-struct modification_delta {
-    // Always -1, 0, or 1.
-    int8_t value = 0;
-};
-
-modification_delta add(modification_delta x, modification_delta y);
-
-struct atomic_undo_item {
-    // The cursor _before_ we apply this undo action.  This departs from jsmacs, where
-    // it's the cursor after the action, or something incoherent and broken.
-    size_t beg = 0;
-    buffer_string text_inserted{};
-    buffer_string text_deleted{};
-    modification_delta mod_delta;
-    Side side = Side::left;
-};
-
-struct undo_item {
-    // This duplicates the jsmacs undo implementation.
-    // TODO: Figure out how we want to capitalize types.
-    enum class Type { atomic, mountain, };
-
-    // TODO: This should be a variant or something.
-    Type type;
-    // Type::atomic:
-    atomic_undo_item atomic;
-
-    // Type::mountain:
-    std::vector<atomic_undo_item> history{};
-};
-
-struct undo_history {
-    // TODO: There are no limits on undo history size.
-    std::vector<undo_item> past;
-    std::vector<atomic_undo_item> future;
-
-    // If the last typed action is a sequence of characters, delete keypresses, or
-    // backspace keypresses, we combine those events into a single undo operation.
-    enum class char_coalescence {
-        none,
-        insert_char,
-        delete_right,
-        delete_left,
-    };
-    char_coalescence coalescence = char_coalescence::none;
-};
 
 struct buffer_number {
     // 0..n-1.  So state->bufs[value - 1] is the buffer, and state->buf is the zero buffer.
@@ -217,14 +159,7 @@ std::optional<const buffer_string *> do_yank(clip_board *clb);
 
 void no_yank(clip_board *clb);
 
-void add_coalescence_break(undo_history *history);
-void add_nop_edit(undo_history *history);
-void add_edit(undo_history *history, atomic_undo_item&& item);
-void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_history::char_coalescence coalescence);
-
-
-void perform_undo(buffer *buf);
-
+// TODO: This should be defined in whatever header buffer_string and buffer_char get declared.
 inline char *as_chars(buffer_char *chs) {
     static_assert(sizeof(*chs) == sizeof(char));
     return reinterpret_cast<char *>(chs);
