@@ -1232,6 +1232,8 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
 
     if (uint8_t(ch) <= 127) {
         switch (ch ^ CTRL_XOR_MASK) {
+        case '?': return backspace_keypress(state, active_buf);
+        case '@': return ctrl_space_keypress(state, active_buf); // Ctrl+Space same as C-@
         case 'A': return ctrl_a_keypress(state, active_buf);
         case 'B': return ctrl_b_keypress(state, active_buf);
         case 'C': return ctrl_c_keypress(state, active_buf, exit_loop);
@@ -1239,15 +1241,13 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
         case 'E': return ctrl_e_keypress(state, active_buf);
         case 'F': return ctrl_f_keypress(state, active_buf);
         case 'G': return ctrl_g_keypress(state, active_buf);
+        case 'K': return ctrl_k_keypress(state, active_buf);
         case 'N': return ctrl_n_keypress(state, active_buf);
         case 'O': return ctrl_o_keypress(state, active_buf);
         case 'P': return ctrl_p_keypress(state, active_buf);
         case 'S': return ctrl_s_keypress(state, active_buf);
-        case '?': return backspace_keypress(state, active_buf);
-        case 'K': return ctrl_k_keypress(state, active_buf);
         case 'W': return ctrl_w_keypress(state, active_buf);
         case 'Y': return ctrl_y_keypress(state, active_buf);
-        case '@': return ctrl_space_keypress(state, active_buf); // Ctrl+Space same as C-@
         case '_': return ctrl_underscore_keypress(state, active_buf);
         default:
             // For now we do push the printable repr for any unhandled chars, for debugging purposes.
