@@ -121,10 +121,13 @@ struct state {
     // Is never empty (after initial_state() returns).
     // NOTE: "Is never empty" may be a UI-specific constraint!  It seems reasonable for GUIs to support having no tabs open.
     std::vector<buffer> buflist;
-    static constexpr size_t topbuf_index_is_0 = 0;
+    // 0 <= buf_ptr < buflist.size(), always (except at construction when buflist is empty).
+    buffer_number buf_ptr = {SIZE_MAX};
+
     buffer& topbuf() {
-        logic_checkg(!buflist.empty());
-        return buflist.front();
+        logic_check(buf_ptr.value < buflist.size(), "topbuf: out of range.  buf_ptr = %zu, buflist.size() = %zu",
+                    buf_ptr.value, buflist.size());
+        return buflist[buf_ptr.value];
     }
 
     std::optional<prompt> status_prompt;

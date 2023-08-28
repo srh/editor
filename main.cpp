@@ -262,7 +262,8 @@ buffer open_file_into_detached_buffer(const std::string& dirty_path) {
     return ret;
 }
 
-void apply_number_to_buf(state *state, size_t buf_index) {
+void apply_number_to_buf(state *state, buffer_number buf_index_num) {
+    size_t buf_index = buf_index_num.value;
     buffer& the_buf = state->buflist.at(buf_index);
     const std::string& name = the_buf.name_str;
     std::unordered_set<uint64_t> numbers;
@@ -302,14 +303,16 @@ state initial_state(const command_line_args& args, const terminal_size& window) 
 
     state state;
     if (n_files == 0) {
+        state.buf_ptr.value = 0;
         state.buflist.push_back(scratch_buffer(buf_window));
     } else {
+        state.buf_ptr.value = 0;
         state.buflist.reserve(n_files);
         state.buflist.clear();  // a no-op
         for (size_t i = 0; i < n_files; ++i) {
             state.buflist.push_back(open_file_into_detached_buffer(args.files.at(i)));
             state.buflist.back().set_window(buf_window);
-            apply_number_to_buf(&state, i);
+            apply_number_to_buf(&state, buffer_number{i});
 
             // TODO: How do we handle duplicate file names?  Just allow identical buffer
             // names, but make selecting them in the UI different?  Only allow identical
@@ -377,7 +380,7 @@ void render_status_area(terminal_frame *frame, state& state) {
         // TODO: This is super-hacky -- we overwrite the main buffer's cursor.
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
     } else {
-        buffer_string str = buffer_name(&state, buffer_number{state::topbuf_index_is_0});
+        buffer_string str = buffer_name(&state, state.buf_ptr);
         str += to_buffer_string(state.topbuf().modified_flag() ? " **" : "   ");
         render_string(frame, {.row = last_row, .col = 0}, str, terminal_style::bold());
     }
@@ -482,7 +485,7 @@ void set_save_prompt(state *state) {
 
 void set_buffer_switch_prompt(state *state) {
     logic_check(!state->status_prompt.has_value(), "set_buffer_switch_prompt with existing prompt");
-    buffer_string data = buffer_name(state, buffer_number{state::topbuf_index_is_0});
+    buffer_string data = buffer_name(state, state->buf_ptr);
     state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(std::move(data)), prompt::message_unused};
 }
 
@@ -552,7 +555,7 @@ undo_killring_handled buffer_switch_action(state *state, buffer *active_buf) {
         return ret;
     }
 
-    buffer_string data = buffer_name(state, buffer_number{state::topbuf_index_is_0});
+    buffer_string data = buffer_name(state, state->buf_ptr);
     state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(std::move(data)), prompt::message_unused};
     return ret;
 }
@@ -675,14 +678,12 @@ undo_killring_handled copy_region(state *state, buffer *buf) {
     return handled_undo_killring(state, buf);
 }
 
-// TODO: This rotation is stupid and makes no sense for multi-window, tabs, etc. -- use a
-// buffer_number to point at the buf instead.
 void rotate_to_buffer(state *state, buffer_number buf_number) {
     logic_check(buf_number.value < state->buflist.size(), "rotate_to_buffer with out-of-range buffer number %zu", buf_number.value);
 
-    note_navigate_away_from_buf(buffer_ptr(state, buffer_number{state::topbuf_index_is_0}));
+    note_navigate_away_from_buf(buffer_ptr(state, state->buf_ptr));
 
-    std::rotate(state->buflist.begin(), state->buflist.begin() + buf_number.value, state->buflist.end());
+    state->buf_ptr = buf_number;
 }
 
 undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *exit_loop) {
@@ -697,7 +698,7 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
             save_buf_to_married_file_and_mark_unmodified(&state->topbuf());
             state->topbuf().name_str = buf_name_from_file_path(fs::path(text));
             state->topbuf().name_number = 0;
-            apply_number_to_buf(state, state::topbuf_index_is_0);
+            apply_number_to_buf(state, state->buf_ptr);
         } else {
             // TODO: Implement displaying errors to the user.
         }
@@ -719,10 +720,11 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
             window_size buf_window = main_buf_window_from_terminal_window(window);
             buf.set_window(buf_window);
 
-            static_assert(state::topbuf_index_is_0 == 0);
-            state->buflist.insert(state->buflist.begin(), std::move(buf));
-            apply_number_to_buf(state, state::topbuf_index_is_0);
+            logic_checkg(state->buf_ptr.value < state->buflist.size());
+            state->buflist.insert(state->buflist.begin() + state->buf_ptr.value, std::move(buf));
+            apply_number_to_buf(state, state->buf_ptr);
 
+            // state->buf_ptr now points at our freshly opened buf -- its value is unchanged.
         } else {
             // TODO: Display error.
         }
@@ -756,9 +758,11 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
         // TODO: Implement displaying errors to the user.
         if (text == "yes") {
             // Yes, close without saving.
-            logic_checkg(!state->buflist.empty());
-            static_assert(state::topbuf_index_is_0 == 0);
-            state->buflist.erase(state->buflist.begin());
+            logic_checkg(state->buf_ptr.value < state->buflist.size());
+            state->buflist.erase(state->buflist.begin() + state->buf_ptr.value);
+            if (state->buf_ptr.value == state->buflist.size()) {
+                state->buf_ptr.value = 0;
+            }
 
             // buflist must never be empty
             if (state->buflist.empty()) {
@@ -766,6 +770,7 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
                 terminal_size window = get_terminal_size(term);
                 window_size buf_window = main_buf_window_from_terminal_window(window);
                 state->buflist.push_back(scratch_buffer(buf_window));
+                // state->buf_ptr is already 0, thus correct.
             }
             close_status_prompt(state);
             return ret;
@@ -802,8 +807,6 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
     }
 }
 
-// I guess we're rotating our _pointer_ into the buf list to the right, by rotating the
-// bufs to the left.
 undo_killring_handled rotate_buf_right(state *state, buffer *active_buf) {
     undo_killring_handled ret = note_navigation_action(state, active_buf);
     if (!state->is_normal()) {
@@ -812,17 +815,17 @@ undo_killring_handled rotate_buf_right(state *state, buffer *active_buf) {
 
     note_navigate_away_from_buf(active_buf);
 
-    logic_checkg(!state->buflist.empty());
-
-    buffer lastBuf = std::move(state->buflist.front());
-    state->buflist.erase(state->buflist.begin());
-    state->buflist.push_back(std::move(lastBuf));
+    logic_checkg(state->buf_ptr.value < state->buflist.size());
+    size_t val = state->buf_ptr.value;
+    val += 1;
+    if (val == state->buflist.size()) {
+        val = 0;
+    }
+    state->buf_ptr.value = val;
 
     return ret;
 }
 
-// I guess we're rotating our _pointer_ into the buf list to the left, by rotating the
-// bufs to the right.
 undo_killring_handled rotate_buf_left(state *state, buffer *active_buf) {
     undo_killring_handled ret = note_navigation_action(state, active_buf);
     if (!state->is_normal()) {
@@ -831,11 +834,13 @@ undo_killring_handled rotate_buf_left(state *state, buffer *active_buf) {
 
     note_navigate_away_from_buf(active_buf);
 
-    logic_checkg(!state->buflist.empty());
-
-    buffer nextBuf = std::move(state->buflist.back());
-    state->buflist.pop_back();
-    state->buflist.insert(state->buflist.begin(), std::move(nextBuf));
+    logic_checkg(state->buf_ptr.value < state->buflist.size());
+    size_t val = state->buf_ptr.value;
+    if (val == 0) {
+        val = state->buflist.size();
+    }
+    val -= 1;
+    state->buf_ptr.value = val;
 
     return ret;
 }
