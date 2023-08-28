@@ -157,52 +157,6 @@ void note_navigate_away_from_buf(buffer *buf) {
     (void)buf;
 }
 
-}  // namespace qwi
-
-bool parse_command_line(FILE *err_fp, int argc, const char **argv, command_line_args *out) {
-    // TODO: We could check for duplicate or conflicting args (like --help and --version
-    // used together with other args).
-    int i = 1;
-    *out = command_line_args{};
-    while (i < argc) {
-        const char *arg = argv[i];
-        if (0 == strcmp(arg, "--version")) {
-            out->version = true;
-            ++i;
-        } else if (0 == strcmp(arg, "--help")) {
-            out->help = true;
-            ++i;
-        } else if (0 == strcmp(arg, "--")) {
-            ++i;
-            while (i < argc) {
-                out->files.emplace_back(argv[i]);
-                ++i;
-            }
-        } else if (arg[0] == '-') {
-            fprintf(err_fp, "Invalid argument '%s'.  See --help for usage.\n", arg);
-            return false;
-        } else {
-            out->files.emplace_back(arg);
-            ++i;
-        }
-    }
-
-    return true;
-}
-
-void print_version(FILE *fp) {
-    const char *PRODUCT_NAME = "Qwertillion";
-    const char *PRODUCT_VERSION = "0.0.0.epsilon";
-    fprintf(fp, "%s %s\n", PRODUCT_NAME, PRODUCT_VERSION);
-}
-
-void print_help(FILE *fp) {
-    print_version(fp);
-    fprintf(fp, "Usage: --help | --version | [files...] [-- files..]\n");
-}
-
-namespace qwi {
-
 void append_mask_difference(std::string *buf, uint8_t old_mask, uint8_t new_mask) {
     static_assert(std::is_same<decltype(old_mask), decltype(terminal_style::mask)>::value);
 
@@ -1257,6 +1211,48 @@ int run_program(const command_line_args& args) {
 }
 
 }  // namespace qwi
+
+bool parse_command_line(FILE *err_fp, int argc, const char **argv, command_line_args *out) {
+    // TODO: We could check for duplicate or conflicting args (like --help and --version
+    // used together with other args).
+    int i = 1;
+    *out = command_line_args{};
+    while (i < argc) {
+        const char *arg = argv[i];
+        if (0 == strcmp(arg, "--version")) {
+            out->version = true;
+            ++i;
+        } else if (0 == strcmp(arg, "--help")) {
+            out->help = true;
+            ++i;
+        } else if (0 == strcmp(arg, "--")) {
+            ++i;
+            while (i < argc) {
+                out->files.emplace_back(argv[i]);
+                ++i;
+            }
+        } else if (arg[0] == '-') {
+            fprintf(err_fp, "Invalid argument '%s'.  See --help for usage.\n", arg);
+            return false;
+        } else {
+            out->files.emplace_back(arg);
+            ++i;
+        }
+    }
+
+    return true;
+}
+
+void print_version(FILE *fp) {
+    const char *PRODUCT_NAME = "Qwertillion";
+    const char *PRODUCT_VERSION = "0.0.0.epsilon";
+    fprintf(fp, "%s %s\n", PRODUCT_NAME, PRODUCT_VERSION);
+}
+
+void print_help(FILE *fp) {
+    print_version(fp);
+    fprintf(fp, "Usage: --help | --version | [files...] [-- files..]\n");
+}
 
 int main(int argc, const char **argv) {
     command_line_args args;
