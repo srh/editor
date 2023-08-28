@@ -84,9 +84,11 @@ struct buffer {
 };
 
 struct prompt {
-    enum class type { file_open, file_save, buffer_switch, buffer_close };
+    enum class type { file_open, file_save, buffer_switch, buffer_close, exit_without_save };
     type typ;
     buffer buf;
+    constexpr static const char *const message_unused = "";
+    std::string messageText;  // only for save_prompt
 };
 
 struct clip_board {

@@ -412,6 +412,9 @@ void render_status_area(terminal_frame *frame, state& state) {
         case prompt::type::file_save: message = "file to save: "; break;
         case prompt::type::buffer_switch: message = "switch to buffer: "; break;
         case prompt::type::buffer_close: message = "close without saving? (yes/no): "; break;
+        case prompt::type::exit_without_save:
+            message = "exit without saving? (" + state.status_prompt->messageText + ") (yes/no): ";
+            break;
         }
 
         render_string(frame, {.row = last_row, .col = 0}, to_buffer_string(message), terminal_style::bold());
@@ -524,14 +527,14 @@ void save_buf_to_married_file_and_mark_unmodified(buffer *buf) {
 
 void set_save_prompt(state *state) {
     logic_check(!state->status_prompt.has_value(), "set_save_prompt with existing prompt");
-    state->status_prompt = {prompt::type::file_save, buffer()};
+    state->status_prompt = {prompt::type::file_save, buffer(), prompt::message_unused};
     // TODO: How/where should we set the prompt's buf's window?
 }
 
 void set_buffer_switch_prompt(state *state) {
     logic_check(!state->status_prompt.has_value(), "set_buffer_switch_prompt with existing prompt");
     buffer_string data = buffer_name(state, buffer_number{state::topbuf_index_is_0});
-    state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(std::move(data))};
+    state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(std::move(data)), prompt::message_unused};
 }
 
 undo_killring_handled open_file_action(state *state, buffer *activeBuf) {
@@ -540,7 +543,7 @@ undo_killring_handled open_file_action(state *state, buffer *activeBuf) {
         return ret;
     }
 
-    state->status_prompt = {prompt::type::file_open, buffer{}};
+    state->status_prompt = {prompt::type::file_open, buffer{}, prompt::message_unused};
     return ret;
 }
 
@@ -563,6 +566,49 @@ undo_killring_handled save_file_action(state *state, buffer *activeBuf) {
     return ret;
 }
 
+std::string string_join(const std::string& inbetween, const std::vector<std::string>& vals) {
+    std::string ret;
+    size_t n = vals.size();
+    if (n == 0) {
+        return ret;
+    }
+    for (size_t i = 0; ; ) {
+        ret += vals[i];
+        ++i;
+        if (i == n) {
+            return ret;
+        }
+        ret += inbetween;
+    }
+}
+
+std::vector<std::string> modified_buffers(state *state) {
+    std::vector<std::string> ret;
+    for (size_t i = 0, e = state->buflist.size(); i < e; ++i) {
+        if (state->buflist[i].modified_flag()) {
+            // TODO: O(n^2), gross.
+            ret.push_back(buffer_name_str(state, buffer_number{i}));
+        }
+    }
+    return ret;
+}
+
+undo_killring_handled exit_cleanly(state *state, buffer *activeBuf, bool *exit_loop) {
+    undo_killring_handled ret = note_backout_action(state, activeBuf);
+
+    if (state->status_prompt.has_value()) {
+        close_status_prompt(state);
+    }
+
+    std::vector<std::string> bufnames = modified_buffers(state);
+    if (!bufnames.empty()) {
+        state->status_prompt = {prompt::type::exit_without_save, buffer{}, string_join(", ", bufnames)};
+    } else {
+        *exit_loop = true;
+    }
+    return ret;
+}
+
 undo_killring_handled buffer_switch_action(state *state, buffer *activeBuf) {
     undo_killring_handled ret = note_navigation_action(state, activeBuf);
     if (state->status_prompt.has_value()) {
@@ -574,7 +620,7 @@ undo_killring_handled buffer_switch_action(state *state, buffer *activeBuf) {
     }
 
     buffer_string data = buffer_name(state, buffer_number{state::topbuf_index_is_0});
-    state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(std::move(data))};
+    state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(std::move(data)), prompt::message_unused};
     return ret;
 }
 
@@ -586,7 +632,7 @@ undo_killring_handled buffer_close_action(state *state, buffer *activeBuf) {
     }
 
     // TODO: Only complain if the buffer has been modified.  (Add a modified flag.)
-    state->status_prompt = {prompt::type::buffer_close, buffer{}};
+    state->status_prompt = {prompt::type::buffer_close, buffer{}, prompt::message_unused};
     return ret;
 }
 
@@ -602,7 +648,8 @@ bool find_buffer_by_name(const state *state, const std::string& text, buffer_num
 
 void rotate_to_buffer(state *state, buffer_number buf_number);
 
-undo_killring_handled enter_key(int term, state *state) {
+// *exit_loop can be assigned true; there is no need to assign it false.
+undo_killring_handled enter_key(int term, state *state, bool *exit_loop) {
     if (!state->status_prompt.has_value()) {
         insert_result res = insert_char(&state->topbuf(), '\n');
         return note_coalescent_action(state, &state->topbuf(), std::move(res));
@@ -699,6 +746,24 @@ undo_killring_handled enter_key(int term, state *state) {
             return ret;
         }
     } break;
+    case prompt::type::exit_without_save: {
+        // killring important, undo not because we're destructing the status_prompt buf.
+        undo_killring_handled ret = note_backout_action(state, &state->status_prompt->buf);
+        std::string text = state->status_prompt->buf.copy_to_string();
+        // TODO: Implement displaying errors to the user.
+        if (text == "yes") {
+            // Yes, exit without saving.
+            *exit_loop = true;
+            return ret;
+        } else if (text == "no") {
+            // No, don't exit without saving.
+            close_status_prompt(state);
+            return ret;
+        } else {
+            // TODO: Report error.
+            return ret;
+        }
+    } break;
     default:
         logic_fail("status prompt unreachable default case");
         break;
@@ -712,8 +777,8 @@ undo_killring_handled cancel_key(state *state, buffer *buf) {
 
     if (state->status_prompt.has_value()) {
         // At some point we should probably add a switch statement to handle all cases --
-        // but for now this is correct for file_save, file_open, buffer_switch, and
-        // buffer_close.  (At some point we'll want message reporting like "C-x C-g is
+        // but for now this is correct for file_save, file_open, buffer_switch,
+        // buffer_close, and exit_without_save.  (At some point we'll want message reporting like "C-x C-g is
         // undefined".)
         close_status_prompt(state);
     }
@@ -947,7 +1012,7 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
         return note_coalescent_action(state, active_buf, std::move(res));
     }
     if (ch == 13) {
-        return enter_key(term, state);
+        return enter_key(term, state, exit_loop);
     }
     if (ch == 28) {
         // Ctrl+backslash
@@ -1079,6 +1144,12 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
         case 'B':
             move_left(active_buf);
             return note_navigation_action(state, active_buf);
+        case 'C': {
+            bool exit = false;
+            auto ret = exit_cleanly(state, active_buf, &exit);
+            if (exit) { *exit_loop = true; }
+            return ret;
+        } break;
         case 'D':
             return delete_keypress(state, active_buf);
         case 'E':
