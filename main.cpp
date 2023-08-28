@@ -483,8 +483,8 @@ void set_buffer_switch_prompt(state *state) {
     state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(std::move(data)), prompt::message_unused};
 }
 
-undo_killring_handled open_file_action(state *state, buffer *activeBuf) {
-    undo_killring_handled ret = note_navigation_action(state, activeBuf);
+undo_killring_handled open_file_action(state *state, buffer *active_buf) {
+    undo_killring_handled ret = note_navigation_action(state, active_buf);
     if (state->status_prompt.has_value()) {
         return ret;
     }
@@ -493,9 +493,9 @@ undo_killring_handled open_file_action(state *state, buffer *activeBuf) {
     return ret;
 }
 
-undo_killring_handled save_file_action(state *state, buffer *activeBuf) {
+undo_killring_handled save_file_action(state *state, buffer *active_buf) {
     // Specifically, I don't want to break the undo chain here.
-    undo_killring_handled ret = note_noundo_killring_action(state, activeBuf);
+    undo_killring_handled ret = note_noundo_killring_action(state, active_buf);
     if (state->status_prompt.has_value()) {
         // TODO: We'll have to handle M-x C-s or C-x C-s somehow -- probably by generic
         // logic at the keypress level.
@@ -523,8 +523,8 @@ std::vector<std::string> modified_buffers(state *state) {
     return ret;
 }
 
-undo_killring_handled exit_cleanly(state *state, buffer *activeBuf, bool *exit_loop) {
-    undo_killring_handled ret = note_backout_action(state, activeBuf);
+undo_killring_handled exit_cleanly(state *state, buffer *active_buf, bool *exit_loop) {
+    undo_killring_handled ret = note_backout_action(state, active_buf);
 
     if (state->status_prompt.has_value()) {
         close_status_prompt(state);
@@ -539,8 +539,8 @@ undo_killring_handled exit_cleanly(state *state, buffer *activeBuf, bool *exit_l
     return ret;
 }
 
-undo_killring_handled buffer_switch_action(state *state, buffer *activeBuf) {
-    undo_killring_handled ret = note_navigation_action(state, activeBuf);
+undo_killring_handled buffer_switch_action(state *state, buffer *active_buf) {
+    undo_killring_handled ret = note_navigation_action(state, active_buf);
     if (state->status_prompt.has_value()) {
         // TODO: We'll have to handle M-x C-s or C-x C-s somehow -- probably by generic
         // logic at the keypress level.
@@ -554,8 +554,8 @@ undo_killring_handled buffer_switch_action(state *state, buffer *activeBuf) {
     return ret;
 }
 
-undo_killring_handled buffer_close_action(state *state, buffer *activeBuf) {
-    undo_killring_handled ret = note_backout_action(state, activeBuf);
+undo_killring_handled buffer_close_action(state *state, buffer *active_buf) {
+    undo_killring_handled ret = note_backout_action(state, active_buf);
     if (state->status_prompt.has_value()) {
         // TODO: Ignore keypress?  Or should we treat this like C-g for the status prompt?
         return ret;
@@ -801,13 +801,13 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
 
 // I guess we're rotating our _pointer_ into the buf list to the right, by rotating the
 // bufs to the left.
-undo_killring_handled rotate_buf_right(state *state, buffer *activeBuf) {
-    undo_killring_handled ret = note_navigation_action(state, activeBuf);
+undo_killring_handled rotate_buf_right(state *state, buffer *active_buf) {
+    undo_killring_handled ret = note_navigation_action(state, active_buf);
     if (!state->is_normal()) {
         return ret;
     }
 
-    note_navigate_away_from_buf(activeBuf);
+    note_navigate_away_from_buf(active_buf);
 
     logic_checkg(!state->buflist.empty());
 
@@ -820,13 +820,13 @@ undo_killring_handled rotate_buf_right(state *state, buffer *activeBuf) {
 
 // I guess we're rotating our _pointer_ into the buf list to the left, by rotating the
 // bufs to the right.
-undo_killring_handled rotate_buf_left(state *state, buffer *activeBuf) {
-    undo_killring_handled ret = note_navigation_action(state, activeBuf);
+undo_killring_handled rotate_buf_left(state *state, buffer *active_buf) {
+    undo_killring_handled ret = note_navigation_action(state, active_buf);
     if (!state->is_normal()) {
         return ret;
     }
 
-    note_navigate_away_from_buf(activeBuf);
+    note_navigate_away_from_buf(active_buf);
 
     logic_checkg(!state->buflist.empty());
 
@@ -913,9 +913,9 @@ undo_killring_handled f1_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled f2_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled f3_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled f4_keypress(state *, buffer *) { return nop_keypress(); }
-undo_killring_handled f5_keypress(state *state, buffer *activeBuf) { return rotate_buf_right(state, activeBuf); }
-undo_killring_handled f6_keypress(state *state, buffer *activeBuf) { return rotate_buf_left(state, activeBuf); }
-undo_killring_handled f7_keypress(state *state, buffer *activeBuf) { return buffer_switch_action(state, activeBuf); }
+undo_killring_handled f5_keypress(state *state, buffer *active_buf) { return rotate_buf_right(state, active_buf); }
+undo_killring_handled f6_keypress(state *state, buffer *active_buf) { return rotate_buf_left(state, active_buf); }
+undo_killring_handled f7_keypress(state *state, buffer *active_buf) { return buffer_switch_action(state, active_buf); }
 undo_killring_handled f8_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled f9_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled f10_keypress(state *, buffer *) { return nop_keypress(); }
