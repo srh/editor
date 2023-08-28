@@ -909,9 +909,9 @@ undo_killring_handled insert_keypress(state *state, buffer *buf) {
     return unimplemented_keypress();
 }
 
-undo_killring_handled f1_keypress(state *, buffer *) { return unimplemented_keypress(); }
+undo_killring_handled f1_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled f2_keypress(state *, buffer *) { return nop_keypress(); }
-undo_killring_handled f3_keypress(state *, buffer *) { return unimplemented_keypress(); }
+undo_killring_handled f3_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled f4_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled f5_keypress(state *state, buffer *activeBuf) { return rotate_buf_right(state, activeBuf); }
 undo_killring_handled f6_keypress(state *state, buffer *activeBuf) { return rotate_buf_left(state, activeBuf); }
@@ -921,6 +921,8 @@ undo_killring_handled f9_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled f10_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled f11_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled f12_keypress(state *, buffer *) { return nop_keypress(); }
+
+undo_killring_handled shift_delete_keypress(state *, buffer *) { return unimplemented_keypress(); }
 
 inline undo_killring_handled character_keypress(state *state, buffer *active_buf, uint8_t uch) {
     insert_result res = insert_char(active_buf, uch);
@@ -1077,8 +1079,7 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
                     } else {
                         uint8_t numbers_second = *numbers.second;
                         if (numbers.first == 3 && numbers_second == 2) {
-                            // TODO: Handle Shift+Del key.
-                            return unimplemented_keypress();
+                            return shift_delete_keypress(state, active_buf);
                         }
                     }
                 }
