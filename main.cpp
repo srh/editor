@@ -333,6 +333,14 @@ void apply_number_to_buf(state *state, size_t buf_index) {
     the_buf.name_number = n;
 }
 
+buffer scratch_buffer(const window_size& buf_window) {
+    buffer ret;
+    ret.set_window(buf_window);
+    ret.name_str = "*scratch*";
+    ret.name_number = 0;
+    return ret;
+}
+
 state initial_state(const command_line_args& args, const terminal_size& window) {
     const size_t n_files = args.files.size();
 
@@ -340,10 +348,7 @@ state initial_state(const command_line_args& args, const terminal_size& window) 
 
     state state;
     if (n_files == 0) {
-        state.buflist.push_back(buffer{});
-        state.topbuf().set_window(buf_window);
-        state.topbuf().name_str = "*scratch*";
-        state.topbuf().name_number = 0;
+        state.buflist.push_back(scratch_buffer(buf_window));
     } else {
         state.buflist.reserve(n_files);
         state.buflist.clear();  // a no-op
@@ -401,6 +406,7 @@ void render_status_area(terminal_frame *frame, state& state) {
         case prompt::type::file_open: message = "file to open: "; break;
         case prompt::type::file_save: message = "file to save: "; break;
         case prompt::type::buffer_switch: message = "switch to buffer: "; break;
+        case prompt::type::buffer_close: message = "close without saving? (yes/no): "; break;
         }
 
         render_string(frame, {.row = last_row, .col = 0}, to_buffer_string(message), terminal_style::bold());
@@ -559,7 +565,20 @@ undo_killring_handled buffer_switch_action(state *state, buffer *activeBuf) {
         return ret;
     }
 
-    set_buffer_switch_prompt(state);
+    buffer_string data = buffer_name(state, buffer_number{state::topbuf_index_is_0});
+    state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(std::move(data))};
+    return ret;
+}
+
+undo_killring_handled buffer_close_action(state *state, buffer *activeBuf) {
+    undo_killring_handled ret = note_backout_action(state, activeBuf);
+    if (state->status_prompt.has_value()) {
+        // TODO: Ignore keypress?  Or should we treat this like C-g for the status prompt?
+        return ret;
+    }
+
+    // TODO: Only complain if the buffer has been modified.  (Add a modified flag.)
+    state->status_prompt = {prompt::type::buffer_close, buffer{}};
     return ret;
 }
 
@@ -643,6 +662,35 @@ undo_killring_handled enter_key(int term, state *state) {
         close_status_prompt(state);
         return ret;
     } break;
+    case prompt::type::buffer_close: {
+        // killring important, undo not because we're destructing the status_prompt buf.
+        undo_killring_handled ret = note_backout_action(state, &state->status_prompt->buf);
+        std::string text = state->status_prompt->buf.copy_to_string();
+        // TODO: Implement displaying errors to the user.
+        if (text == "yes") {
+            // Yes, close without saving.
+            logic_checkg(!state->buflist.empty());
+            static_assert(state::topbuf_index_is_0 == 0);
+            state->buflist.erase(state->buflist.begin());
+
+            // buflist must never be empty
+            if (state->buflist.empty()) {
+                // TODO: Gross!  So gross.
+                terminal_size window = get_terminal_size(term);
+                window_size buf_window = main_buf_window_from_terminal_window(window);
+                state->buflist.push_back(scratch_buffer(buf_window));
+            }
+            close_status_prompt(state);
+            return ret;
+        } else if (text == "no") {
+            // No, don't close without saving.
+            close_status_prompt(state);
+            return ret;
+        } else {
+            // TODO: Report error.
+            return ret;
+        }
+    } break;
     default:
         logic_fail("status prompt unreachable default case");
         break;
@@ -655,6 +703,10 @@ undo_killring_handled cancel_key(state *state, buffer *buf) {
     undo_killring_handled ret = note_backout_action(state, buf);
 
     if (state->status_prompt.has_value()) {
+        // At some point we should probably add a switch statement to handle all cases --
+        // but for now this is correct for file_save, file_open, buffer_switch, and
+        // buffer_close.  (At some point we'll want message reporting like "C-x C-g is
+        // undefined".)
         close_status_prompt(state);
     }
 
@@ -965,6 +1017,8 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
             case 'b':
                 move_backward_word(active_buf);
                 return note_navigation_action(state, active_buf);
+            case 'q':
+                return buffer_close_action(state, active_buf);
             case 'y':
                 return alt_yank_from_clipboard(state, active_buf);
             case 'd':

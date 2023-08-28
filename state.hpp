@@ -126,7 +126,7 @@ struct buffer {
 };
 
 struct prompt {
-    enum class type { file_open, file_save, buffer_switch };
+    enum class type { file_open, file_save, buffer_switch, buffer_close };
     type typ;
     buffer buf;
 };
@@ -159,6 +159,7 @@ struct state {
     // get pushed onto the end of bufs after some other buf takes its place.
     //
     // Is never empty (after initial_state() returns).
+    // NOTE: "Is never empty" may be a UI-specific constraint!  It seems reasonable for GUIs to support having no tabs open.
     std::vector<buffer> buflist;
     static constexpr size_t topbuf_index_is_0 = 0;
     buffer& topbuf() {
