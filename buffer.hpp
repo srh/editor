@@ -5,15 +5,9 @@
 
 namespace qwi {
 
-struct oneway_modification_delta {
-    // Always 0 or 1, never -1.
-    int8_t value = false;
-};
-
 struct [[nodiscard]] insert_result {
     // Cursor position _after_ insertion
     size_t new_cursor;
-    oneway_modification_delta modificationFlagDelta;
     // Returned only to make implementing opposite(const undo_info&) easier.
     buffer_string insertedText;
     Side side;
@@ -35,7 +29,6 @@ insert_result insert_chars_right(buffer *buf, const buffer_char *chs, size_t cou
 struct [[nodiscard]] delete_result {
     // Cursor position _after_ deletion.
     size_t new_cursor;
-    oneway_modification_delta modificationFlagDelta;
     buffer_string deletedText;
     Side side;
 };

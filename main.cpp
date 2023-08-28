@@ -55,14 +55,14 @@ undo_killring_handled handled_undo_killring(state *state, buffer *buf) {
     return undo_killring_handled{};
 }
 
-atomic_undo_item make_reverse_action(insert_result&& i_res) {
-    int8_t rmd = - i_res.modificationFlagDelta.value;
+atomic_undo_item make_reverse_action(const undo_history *history, insert_result&& i_res) {
     atomic_undo_item item = {
         .beg = i_res.new_cursor,
         .text_inserted = buffer_string{},
         .text_deleted = std::move(i_res.insertedText),
-        .mod_delta = modification_delta{ rmd },
         .side = i_res.side,  // We inserted on left (right), hence we delete on left (right)
+        .before_node = history->unused_node_number(),
+        .after_node = history->current_node,
     };
 
     return item;
@@ -74,7 +74,7 @@ void note_undo(buffer *buf, insert_result&& i_res) {
 
     // TODO: Of course, in some cases we have reverseAddEdit -- but that's only when
     // actually undoing, so there are none yet.
-    add_edit(&buf->undo_info, make_reverse_action(std::move(i_res)));
+    add_edit(&buf->undo_info, make_reverse_action(&buf->undo_info, std::move(i_res)));
 }
 
 void note_nop_undo(buffer *buf) {
@@ -91,25 +91,26 @@ undo_killring_handled note_action(state *state, buffer *buf, insert_result&& i_r
 undo_killring_handled note_coalescent_action(state *state, buffer *buf, insert_result&& i_res) {
     no_yank(&state->clipboard);
 
-    add_coalescent_edit(&buf->undo_info, make_reverse_action(std::move(i_res)), undo_history::char_coalescence::insert_char);
+    add_coalescent_edit(&buf->undo_info, make_reverse_action(&buf->undo_info, std::move(i_res)),
+                        undo_history::char_coalescence::insert_char);
     return undo_killring_handled{};
 }
 
-atomic_undo_item make_reverse_action(delete_result&& d_res) {
-    int8_t rmd = - d_res.modificationFlagDelta.value;
+atomic_undo_item make_reverse_action(const undo_history *history, delete_result&& d_res) {
     atomic_undo_item item = {
         .beg = d_res.new_cursor,
         .text_inserted = std::move(d_res.deletedText),
         .text_deleted = buffer_string{},
-        .mod_delta = modification_delta{ rmd },
         .side = d_res.side,  // We deleted on left (right), hence we insert on left (right)
+        .before_node = history->unused_node_number(),
+        .after_node = history->current_node,
     };
 
     return item;
 }
 
 void note_undo(buffer *buf, delete_result&& d_res) {
-    add_edit(&buf->undo_info, make_reverse_action(std::move(d_res)));
+    add_edit(&buf->undo_info, make_reverse_action(&buf->undo_info, std::move(d_res)));
 }
 
 undo_killring_handled note_action(state *state, buffer *buf, delete_result&& d_res) {
@@ -124,7 +125,7 @@ undo_killring_handled note_coalescent_action(state *state, buffer *buf, delete_r
 
     Side side = d_res.side;
     using char_coalescence = undo_history::char_coalescence;
-    add_coalescent_edit(&buf->undo_info, make_reverse_action(std::move(d_res)),
+    add_coalescent_edit(&buf->undo_info, make_reverse_action(&buf->undo_info, std::move(d_res)),
                         side == Side::left ? char_coalescence::delete_left : char_coalescence::delete_right);
     return undo_killring_handled{};
 }
@@ -425,7 +426,7 @@ void render_status_area(terminal_frame *frame, state& state) {
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
     } else {
         buffer_string str = buffer_name(&state, buffer_number{state::topbuf_index_is_0});
-        str += to_buffer_string(state.topbuf().modified_flag ? " **" : "   ");
+        str += to_buffer_string(state.topbuf().modified_flag() ? " **" : "   ");
         render_string(frame, {.row = last_row, .col = 0}, str, terminal_style::bold());
     }
 }
@@ -507,16 +508,18 @@ void check_read_tty_char(int term_fd, char *out) {
     runtime_check(success, "zero-length read from tty configured with VMIN=1");
 }
 
-void save_buf_to_married_file(const buffer& buf) {
+void save_buf_to_married_file_and_mark_unmodified(buffer *buf) {
     // TODO: Display that save succeeded, somehow.
-    logic_check(buf.married_file.has_value(), "save_buf_to_married_file with unmarried buf");
-    std::ofstream fstream(*buf.married_file, std::ios::binary | std::ios::trunc);
-    // TODO: Write a temporary file and rename it.
-    fstream.write(as_chars(buf.bef.data()), buf.bef.size());
-    fstream.write(as_chars(buf.aft.data()), buf.aft.size());
+    logic_check(buf->married_file.has_value(), "save_buf_to_married_file with unmarried buf");
+    std::ofstream fstream(*buf->married_file, std::ios::binary | std::ios::trunc);
+    // TODO: Write a temporary file and rename it.  Use pwrite.  Etc.
+    fstream.write(as_chars(buf->bef.data()), buf->bef.size());
+    fstream.write(as_chars(buf->aft.data()), buf->aft.size());
     fstream.close();
     // TODO: Better error handling
-    runtime_check(!fstream.fail(), "error writing to file %s", buf.married_file->c_str());
+    runtime_check(!fstream.fail(), "error writing to file %s", buf->married_file->c_str());
+
+    buf->non_modified_undo_node = buf->undo_info.current_node;
 }
 
 void set_save_prompt(state *state) {
@@ -553,7 +556,7 @@ undo_killring_handled save_file_action(state *state, buffer *activeBuf) {
     }
 
     if (state->topbuf().married_file.has_value()) {
-        save_buf_to_married_file(state->topbuf());
+        save_buf_to_married_file_and_mark_unmodified(&state->topbuf());
     } else {
         set_save_prompt(state);
     }
@@ -612,7 +615,7 @@ undo_killring_handled enter_key(int term, state *state) {
         std::string text = state->status_prompt->buf.copy_to_string();
         if (text != "") {
             state->topbuf().married_file = text;
-            save_buf_to_married_file(state->topbuf());
+            save_buf_to_married_file_and_mark_unmodified(&state->topbuf());
             state->topbuf().name_str = buf_name_from_file_path(fs::path(text));
             state->topbuf().name_number = 0;
             apply_number_to_buf(state, state::topbuf_index_is_0);
@@ -876,13 +879,13 @@ undo_killring_handled alt_yank_from_clipboard(state *state, buffer *buf) {
         insert_result insres = insert_chars(buf, (*text)->data(), (*text)->size());
 
         // Add the reverse action to undo history.
-        int8_t rmd = -(delres.modificationFlagDelta.value + insres.modificationFlagDelta.value);
         atomic_undo_item item = {
             .beg = insres.new_cursor,
             .text_inserted = std::move(delres.deletedText),
             .text_deleted = std::move(insres.insertedText),
-            .mod_delta = modification_delta{ rmd },
             .side = Side::left,
+            .before_node = buf->undo_info.unused_node_number(),
+            .after_node = buf->undo_info.current_node,
         };
         add_edit(&buf->undo_info, std::move(item));
         return handled_undo_killring(state, buf);

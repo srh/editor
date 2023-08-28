@@ -5,13 +5,6 @@
 
 namespace qwi {
 
-modification_delta add(modification_delta x, modification_delta y) {
-    int8_t result = x.value + y.value;
-    logic_check(result >= -1 && result <= -1, "modification_delta operator+(%d, %d)", int(x.value), int(y.value));
-    return modification_delta{result};
-}
-
-
 void move_future_to_mountain(undo_history *history) {
     if (!history->future.empty()) {
         history->past.push_back({
@@ -41,6 +34,8 @@ void add_edit(undo_history *history, atomic_undo_item&& item) {
             .type = undo_item::Type::atomic,
             .atomic = std::move(item),
         });
+    history->current_node = item.before_node;
+    history->next_node_number.value += 1;
 }
 
 void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_history::char_coalescence coalescence) {
@@ -49,6 +44,8 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
         undo_item& back_item = history->past.back();
         if (back_item.type != undo_item::Type::mountain) {
             atomic_undo_item& back = back_item.atomic;
+            // Kind of unnecessary (we'd catch it when we try to undo).
+            logic_check(back.before_node == history->current_node, "add_coalescent_edit observing mismatching before_node");
 
             /* This code is annoying because undo history contains the _reverse_ actions
                but char_coalescence refers to the user actions that are getting coalesced. */
@@ -60,7 +57,6 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
                 logic_check(back.text_inserted.empty() && item.text_inserted.empty(), "incompatible insert_char coalescence");
                 logic_check(back.beg == size_sub(item.beg, item.text_deleted.size()), "incompatible insert_char coalescence");
                 back.text_deleted += item.text_deleted;
-                back.mod_delta = add(back.mod_delta, item.mod_delta);
                 back.beg = item.beg;
                 {
                     return;
@@ -70,7 +66,6 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
                 logic_check(back.text_deleted.empty() && item.text_deleted.empty(), "incompatible delete_left coalescence");
                 logic_check(size_add(item.beg, item.text_inserted.size()) == back.beg, "incompatible delete_left coalescence");
                 back.text_inserted = std::move(item.text_inserted) + back.text_inserted;
-                back.mod_delta = add(back.mod_delta, item.mod_delta);
                 back.beg = item.beg;
                 {
                     return;
@@ -80,7 +75,6 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
                 logic_check(back.text_deleted.empty() && item.text_deleted.empty(), "incompatible delete_right coalescence");
                 logic_check(back.beg == item.beg, "incompatible delete_right coalescence");
                 back.text_inserted += item.text_inserted;
-                back.mod_delta = add(back.mod_delta, item.mod_delta);
                 {
                     return;
                 }
@@ -92,6 +86,8 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
             .type = undo_item::Type::atomic,
             .atomic = std::move(item),
         });
+    history->current_node = item.before_node;
+    history->next_node_number.value += 1;
 }
 
 
@@ -102,12 +98,14 @@ atomic_undo_item opposite(const atomic_undo_item &item) {
         ret.beg = size_sub(size_add(ret.beg, item.text_inserted.size()), item.text_deleted.size());
     }
     std::swap(ret.text_inserted, ret.text_deleted);
-    ret.mod_delta.value = -ret.mod_delta.value;
+    std::swap(ret.before_node, ret.after_node);
     return ret;
 }
 
 void atomic_undo(buffer *buf, atomic_undo_item&& item) {
-    const bool og_modified_flag = buf->modified_flag;
+    logic_check(item.before_node == buf->undo_info.current_node, "atomic_undo node number mismatch, item.before_node=%" PRIu64 " vs %" PRIu64,
+                item.before_node.value, buf->undo_info.current_node.value);
+
     buf->set_cursor(item.beg);
 
     if (!item.text_deleted.empty()) {
@@ -135,18 +133,7 @@ void atomic_undo(buffer *buf, atomic_undo_item&& item) {
         }
     }
 
-    // TODO: It's kind of gross that we call insert/delete functions that touch the modified flag, then overwrite that action here.
-    if (item.mod_delta.value == 0) {
-        buf->modified_flag = og_modified_flag;
-    } else if (item.mod_delta.value == 1) {
-        logic_check(!og_modified_flag, "atomic_undo: mod_delta 1, buf modification flag is turned on");
-        buf->modified_flag = true;
-    } else if (item.mod_delta.value == -1) {
-        logic_check(og_modified_flag, "atomic_undo: mod_delta -1, buf modification flag is turned off");
-        buf->modified_flag = false;
-    } else {
-        logic_fail("atomic_undo: mod_delta invalid: %d", int(item.mod_delta.value));
-    }
+    buf->undo_info.current_node = item.after_node;
 
     // TODO: opposite with std::move.
     buf->undo_info.future.push_back(opposite(item));
@@ -154,6 +141,7 @@ void atomic_undo(buffer *buf, atomic_undo_item&& item) {
 
 void perform_undo(buffer *buf) {
     if (buf->undo_info.past.empty()) {
+        // TODO: Return an error code in this case?  (So the app can ring the (visible) bell?)
         return;
     }
     undo_item item = std::move(buf->undo_info.past.back());

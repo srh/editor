@@ -1,6 +1,8 @@
 #ifndef QWERTILLION_STATE_HPP_
 #define QWERTILLION_STATE_HPP_
 
+#include <inttypes.h>
+
 #include <optional>
 #include <string>
 #include <vector>
@@ -32,8 +34,6 @@ struct buffer {
     // We just have strings for text before/after the cursor.  Very bad perf.
     buffer_string bef;
     buffer_string aft;
-    // TODO: Our model for modified_flag is fundamentally broken, because when a file gets saved, we'd have to traverse our undo history to fix the modification flag deltas -- and arguably, there are multiple points where we'd have to set the flag back on!
-    bool modified_flag = false;
 
     // Absolute position of the mark, if there is one.
     std::optional<size_t> mark;
@@ -52,6 +52,10 @@ struct buffer {
        global ordered bag of past actions (including undo actions) but instead it's per
        buffer. */
     undo_history undo_info;
+
+    undo_node_number non_modified_undo_node;
+
+    bool modified_flag() const { return non_modified_undo_node != undo_info.current_node; }
 
     /* UI-specific stuff -- this could get factored out of buffer at some point */
 
@@ -75,6 +79,8 @@ struct buffer {
     buffer_string copy_substr(size_t beg, size_t end) const;
 
     static buffer from_data(buffer_string&& data);
+
+    buffer() : undo_info(), non_modified_undo_node(undo_info.current_node) { }
 };
 
 struct prompt {

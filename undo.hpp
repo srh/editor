@@ -7,12 +7,10 @@
 
 namespace qwi {
 
-struct modification_delta {
-    // Always -1, 0, or 1.
-    int8_t value = 0;
+struct undo_node_number {
+    uint64_t value = 0;
+    bool operator==(const undo_node_number&) const = default;
 };
-
-modification_delta add(modification_delta x, modification_delta y);
 
 struct atomic_undo_item {
     // The cursor _before_ we apply this undo action.  This departs from jsmacs, where
@@ -20,8 +18,10 @@ struct atomic_undo_item {
     size_t beg = 0;
     buffer_string text_inserted{};
     buffer_string text_deleted{};
-    modification_delta mod_delta;
     Side side = Side::left;
+
+    undo_node_number before_node;
+    undo_node_number after_node;
 };
 
 struct undo_item {
@@ -42,6 +42,11 @@ struct undo_history {
     // TODO: There are no limits on undo history size.
     std::vector<undo_item> past;
     std::vector<atomic_undo_item> future;
+
+    undo_node_number current_node{1};
+
+    undo_node_number next_node_number{2};
+    undo_node_number unused_node_number() const { return next_node_number; }
 
     // If the last typed action is a sequence of characters, delete keypresses, or
     // backspace keypresses, we combine those events into a single undo operation.

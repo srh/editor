@@ -15,17 +15,9 @@
 
 namespace qwi {
 
-inline oneway_modification_delta updateModifiedFlag(buffer *buf, bool didModification) {
-    bool old = buf->modified_flag;
-    buf->modified_flag |= didModification;
-    int8_t val = int8_t(buf->modified_flag) - int8_t(old);
-    return oneway_modification_delta{val};
-}
-
 insert_result insert_chars(buffer *buf, const buffer_char *chs, size_t count) {
     const size_t og_cursor = buf->cursor();
     buf->bef.append(chs, count);
-    oneway_modification_delta modDelta = updateModifiedFlag(buf, count > 0);
     if (buf->mark.has_value()) {
         *buf->mark += (*buf->mark > og_cursor ? count : 0);
     }
@@ -35,7 +27,6 @@ insert_result insert_chars(buffer *buf, const buffer_char *chs, size_t count) {
     recenter_cursor_if_offscreen(buf);
     return {
         .new_cursor = buf->cursor(),
-        .modificationFlagDelta = modDelta,
         .insertedText = buffer_string(chs, count),
         .side = Side::left };
 }
@@ -43,7 +34,6 @@ insert_result insert_chars(buffer *buf, const buffer_char *chs, size_t count) {
 insert_result insert_chars_right(buffer *buf, const buffer_char *chs, size_t count) {
     const size_t og_cursor = buf->cursor();
     buf->aft.insert(0, chs, count);
-    oneway_modification_delta modDelta = updateModifiedFlag(buf, count > 0);
     if (buf->mark.has_value()) {
         // TODO: Is ">= og_cursor" (unlike insert_chars) what we want here?  (Seems like it.)
         *buf->mark += (*buf->mark >= og_cursor ? count : 0);
@@ -54,7 +44,6 @@ insert_result insert_chars_right(buffer *buf, const buffer_char *chs, size_t cou
     recenter_cursor_if_offscreen(buf);
     return {
         .new_cursor = buf->cursor(),
-        .modificationFlagDelta = modDelta,
         .insertedText = buffer_string(chs, count),
         .side = Side::right };
 }
@@ -72,11 +61,8 @@ delete_result delete_left(buffer *buf, size_t count) {
     size_t og_cursor = buf->bef.size();
     size_t new_cursor = og_cursor - count;
 
-    oneway_modification_delta modDelta = updateModifiedFlag(buf, count > 0);
-
     delete_result ret;
     ret.new_cursor = new_cursor;
-    ret.modificationFlagDelta = modDelta;
     ret.deletedText.assign(buf->bef, new_cursor, count);
     ret.side = Side::left;
 
@@ -95,11 +81,8 @@ delete_result delete_right(buffer *buf, size_t count) {
     size_t cursor = buf->cursor();
     count = std::min<size_t>(count, buf->aft.size());
 
-    oneway_modification_delta modDelta = updateModifiedFlag(buf, count > 0);
-
     delete_result ret;
     ret.new_cursor = cursor;
-    ret.modificationFlagDelta = modDelta;
     ret.deletedText.assign(buf->aft, 0, count);
     ret.side = Side::right;
 
