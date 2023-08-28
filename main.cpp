@@ -35,15 +35,6 @@ namespace qwi {
 // Generated and returned to indicate that the code exhaustively handles undo and killring behavior.
 struct [[nodiscard]] undo_killring_handled { };
 
-// TODO: All keypresses should be implemented.
-undo_killring_handled unimplemented_keypress() {
-    return undo_killring_handled{};
-}
-
-undo_killring_handled nop_keypress() {
-    return undo_killring_handled{};
-}
-
 // Callers will need to handle undo.
 #if 0
 undo_killring_handled undo_will_need_handling() {
@@ -587,12 +578,111 @@ bool find_buffer_by_name(const state *state, const std::string& text, buffer_num
 
 void rotate_to_buffer(state *state, buffer_number buf_number);
 
-// *exit_loop can be assigned true; there is no need to assign it false.
-undo_killring_handled enter_keypress(int term, state *state, bool *exit_loop) {
-    if (!state->status_prompt.has_value()) {
-        insert_result res = insert_char(&state->topbuf(), '\n');
-        return note_coalescent_action(state, &state->topbuf(), std::move(res));
+undo_killring_handled cancel_key(state *state, buffer *buf) {
+    // We break the yank and undo sequence in `buf` -- of course, when creating the status
+    // prompt, we already broke the yank and undo sequence in the _original_ buf.
+    undo_killring_handled ret = note_backout_action(state, buf);
+
+    if (state->status_prompt.has_value()) {
+        // At some point we should probably add a switch statement to handle all cases --
+        // but for now this is correct for file_save, file_open, buffer_switch,
+        // buffer_close, and exit_without_save.  (At some point we'll want message reporting like "C-x C-g is
+        // undefined".)
+        close_status_prompt(state);
     }
+
+    return ret;
+}
+
+undo_killring_handled delete_backward_word(state *state, buffer *buf) {
+    size_t d = backward_word_distance(buf);
+    delete_result delres = delete_left(buf, d);
+    record_yank(&state->clipboard, delres.deletedText, yank_side::left);
+    note_undo(buf, std::move(delres));
+    return handled_undo_killring(state, buf);
+}
+
+undo_killring_handled delete_forward_word(state *state, buffer *buf) {
+    size_t d = forward_word_distance(buf);
+    delete_result delres = delete_right(buf, d);
+    record_yank(&state->clipboard, delres.deletedText, yank_side::right);
+    note_undo(buf, std::move(delres));
+    return handled_undo_killring(state, buf);
+}
+
+undo_killring_handled kill_line(state *state, buffer *buf) {
+    size_t eolDistance = distance_to_eol(*buf, buf->cursor());
+
+    delete_result delres;
+    if (eolDistance == 0 && buf->cursor() < buf->size()) {
+        delres = delete_right(buf, 1);
+    } else {
+        delres = delete_right(buf, eolDistance);
+    }
+    record_yank(&state->clipboard, delres.deletedText, yank_side::right);
+    note_undo(buf, std::move(delres));
+    return handled_undo_killring(state, buf);
+}
+
+undo_killring_handled kill_region(state *state, buffer *buf) {
+    if (!buf->mark.has_value()) {
+        // TODO: Display error
+        // (We do NOT want no_yank here.)  We do want to disrupt the undo action chain (if only because Emacs does that).
+        note_nop_undo(buf);
+        return handled_undo_killring(state, buf);
+    }
+    size_t mark = *buf->mark;
+    size_t cursor = buf->cursor();
+    if (mark > cursor) {
+        delete_result delres = delete_right(buf, mark - cursor);
+        record_yank(&state->clipboard, delres.deletedText, yank_side::right);
+        note_undo(buf, std::move(delres));
+        return handled_undo_killring(state, buf);
+    } else if (mark < cursor) {
+        delete_result delres = delete_left(buf, cursor - mark);
+        record_yank(&state->clipboard, delres.deletedText, yank_side::left);
+        note_undo(buf, std::move(delres));
+        return handled_undo_killring(state, buf);
+    } else {
+        // We actually do want to yank, and combine yanks with successive yanks.  Right or
+        // left yank side doesn't matter except for string concatenation efficiency.  Note
+        // that we can't "do nothing" -- if state->clipboard.justRecorded is false, we
+        // need to create an empty string clipboard entry.  That's what this record_yank
+        // call does.
+        record_yank(&state->clipboard, buffer_string{}, yank_side::right);
+        note_nop_undo(buf);
+        return handled_undo_killring(state, buf);
+    }
+}
+
+undo_killring_handled copy_region(state *state, buffer *buf) {
+    if (!buf->mark.has_value()) {
+        // TODO: Display error
+        // (We do NOT want no_yank here.)  We do want to disrupt the undo action chain (if only because Emacs does that).
+        note_nop_undo(buf);
+        return handled_undo_killring(state, buf);
+    }
+    size_t mark = *buf->mark;
+    size_t cursor = buf->cursor();
+    size_t region_beg = std::min(mark, cursor);
+    size_t region_end = std::max(mark, cursor);
+
+    note_nop_undo(buf);
+    record_yank(&state->clipboard, buf->copy_substr(region_beg, region_end), yank_side::none);
+    return handled_undo_killring(state, buf);
+}
+
+// TODO: This rotation is stupid and makes no sense for multi-window, tabs, etc. -- use a
+// buffer_number to point at the buf instead.
+void rotate_to_buffer(state *state, buffer_number buf_number) {
+    logic_check(buf_number.value < state->buflist.size(), "rotate_to_buffer with out-of-range buffer number %zu", buf_number.value);
+
+    note_navigate_away_from_buf(buffer_ptr(state, buffer_number{state::topbuf_index_is_0}));
+
+    std::rotate(state->buflist.begin(), state->buflist.begin() + buf_number.value, state->buflist.end());
+}
+
+undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *exit_loop) {
     switch (state->status_prompt->typ) {
     case prompt::type::file_save: {
         // killring important, undo not because we're destructing the status_prompt buf.
@@ -709,121 +799,6 @@ undo_killring_handled enter_keypress(int term, state *state, bool *exit_loop) {
     }
 }
 
-undo_killring_handled cancel_key(state *state, buffer *buf) {
-    // We break the yank and undo sequence in `buf` -- of course, when creating the status
-    // prompt, we already broke the yank and undo sequence in the _original_ buf.
-    undo_killring_handled ret = note_backout_action(state, buf);
-
-    if (state->status_prompt.has_value()) {
-        // At some point we should probably add a switch statement to handle all cases --
-        // but for now this is correct for file_save, file_open, buffer_switch,
-        // buffer_close, and exit_without_save.  (At some point we'll want message reporting like "C-x C-g is
-        // undefined".)
-        close_status_prompt(state);
-    }
-
-    return ret;
-}
-
-undo_killring_handled delete_backward_word(state *state, buffer *buf) {
-    size_t d = backward_word_distance(buf);
-    delete_result delres = delete_left(buf, d);
-    record_yank(&state->clipboard, delres.deletedText, yank_side::left);
-    note_undo(buf, std::move(delres));
-    return handled_undo_killring(state, buf);
-}
-
-undo_killring_handled delete_forward_word(state *state, buffer *buf) {
-    size_t d = forward_word_distance(buf);
-    delete_result delres = delete_right(buf, d);
-    record_yank(&state->clipboard, delres.deletedText, yank_side::right);
-    note_undo(buf, std::move(delres));
-    return handled_undo_killring(state, buf);
-}
-
-undo_killring_handled kill_line(state *state, buffer *buf) {
-    size_t eolDistance = distance_to_eol(*buf, buf->cursor());
-
-    delete_result delres;
-    if (eolDistance == 0 && buf->cursor() < buf->size()) {
-        delres = delete_right(buf, 1);
-    } else {
-        delres = delete_right(buf, eolDistance);
-    }
-    record_yank(&state->clipboard, delres.deletedText, yank_side::right);
-    note_undo(buf, std::move(delres));
-    return handled_undo_killring(state, buf);
-}
-
-undo_killring_handled kill_region(state *state, buffer *buf) {
-    if (!buf->mark.has_value()) {
-        // TODO: Display error
-        // (We do NOT want no_yank here.)  We do want to disrupt the undo action chain (if only because Emacs does that).
-        note_nop_undo(buf);
-        return handled_undo_killring(state, buf);
-    }
-    size_t mark = *buf->mark;
-    size_t cursor = buf->cursor();
-    if (mark > cursor) {
-        delete_result delres = delete_right(buf, mark - cursor);
-        record_yank(&state->clipboard, delres.deletedText, yank_side::right);
-        note_undo(buf, std::move(delres));
-        return handled_undo_killring(state, buf);
-    } else if (mark < cursor) {
-        delete_result delres = delete_left(buf, cursor - mark);
-        record_yank(&state->clipboard, delres.deletedText, yank_side::left);
-        note_undo(buf, std::move(delres));
-        return handled_undo_killring(state, buf);
-    } else {
-        // We actually do want to yank, and combine yanks with successive yanks.  Right or
-        // left yank side doesn't matter except for string concatenation efficiency.  Note
-        // that we can't "do nothing" -- if state->clipboard.justRecorded is false, we
-        // need to create an empty string clipboard entry.  That's what this record_yank
-        // call does.
-        record_yank(&state->clipboard, buffer_string{}, yank_side::right);
-        note_nop_undo(buf);
-        return handled_undo_killring(state, buf);
-    }
-}
-
-undo_killring_handled copy_region(state *state, buffer *buf) {
-    if (!buf->mark.has_value()) {
-        // TODO: Display error
-        // (We do NOT want no_yank here.)  We do want to disrupt the undo action chain (if only because Emacs does that).
-        note_nop_undo(buf);
-        return handled_undo_killring(state, buf);
-    }
-    size_t mark = *buf->mark;
-    size_t cursor = buf->cursor();
-    size_t region_beg = std::min(mark, cursor);
-    size_t region_end = std::max(mark, cursor);
-
-    note_nop_undo(buf);
-    record_yank(&state->clipboard, buf->copy_substr(region_beg, region_end), yank_side::none);
-    return handled_undo_killring(state, buf);
-}
-
-undo_killring_handled delete_keypress(state *state, buffer *buf) {
-    delete_result res = delete_char(buf);
-    // TODO: Here, and perhaps in general, handle cases where no characters were actually deleted.
-    return note_coalescent_action(state, buf, std::move(res));
-}
-
-undo_killring_handled insert_keypress(state *state, buffer *buf) {
-    (void)state, (void)buf;
-    return unimplemented_keypress();
-}
-
-// TODO: This rotation is stupid and makes no sense for multi-window, tabs, etc. -- use a
-// buffer_number to point at the buf instead.
-void rotate_to_buffer(state *state, buffer_number buf_number) {
-    logic_check(buf_number.value < state->buflist.size(), "rotate_to_buffer with out-of-range buffer number %zu", buf_number.value);
-
-    note_navigate_away_from_buf(buffer_ptr(state, buffer_number{state::topbuf_index_is_0}));
-
-    std::rotate(state->buflist.begin(), state->buflist.begin() + buf_number.value, state->buflist.end());
-}
-
 // I guess we're rotating our _pointer_ into the buf list to the right, by rotating the
 // bufs to the left.
 undo_killring_handled rotate_buf_right(state *state, buffer *activeBuf) {
@@ -861,19 +836,6 @@ undo_killring_handled rotate_buf_left(state *state, buffer *activeBuf) {
 
     return ret;
 }
-
-undo_killring_handled f1_keypress(state *, buffer *) { return unimplemented_keypress(); }
-undo_killring_handled f2_keypress(state *, buffer *) { return nop_keypress(); }
-undo_killring_handled f3_keypress(state *, buffer *) { return unimplemented_keypress(); }
-undo_killring_handled f4_keypress(state *, buffer *) { return nop_keypress(); }
-undo_killring_handled f5_keypress(state *state, buffer *activeBuf) { return rotate_buf_right(state, activeBuf); }
-undo_killring_handled f6_keypress(state *state, buffer *activeBuf) { return rotate_buf_left(state, activeBuf); }
-undo_killring_handled f7_keypress(state *state, buffer *activeBuf) { return buffer_switch_action(state, activeBuf); }
-undo_killring_handled f8_keypress(state *, buffer *) { return nop_keypress(); }
-undo_killring_handled f9_keypress(state *, buffer *) { return nop_keypress(); }
-undo_killring_handled f10_keypress(state *, buffer *) { return nop_keypress(); }
-undo_killring_handled f11_keypress(state *, buffer *) { return nop_keypress(); }
-undo_killring_handled f12_keypress(state *, buffer *) { return nop_keypress(); }
 
 undo_killring_handled yank_from_clipboard(state *state, buffer *buf) {
     std::optional<const buffer_string *> text = do_yank(&state->clipboard);
@@ -917,44 +879,48 @@ undo_killring_handled alt_yank_from_clipboard(state *state, buffer *buf) {
     }
 }
 
-// Reads remainder of "\e[\d+(;\d+)?~" character escapes after the first digit was read.
-bool read_tty_numeric_escape(int term, std::string *chars_read, char firstDigit, std::pair<uint8_t, std::optional<uint8_t>> *out) {
-    logic_checkg(isdigit(firstDigit));
-    uint32_t number = firstDigit - '0';
-    std::optional<uint8_t> first_number;
-
-    for (;;) {
-        char ch;
-        check_read_tty_char(term, &ch);
-        chars_read->push_back(ch);
-        if (isdigit(ch)) {
-            uint32_t new_number = number * 10 + (ch - '0');
-            if (new_number > UINT8_MAX) {
-                // TODO: We'd probably want to report this to the user somehow, or still
-                // consume the entire escape code (for now we just render its characters.
-                return false;
-            }
-            number = new_number;
-        } else if (ch == '~') {
-            if (first_number.has_value()) {
-                out->first = *first_number;
-                out->second = number;
-            } else {
-                out->first = number;
-                out->second = std::nullopt;
-            }
-            return true;
-        } else if (ch == ';') {
-            if (first_number.has_value()) {
-                // TODO: We want to consume the whole keyboard escape code and ignore it together.
-                return false;
-            }
-            // TODO: Should we enforce a digit after the first semicolon, or allow "\e[\d+;~" as the code does now?
-            first_number = number;
-            number = 0;
-        }
-    }
+// TODO: All keypresses should be implemented.
+undo_killring_handled unimplemented_keypress() {
+    return undo_killring_handled{};
 }
+
+undo_killring_handled nop_keypress() {
+    return undo_killring_handled{};
+}
+
+// *exit_loop can be assigned true; there is no need to assign it false.
+undo_killring_handled enter_keypress(int term, state *state, bool *exit_loop) {
+    if (!state->status_prompt.has_value()) {
+        insert_result res = insert_char(&state->topbuf(), '\n');
+        return note_coalescent_action(state, &state->topbuf(), std::move(res));
+    }
+
+    return enter_handle_status_prompt(term, state, exit_loop);
+}
+
+undo_killring_handled delete_keypress(state *state, buffer *buf) {
+    delete_result res = delete_char(buf);
+    // TODO: Here, and perhaps in general, handle cases where no characters were actually deleted.
+    return note_coalescent_action(state, buf, std::move(res));
+}
+
+undo_killring_handled insert_keypress(state *state, buffer *buf) {
+    (void)state, (void)buf;
+    return unimplemented_keypress();
+}
+
+undo_killring_handled f1_keypress(state *, buffer *) { return unimplemented_keypress(); }
+undo_killring_handled f2_keypress(state *, buffer *) { return nop_keypress(); }
+undo_killring_handled f3_keypress(state *, buffer *) { return unimplemented_keypress(); }
+undo_killring_handled f4_keypress(state *, buffer *) { return nop_keypress(); }
+undo_killring_handled f5_keypress(state *state, buffer *activeBuf) { return rotate_buf_right(state, activeBuf); }
+undo_killring_handled f6_keypress(state *state, buffer *activeBuf) { return rotate_buf_left(state, activeBuf); }
+undo_killring_handled f7_keypress(state *state, buffer *activeBuf) { return buffer_switch_action(state, activeBuf); }
+undo_killring_handled f8_keypress(state *, buffer *) { return nop_keypress(); }
+undo_killring_handled f9_keypress(state *, buffer *) { return nop_keypress(); }
+undo_killring_handled f10_keypress(state *, buffer *) { return nop_keypress(); }
+undo_killring_handled f11_keypress(state *, buffer *) { return nop_keypress(); }
+undo_killring_handled f12_keypress(state *, buffer *) { return nop_keypress(); }
 
 inline undo_killring_handled character_keypress(state *state, buffer *active_buf, uint8_t uch) {
     insert_result res = insert_char(active_buf, uch);
@@ -1015,6 +981,45 @@ inline undo_killring_handled end_keypress(state *state, buffer *active_buf) {
 
 inline undo_killring_handled ctrl_backspace_keypress(state *state, buffer *active_buf) {
     return delete_backward_word(state, active_buf);
+}
+
+// Reads remainder of "\e[\d+(;\d+)?~" character escapes after the first digit was read.
+bool read_tty_numeric_escape(int term, std::string *chars_read, char firstDigit, std::pair<uint8_t, std::optional<uint8_t>> *out) {
+    logic_checkg(isdigit(firstDigit));
+    uint32_t number = firstDigit - '0';
+    std::optional<uint8_t> first_number;
+
+    for (;;) {
+        char ch;
+        check_read_tty_char(term, &ch);
+        chars_read->push_back(ch);
+        if (isdigit(ch)) {
+            uint32_t new_number = number * 10 + (ch - '0');
+            if (new_number > UINT8_MAX) {
+                // TODO: We'd probably want to report this to the user somehow, or still
+                // consume the entire escape code (for now we just render its characters.
+                return false;
+            }
+            number = new_number;
+        } else if (ch == '~') {
+            if (first_number.has_value()) {
+                out->first = *first_number;
+                out->second = number;
+            } else {
+                out->first = number;
+                out->second = std::nullopt;
+            }
+            return true;
+        } else if (ch == ';') {
+            if (first_number.has_value()) {
+                // TODO: We want to consume the whole keyboard escape code and ignore it together.
+                return false;
+            }
+            // TODO: Should we enforce a digit after the first semicolon, or allow "\e[\d+;~" as the code does now?
+            first_number = number;
+            number = 0;
+        }
+    }
 }
 
 undo_killring_handled read_and_process_tty_input(int term, state *state, bool *exit_loop) {
