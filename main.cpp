@@ -40,11 +40,11 @@ struct [[nodiscard]] undo_killring_handled { };
 undo_killring_handled undo_will_need_handling() {
     return undo_killring_handled{};
 }
-#endif
 undo_killring_handled killring_will_need_handling() {
     return undo_killring_handled{};
 }
-
+#endif  // 0
+// TODO: We still need to check every usage of this to see if error messages are reset.
 undo_killring_handled handled_undo_killring(state *state, buffer *buf) {
     (void)state, (void)buf;
     return undo_killring_handled{};
@@ -80,6 +80,7 @@ undo_killring_handled note_action(state *state, buffer *buf, insert_result&& i_r
     no_yank(&state->clipboard);
 
     note_undo(buf, std::move(i_res));
+    state->clear_error_message();
     return undo_killring_handled{};
 }
 
@@ -88,6 +89,7 @@ undo_killring_handled note_coalescent_action(state *state, buffer *buf, insert_r
 
     add_coalescent_edit(&buf->undo_info, make_reverse_action(&buf->undo_info, std::move(i_res)),
                         undo_history::char_coalescence::insert_char);
+    state->clear_error_message();
     return undo_killring_handled{};
 }
 
@@ -111,6 +113,7 @@ void note_undo(buffer *buf, delete_result&& d_res) {
 undo_killring_handled note_action(state *state, buffer *buf, delete_result&& d_res) {
     no_yank(&state->clipboard);
 
+    state->note_error_message(std::move(d_res.error_message));
     note_undo(buf, std::move(d_res));
     return undo_killring_handled{};
 }
@@ -118,6 +121,7 @@ undo_killring_handled note_action(state *state, buffer *buf, delete_result&& d_r
 undo_killring_handled note_coalescent_action(state *state, buffer *buf, delete_result&& d_res) {
     no_yank(&state->clipboard);
 
+    state->note_error_message(std::move(d_res.error_message));
     Side side = d_res.side;
     using char_coalescence = undo_history::char_coalescence;
     add_coalescent_edit(&buf->undo_info, make_reverse_action(&buf->undo_info, std::move(d_res)),
@@ -130,6 +134,7 @@ undo_killring_handled note_coalescent_action(state *state, buffer *buf, delete_r
 undo_killring_handled note_noundo_killring_action(state *state, buffer *buf) {
     no_yank(&state->clipboard);
     add_coalescence_break(&buf->undo_info);
+    state->clear_error_message();
     return undo_killring_handled{};
 }
 
@@ -138,6 +143,7 @@ undo_killring_handled note_noundo_killring_action(state *state, buffer *buf) {
 undo_killring_handled note_backout_action(state *state, buffer *buf) {
     no_yank(&state->clipboard);
     add_nop_edit(&buf->undo_info);
+    state->clear_error_message();
     return undo_killring_handled{};
 }
 
@@ -357,6 +363,13 @@ void render_string(terminal_frame *frame, const terminal_coord& coord, const buf
 // TODO: Non-const reference for state param -- we set its status_prompt's buf's window.
 void render_status_area(terminal_frame *frame, state& state) {
     uint32_t last_row = u32_sub(frame->window.rows, 1);
+
+    if (!state.live_error_message.empty()) {
+        render_string(frame, {.row = last_row, .col = 0},
+                      to_buffer_string(state.live_error_message), terminal_style::zero());
+        return;
+    }
+
     if (state.status_prompt.has_value()) {
         std::string message;
         switch (state.status_prompt->typ) {
@@ -604,6 +617,7 @@ undo_killring_handled delete_backward_word(state *state, buffer *buf) {
     size_t d = backward_word_distance(buf);
     delete_result delres = delete_left(buf, d);
     record_yank(&state->clipboard, delres.deletedText, yank_side::left);
+    state->note_error_message(std::move(delres.error_message));
     note_undo(buf, std::move(delres));
     return handled_undo_killring(state, buf);
 }
@@ -612,6 +626,7 @@ undo_killring_handled delete_forward_word(state *state, buffer *buf) {
     size_t d = forward_word_distance(buf);
     delete_result delres = delete_right(buf, d);
     record_yank(&state->clipboard, delres.deletedText, yank_side::right);
+    state->note_error_message(std::move(delres.error_message));
     note_undo(buf, std::move(delres));
     return handled_undo_killring(state, buf);
 }
@@ -627,6 +642,7 @@ undo_killring_handled kill_line(state *state, buffer *buf) {
     }
     record_yank(&state->clipboard, delres.deletedText, yank_side::right);
     note_undo(buf, std::move(delres));
+    // TODO: Error message if we're at end of buffer.
     return handled_undo_killring(state, buf);
 }
 
@@ -635,6 +651,7 @@ undo_killring_handled kill_region(state *state, buffer *buf) {
         // TODO: Display error
         // (We do NOT want no_yank here.)  We do want to disrupt the undo action chain (if only because Emacs does that).
         note_nop_undo(buf);
+        state->note_error_message("No mark set");  // TODO: UI logic
         return handled_undo_killring(state, buf);
     }
     size_t mark = *buf->mark;
@@ -663,9 +680,9 @@ undo_killring_handled kill_region(state *state, buffer *buf) {
 
 undo_killring_handled copy_region(state *state, buffer *buf) {
     if (!buf->mark.has_value()) {
-        // TODO: Display error
         // (We do NOT want no_yank here.)  We do want to disrupt the undo action chain (if only because Emacs does that).
         note_nop_undo(buf);
+        state->note_error_message("No mark set");  // TODO: UI logic, and duplicated string
         return handled_undo_killring(state, buf);
     }
     size_t mark = *buf->mark;
@@ -700,7 +717,7 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
             state->topbuf().name_number = 0;
             apply_number_to_buf(state, state->buf_ptr);
         } else {
-            // TODO: Implement displaying errors to the user.
+            state->note_error_message("No filename given");
         }
         close_status_prompt(state);
         return ret;
@@ -726,7 +743,7 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
 
             // state->buf_ptr now points at our freshly opened buf -- its value is unchanged.
         } else {
-            // TODO: Display error.
+            state->note_error_message("No filename given");
         }
 
         close_status_prompt(state);
@@ -742,10 +759,10 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
             if (find_buffer_by_name(state, text, &buf_number)) {
                 rotate_to_buffer(state, buf_number);
             } else {
-                // TODO: Display error.
+                state->note_error_message("Buffer not found");
             }
         } else {
-            // TODO: Display error.
+            state->note_error_message("No buffer name given");
         }
 
         close_status_prompt(state);
@@ -779,7 +796,7 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
             close_status_prompt(state);
             return ret;
         } else {
-            // TODO: Report error.
+            state->note_error_message("Please type yes or no");
             return ret;
         }
     } break;
@@ -797,7 +814,7 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
             close_status_prompt(state);
             return ret;
         } else {
-            // TODO: Report error.
+            state->note_error_message("Please type yes or no");
             return ret;
         }
     } break;

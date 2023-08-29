@@ -56,8 +56,8 @@ void update_offset_for_delete_range(size_t *offset, size_t range_beg, size_t ran
     }
 }
 
-delete_result delete_left(buffer *buf, size_t count) {
-    count = std::min<size_t>(count, buf->bef.size());
+delete_result delete_left(buffer *buf, size_t og_count) {
+    const size_t count = std::min<size_t>(og_count, buf->bef.size());
     size_t og_cursor = buf->bef.size();
     size_t new_cursor = og_cursor - count;
 
@@ -74,12 +74,15 @@ delete_result delete_left(buffer *buf, size_t count) {
     buf->virtual_column = current_column(*buf);
     update_offset_for_delete_range(&buf->first_visible_offset, new_cursor, og_cursor);
     recenter_cursor_if_offscreen(buf);
+    if (count < og_count) {
+        ret.error_message = "Beginning of buffer";  // TODO: Bad place for UI logic
+    }
     return ret;
 }
 
-delete_result delete_right(buffer *buf, size_t count) {
+delete_result delete_right(buffer *buf, size_t og_count) {
     size_t cursor = buf->cursor();
-    count = std::min<size_t>(count, buf->aft.size());
+    const size_t count = std::min<size_t>(og_count, buf->aft.size());
 
     delete_result ret;
     ret.new_cursor = cursor;
@@ -95,6 +98,9 @@ delete_result delete_right(buffer *buf, size_t count) {
     buf->virtual_column = current_column(*buf);
     update_offset_for_delete_range(&buf->first_visible_offset, cursor, cursor + count);
     recenter_cursor_if_offscreen(buf);
+    if (count < og_count) {
+        ret.error_message = "End of buffer";  // TODO: Bad place for UI logic
+    }
     return ret;
 }
 

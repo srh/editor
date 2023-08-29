@@ -133,6 +133,11 @@ struct state {
     std::optional<prompt> status_prompt;
     bool is_normal() const { return !status_prompt.has_value(); }
 
+    // TODO: Every use of this function is probably a bad place for UI logic.
+    void note_error_message(std::string&& msg) { live_error_message = std::move(msg); }
+    void clear_error_message() { live_error_message = ""; }
+    std::string live_error_message;  // empty means there is none
+
     clip_board clipboard;
 
     ui_mode ui_config;

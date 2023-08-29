@@ -31,6 +31,7 @@ struct [[nodiscard]] delete_result {
     size_t new_cursor;
     buffer_string deletedText;
     Side side;
+    std::string error_message;
 };
 delete_result delete_left(buffer *buf, size_t count);
 
