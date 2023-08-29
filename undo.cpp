@@ -27,15 +27,31 @@ void add_coalescence_break(undo_history *history) {
     history->coalescence = undo_history::char_coalescence::none;
 }
 
+// TODO: Maybe we should catalog exactly which zero-effect edits (deleting at end of
+// buffer, backspace at beginning, etc.) don't have undo actions, and which (M-y reyanking
+// the same text) do.  Then adding the no-op edit is computed based on intent rather than
+// the changeset.
+//
+// This might change behavior if an empty string is yanked twice in a row, if C-y and M-y
+// in sequence both insert empty strings, and then we undo.
+bool item_has_effect(const atomic_undo_item& item) {
+    // We consider non-empty but equal text_inserted and text_deleted strings to have an
+    // "effect".
+    return !(item.text_inserted.empty() && item.text_deleted.empty());
+}
+
 void add_edit(undo_history *history, atomic_undo_item&& item) {
     history->coalescence = undo_history::char_coalescence::none;
     move_future_to_mountain(history);
-    history->past.push_back({
-            .type = undo_item::Type::atomic,
-            .atomic = std::move(item),
-        });
-    history->current_node = item.before_node;
-    history->next_node_number.value += 1;
+
+    if (item_has_effect(item)) {
+        history->past.push_back({
+                .type = undo_item::Type::atomic,
+                .atomic = std::move(item),
+            });
+        history->current_node = item.before_node;
+        history->next_node_number.value += 1;
+    }
 }
 
 void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_history::char_coalescence coalescence) {
