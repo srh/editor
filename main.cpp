@@ -995,13 +995,11 @@ undo_killring_handled ctrl_backspace_keypress(state *state, buffer *active_buf) 
 }
 
 undo_killring_handled ctrl_a_keypress(state *state, buffer *active_buf) {
-    move_home(active_buf);
-    return note_navigation_action(state, active_buf);
+    return home_keypress(state, active_buf);
 }
 
 undo_killring_handled ctrl_b_keypress(state *state, buffer *active_buf) {
-    move_left(active_buf);
-    return note_navigation_action(state, active_buf);
+    return left_arrow_keypress(state, active_buf);
 }
 
 undo_killring_handled ctrl_c_keypress(state *state, buffer *active_buf, bool *exit_loop) {
@@ -1016,13 +1014,11 @@ undo_killring_handled ctrl_d_keypress(state *state, buffer *active_buf) {
 }
 
 undo_killring_handled ctrl_e_keypress(state *state, buffer *active_buf) {
-    move_end(active_buf);
-    return note_navigation_action(state, active_buf);
+    return end_keypress(state, active_buf);
 }
 
 undo_killring_handled ctrl_f_keypress(state *state, buffer *active_buf) {
-    move_right(active_buf);
-    return note_navigation_action(state, active_buf);
+    return right_arrow_keypress(state, active_buf);
 }
 
 undo_killring_handled ctrl_g_keypress(state *state, buffer *active_buf) {
@@ -1030,8 +1026,7 @@ undo_killring_handled ctrl_g_keypress(state *state, buffer *active_buf) {
 }
 
 undo_killring_handled ctrl_n_keypress(state *state, buffer *active_buf) {
-    move_down(active_buf);
-    return note_navigation_action(state, active_buf);
+    return down_arrow_keypress(state, active_buf);
 }
 
 undo_killring_handled ctrl_o_keypress(state *state, buffer *active_buf) {
@@ -1039,8 +1034,7 @@ undo_killring_handled ctrl_o_keypress(state *state, buffer *active_buf) {
 }
 
 undo_killring_handled ctrl_p_keypress(state *state, buffer *active_buf) {
-    move_up(active_buf);
-    return note_navigation_action(state, active_buf);
+    return up_arrow_keypress(state, active_buf);
 }
 
 undo_killring_handled ctrl_s_keypress(state *state, buffer *active_buf) {
