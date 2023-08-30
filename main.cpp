@@ -106,14 +106,14 @@ state initial_state(int term, const command_line_args& args, const terminal_size
     state state(term);
     if (n_files == 0) {
         state.buf_ptr.value = 0;
-        state.buflist.push_back(scratch_buffer(buf_window));
+        state.buflist.push_back(scratch_buffer(state.gen_buf_id(), buf_window));
     } else {
         state.buf_ptr.value = 0;
         state.buflist.reserve(n_files);
         state.buflist.clear();  // a no-op
         for (size_t i = 0; i < n_files; ++i) {
             // TODO: Maybe combine these ops and define the fn in editing.cpp
-            state.buflist.push_back(open_file_into_detached_buffer(args.files.at(i)));
+            state.buflist.push_back(open_file_into_detached_buffer(&state, args.files.at(i)));
             state.buflist.back().set_window(buf_window);
             apply_number_to_buf(&state, buffer_number{i});
 

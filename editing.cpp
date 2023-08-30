@@ -129,7 +129,7 @@ undo_killring_handled buffer_close_action(state *state, buffer *active_buf) {
     }
 
     // TODO: Only complain if the buffer has been modified.  (Add a modified flag.)
-    state->status_prompt = {prompt::type::buffer_close, buffer{}, prompt::message_unused};
+    state->status_prompt = {prompt::type::buffer_close, buffer(state->gen_buf_id()), prompt::message_unused};
     return ret;
 }
 
@@ -255,7 +255,7 @@ undo_killring_handled open_file_action(state *state, buffer *active_buf) {
         return ret;
     }
 
-    state->status_prompt = {prompt::type::file_open, buffer{}, prompt::message_unused};
+    state->status_prompt = {prompt::type::file_open, buffer(state->gen_buf_id()), prompt::message_unused};
     return ret;
 }
 
@@ -288,7 +288,7 @@ undo_killring_handled save_file_action(state *state, buffer *active_buf) {
         save_buf_to_married_file_and_mark_unmodified(&state->topbuf());
     } else {
         // TODO: How/where should we set the prompt's buf's window?
-        state->status_prompt = {prompt::type::file_save, buffer(), prompt::message_unused};
+        state->status_prompt = {prompt::type::file_save, buffer(state->gen_buf_id()), prompt::message_unused};
     }
     return ret;
 }
@@ -313,7 +313,7 @@ undo_killring_handled exit_cleanly(state *state, buffer *active_buf, bool *exit_
 
     std::vector<std::string> bufnames = modified_buffers(state);
     if (!bufnames.empty()) {
-        state->status_prompt = {prompt::type::exit_without_save, buffer{}, string_join(", ", bufnames)};
+        state->status_prompt = {prompt::type::exit_without_save, buffer(state->gen_buf_id()), string_join(", ", bufnames)};
     } else {
         *exit_loop = true;
     }
@@ -332,7 +332,7 @@ undo_killring_handled buffer_switch_action(state *state, buffer *active_buf) {
     }
 
     buffer_string data = buffer_name(state, state->buf_ptr);
-    state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(std::move(data)), prompt::message_unused};
+    state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(state->gen_buf_id(), std::move(data)), prompt::message_unused};
     return ret;
 }
 
@@ -341,12 +341,12 @@ std::string buf_name_from_file_path(const fs::path& path) {
 }
 
 // Caller needs to call set_window on the buf, generally, or other ui-specific stuff.
-buffer open_file_into_detached_buffer(const std::string& dirty_path) {
+buffer open_file_into_detached_buffer(state *state, const std::string& dirty_path) {
     fs::path path = dirty_path;
     buffer_string data = read_file(path);
     std::string name = buf_name_from_file_path(path);
 
-    buffer ret;
+    buffer ret(state->gen_buf_id());
     ret.name_str = std::move(name);
     ret.married_file = path.string();
     ret.aft = std::move(data);
@@ -379,8 +379,8 @@ void apply_number_to_buf(state *state, buffer_number buf_index_num) {
     the_buf.name_number = n;
 }
 
-buffer scratch_buffer(const window_size& buf_window) {
-    buffer ret;
+buffer scratch_buffer(buffer_id id, const window_size& buf_window) {
+    buffer ret(id);
     ret.set_window(buf_window);
     ret.name_str = "*scratch*";
     ret.name_number = 0;
@@ -414,7 +414,7 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
 
         if (text != "") {
             // TODO: Handle error!
-            buffer buf = open_file_into_detached_buffer(text);
+            buffer buf = open_file_into_detached_buffer(state, text);
 
             // TODO: Gross!  So gross.
             terminal_size window = get_terminal_size(term);
@@ -470,7 +470,7 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
                 // TODO: Gross!  So gross.
                 terminal_size window = get_terminal_size(term);
                 window_size buf_window = main_buf_window_from_terminal_window(window);
-                state->buflist.push_back(scratch_buffer(buf_window));
+                state->buflist.push_back(scratch_buffer(state->gen_buf_id(), buf_window));
                 // state->buf_ptr is already 0, thus correct.
             }
             close_status_prompt(state);

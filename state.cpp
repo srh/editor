@@ -51,8 +51,8 @@ buffer_string buffer::copy_substr(size_t beg, size_t end) const {
     return ret;
 }
 
-buffer buffer::from_data(buffer_string&& data) {
-    buffer ret;
+buffer buffer::from_data(buffer_id id, buffer_string&& data) {
+    buffer ret(id);
     ret.bef = std::move(data);
     return ret;
 }
@@ -175,7 +175,7 @@ buffer_number find_or_create_buf(state *state, const std::string& name, int term
         return ret;
     }
 
-    buffer buf;
+    buffer buf(state->gen_buf_id());
     buf.read_only = make_read_only;
     buf.name_str = name;
     terminal_size window = get_terminal_size(term);

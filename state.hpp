@@ -25,7 +25,15 @@ struct buffer_number {
     size_t value;
 };
 
+struct buffer_id {
+    uint64_t value;
+};
+
 struct buffer {
+    buffer() = delete;
+    explicit buffer(buffer_id _id) : id(_id), undo_info(), non_modified_undo_node(undo_info.current_node) {}
+    buffer_id id;
+
     // Used to choose in the list of buffers, unique to the buffer.  Program logic should
     // not allow empty or overlong values.  (name_str, name_number) pairs should be
     // unique.
@@ -55,7 +63,7 @@ private:
     friend void move_right_by(buffer *buf, size_t count);
     friend void move_left_by(buffer *buf, size_t count);
     friend void save_buf_to_married_file_and_mark_unmodified(buffer *buf);
-    friend buffer open_file_into_detached_buffer(const std::string& dirty_path);
+    friend buffer open_file_into_detached_buffer(state *state, const std::string& dirty_path);
 
 public:
     // Absolute position of the mark, if there is one.
@@ -103,9 +111,7 @@ public:
 
     buffer_string copy_substr(size_t beg, size_t end) const;
 
-    static buffer from_data(buffer_string&& data);
-
-    buffer() : undo_info(), non_modified_undo_node(undo_info.current_node) { }
+    static buffer from_data(buffer_id id, buffer_string&& data);
 };
 
 struct prompt {
@@ -150,6 +156,13 @@ struct state {
     // Is never empty (after initial_state() returns).
     // NOTE: "Is never empty" may be a UI-specific constraint!  It seems reasonable for GUIs to support having no tabs open.
     std::vector<buffer> buflist;
+
+private:
+    uint64_t next_buf_id_value = 0;
+
+public:
+    buffer_id gen_buf_id() { return buffer_id{next_buf_id_value++}; }
+
     // 0 <= buf_ptr < buflist.size(), always (except at construction when buflist is empty).
     buffer_number buf_ptr = {SIZE_MAX};
 
