@@ -452,7 +452,7 @@ undo_killring_handled ctrl_space_keypress(state *state, buffer *active_buf) {
 
 undo_killring_handled ctrl_underscore_keypress(state *state, buffer *active_buf) {
     no_yank(&state->clipboard);
-    perform_undo(active_buf);
+    perform_undo(state, active_buf);
     return handled_undo_killring(state, active_buf);
 }
 

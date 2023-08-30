@@ -187,8 +187,8 @@ undo_killring_handled kill_line(state *state, buffer *buf) {
         delres = delete_right(buf, eolDistance);
     }
     record_yank(&state->clipboard, delres.deletedText, yank_side::right);
+    state->note_error_message(std::move(delres.error_message));
     note_undo(buf, std::move(delres));
-    // TODO: Error message if we're at end of buffer.
     return handled_undo_killring(state, buf);
 }
 
@@ -567,6 +567,7 @@ undo_killring_handled yank_from_clipboard(state *state, buffer *buf) {
         return handled_undo_killring(state, buf);
     } else {
         note_nop_undo(buf);
+        state->note_error_message("Killring is empty");  // TODO: UI logic (and Emacs verbiage)
         return handled_undo_killring(state, buf);
     }
     // Note that this gets called directly by C-y and by alt_yank_from_clipboard as a
@@ -596,7 +597,7 @@ undo_killring_handled alt_yank_from_clipboard(state *state, buffer *buf) {
         add_edit(&buf->undo_info, std::move(item));
         return handled_undo_killring(state, buf);
     } else {
-        // TODO: Report error ("Previous command was not a yank.")
+        state->note_error_message("Previous command was not a yank");  // TODO: UI logic (and Emacs verbiage)
         note_nop_undo(buf);
         return handled_undo_killring(state, buf);
     }

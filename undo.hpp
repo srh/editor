@@ -65,7 +65,9 @@ void add_edit(undo_history *history, atomic_undo_item&& item);
 void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_history::char_coalescence coalescence);
 
 struct buffer;
-void perform_undo(buffer *buf);
+struct state;
+// TODO: Make error reporting object be a separate type, member object of state.
+void perform_undo(state *st, buffer *buf);
 
 }  // namespace qwi
 

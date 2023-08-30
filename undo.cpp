@@ -155,9 +155,9 @@ void atomic_undo(buffer *buf, atomic_undo_item&& item) {
     buf->undo_info.future.push_back(opposite(item));
 }
 
-void perform_undo(buffer *buf) {
+void perform_undo(state *st, buffer *buf) {
     if (buf->undo_info.past.empty()) {
-        // TODO: Return an error code in this case?  (So the app can ring the (visible) bell?)
+        st->note_error_message("No further undo information");  // TODO: UI logic
         return;
     }
     undo_item item = std::move(buf->undo_info.past.back());
