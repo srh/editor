@@ -15,6 +15,9 @@ struct terminal_size;
 
 namespace qwi {
 
+struct insert_result;
+struct delete_result;
+
 struct window_size { uint32_t rows = 0, cols = 0; };
 
 struct buffer_number {
@@ -31,12 +34,30 @@ struct buffer {
 
     std::optional<std::string> married_file;
 
+    // Buffer content is private to ensure that everything respects read-only.
+private:
+
     // We just have strings for text before/after the cursor.  Very bad perf.
     buffer_string bef;
     buffer_string aft;
 
+    // True friends, necessary mutation functions.
+    friend insert_result insert_chars(buffer *buf, const buffer_char *chs, size_t count);
+    friend insert_result insert_chars_right(buffer *buf, const buffer_char *chs, size_t count);
+    friend delete_result delete_left(buffer *buf, size_t og_count);
+    friend delete_result delete_right(buffer *buf, size_t og_count);
+
+    // False friends, that access bef and aft, but we'd like them to use the buf more abstractly.
+    friend void move_right_by(buffer *buf, size_t count);
+    friend void move_left_by(buffer *buf, size_t count);
+    friend void save_buf_to_married_file_and_mark_unmodified(buffer *buf);
+    friend buffer open_file_into_detached_buffer(const std::string& dirty_path);
+
+public:
     // Absolute position of the mark, if there is one.
     std::optional<size_t> mark;
+
+    bool read_only = false;
 
     size_t cursor() const { return bef.size(); }
     void set_cursor(size_t pos);

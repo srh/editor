@@ -15,7 +15,18 @@
 
 namespace qwi {
 
+static const std::string NO_ERROR{};
+
 insert_result insert_chars(buffer *buf, const buffer_char *chs, size_t count) {
+    if (buf->read_only) {
+        return {
+            .new_cursor = buf->cursor(),
+            .insertedText = buffer_string{},
+            .side = Side::left,
+            .error_message = "Buffer is read-only",  // TODO: UI logic
+        };
+    }
+
     const size_t og_cursor = buf->cursor();
     buf->bef.append(chs, count);
     if (buf->mark.has_value()) {
@@ -28,10 +39,20 @@ insert_result insert_chars(buffer *buf, const buffer_char *chs, size_t count) {
     return {
         .new_cursor = buf->cursor(),
         .insertedText = buffer_string(chs, count),
-        .side = Side::left };
+        .side = Side::left,
+        .error_message = NO_ERROR };
 }
 
 insert_result insert_chars_right(buffer *buf, const buffer_char *chs, size_t count) {
+    if (buf->read_only) {
+        return {
+            .new_cursor = buf->cursor(),
+            .insertedText = buffer_string{},
+            .side = Side::right,
+            .error_message = "Buffer is read-only",  // TODO: UI logic
+        };
+    }
+
     const size_t og_cursor = buf->cursor();
     buf->aft.insert(0, chs, count);
     if (buf->mark.has_value()) {
@@ -45,7 +66,9 @@ insert_result insert_chars_right(buffer *buf, const buffer_char *chs, size_t cou
     return {
         .new_cursor = buf->cursor(),
         .insertedText = buffer_string(chs, count),
-        .side = Side::right };
+        .side = Side::right,
+        .error_message = NO_ERROR,
+    };
 }
 
 void update_offset_for_delete_range(size_t *offset, size_t range_beg, size_t range_end) {
@@ -57,6 +80,15 @@ void update_offset_for_delete_range(size_t *offset, size_t range_beg, size_t ran
 }
 
 delete_result delete_left(buffer *buf, size_t og_count) {
+    if (buf->read_only) {
+        return {
+            .new_cursor = buf->cursor(),
+            .deletedText = buffer_string{},
+            .side = Side::left,
+            .error_message = "Buffer is read-only",  // TODO: UI logic
+        };
+    }
+
     const size_t count = std::min<size_t>(og_count, buf->bef.size());
     size_t og_cursor = buf->bef.size();
     size_t new_cursor = og_cursor - count;
@@ -81,6 +113,15 @@ delete_result delete_left(buffer *buf, size_t og_count) {
 }
 
 delete_result delete_right(buffer *buf, size_t og_count) {
+    if (buf->read_only) {
+        return {
+            .new_cursor = buf->cursor(),
+            .deletedText = buffer_string{},
+            .side = Side::right,
+            .error_message = "Buffer is read-only",  // TODO: UI logic
+        };
+    }
+
     size_t cursor = buf->cursor();
     const size_t count = std::min<size_t>(og_count, buf->aft.size());
 

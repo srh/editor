@@ -11,6 +11,7 @@ struct [[nodiscard]] insert_result {
     // Returned only to make implementing opposite(const undo_info&) easier.
     buffer_string insertedText;
     Side side;
+    std::string error_message;  // "" or "Buffer is read only"
 };
 
 insert_result insert_chars(buffer *buf, const buffer_char *chs, size_t count);
