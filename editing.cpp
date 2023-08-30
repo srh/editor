@@ -259,13 +259,6 @@ undo_killring_handled open_file_action(state *state, buffer *active_buf) {
     return ret;
 }
 
-// TODO: Inline this?
-void set_save_prompt(state *state) {
-    logic_check(!state->status_prompt.has_value(), "set_save_prompt with existing prompt");
-    state->status_prompt = {prompt::type::file_save, buffer(), prompt::message_unused};
-    // TODO: How/where should we set the prompt's buf's window?
-}
-
 void save_buf_to_married_file_and_mark_unmodified(buffer *buf) {
     // TODO: Display that save succeeded, somehow.
     logic_check(buf->married_file.has_value(), "save_buf_to_married_file with unmarried buf");
@@ -294,7 +287,8 @@ undo_killring_handled save_file_action(state *state, buffer *active_buf) {
     if (state->topbuf().married_file.has_value()) {
         save_buf_to_married_file_and_mark_unmodified(&state->topbuf());
     } else {
-        set_save_prompt(state);
+        // TODO: How/where should we set the prompt's buf's window?
+        state->status_prompt = {prompt::type::file_save, buffer(), prompt::message_unused};
     }
     return ret;
 }
