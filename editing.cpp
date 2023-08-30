@@ -249,14 +249,6 @@ void rotate_to_buffer(state *state, buffer_number buf_number) {
     state->buf_ptr = buf_number;
 }
 
-
-// TODO: Unused?  Remove?
-void set_buffer_switch_prompt(state *state) {
-    logic_check(!state->status_prompt.has_value(), "set_buffer_switch_prompt with existing prompt");
-    buffer_string data = buffer_name(state, state->buf_ptr);
-    state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(std::move(data)), prompt::message_unused};
-}
-
 undo_killring_handled open_file_action(state *state, buffer *active_buf) {
     undo_killring_handled ret = note_navigation_action(state, active_buf);
     if (state->status_prompt.has_value()) {
