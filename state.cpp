@@ -2,6 +2,7 @@
 
 #include "arith.hpp"
 #include "buffer.hpp"  // for insert_result and delete_result in undo logic
+#include "editing.hpp"
 #include "error.hpp"
 // TODO: We don't want this dependency exactly -- we kind of want ui info to be separate from state.
 #include "terminal.hpp"
@@ -167,5 +168,49 @@ void no_yank(clip_board *clb) {
     clb->justRecorded = false;
     clb->justYanked = std::nullopt;
 }
+
+buffer_number find_or_create_buf(state *state, const std::string& name, int term, bool make_read_only) {
+    buffer_number ret;
+    if (find_buffer_by_name(state, name, &ret)) {
+        return ret;
+    }
+
+    buffer buf;
+    buf.read_only = make_read_only;
+    buf.name_str = name;
+    terminal_size window = get_terminal_size(term);
+    window_size buf_window = main_buf_window_from_terminal_window(window);
+    buf.set_window(buf_window);
+
+    // We insert the buf just before the current buf -- thus we increment buf_ptr.
+    logic_checkg(state->buf_ptr.value < state->buflist.size());
+    ret = state->buf_ptr;
+    state->buflist.insert(state->buflist.begin() + state->buf_ptr.value, std::move(buf));
+    state->buf_ptr.value += 1;
+    apply_number_to_buf(state, ret);
+    return ret;
+}
+
+void state::note_error_message(std::string&& msg) {
+    if (!msg.empty()) {
+        buffer_number num = find_or_create_buf(this, "*Messages*", term, true /* read-only */);
+        buffer *buf = buffer_ptr(this, num);
+
+        force_insert_chars_end_before_cursor(
+            buf,
+            as_buffer_chars(msg.data()), msg.size());
+
+        char ch = '\n';
+        force_insert_chars_end_before_cursor(
+            buf,
+            as_buffer_chars(&ch), 1);
+        // We don't touch the buffer's undo history or yank history -- since we append at
+        // the end of the buffer, the behavior doesn't need to adjust any undo offsets --
+        // a concept we never had before.  (And so far we don't even have the concept of user
+        // turning off read-only mode and editing the buffer.)
+    }
+    live_error_message = std::move(msg);
+}
+
 
 }  // namespace qwi

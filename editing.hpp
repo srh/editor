@@ -41,6 +41,7 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
 undo_killring_handled note_coalescent_action(state *state, buffer *buf, delete_result&& d_res);
 
 undo_killring_handled buffer_close_action(state *state, buffer *active_buf);
+bool find_buffer_by_name(const state *state, const std::string& text, buffer_number *out);
 undo_killring_handled cancel_action(state *state, buffer *buf);
 
 undo_killring_handled delete_backward_word(state *state, buffer *buf);

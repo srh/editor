@@ -98,12 +98,12 @@ void draw_empty_frame_for_exit(int fd, const terminal_size& window) {
     write_frame(fd, frame);
 }
 
-state initial_state(const command_line_args& args, const terminal_size& window) {
+state initial_state(int term, const command_line_args& args, const terminal_size& window) {
     const size_t n_files = args.files.size();
 
     window_size buf_window = main_buf_window_from_terminal_window(window);
 
-    state state;
+    state state(term);
     if (n_files == 0) {
         state.buf_ptr.value = 0;
         state.buflist.push_back(scratch_buffer(buf_window));
@@ -647,7 +647,7 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
 
 void main_loop(int term, const command_line_args& args) {
     terminal_size window = get_terminal_size(term);
-    state state = initial_state(args, window);
+    state state = initial_state(term, args, window);
 
     redraw_state(term, window, state);
 

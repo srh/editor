@@ -26,6 +26,9 @@ inline insert_result insert_char(buffer *buf, uint8_t uch) {
 
 insert_result insert_chars_right(buffer *buf, const buffer_char *chs, size_t count);
 
+void force_insert_chars_end_before_cursor(buffer *buf,
+                                          const buffer_char *chs, size_t count);
+
 // TODO: Maximal efficiency: don't construct a delete_result on exactly the funcalls that don't use it.
 struct [[nodiscard]] delete_result {
     // Cursor position _after_ deletion.

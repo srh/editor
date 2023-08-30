@@ -47,6 +47,10 @@ private:
     friend delete_result delete_left(buffer *buf, size_t og_count);
     friend delete_result delete_right(buffer *buf, size_t og_count);
 
+    // Half friends -- a function I don't want to exist.
+    friend void force_insert_chars_end_before_cursor(
+        buffer *buf, const buffer_char *chs, size_t count);
+
     // False friends, that access bef and aft, but we'd like them to use the buf more abstractly.
     friend void move_right_by(buffer *buf, size_t count);
     friend void move_left_by(buffer *buf, size_t count);
@@ -136,6 +140,10 @@ struct ui_mode {
 };
 
 struct state {
+    // TODO: Remove term.
+    explicit state(int _term) : term(_term) {}
+    int term = -1;
+
     // Sorted in order from least-recently-used -- `buf` is the active buffer and should
     // get pushed onto the end of bufs after some other buf takes its place.
     //
@@ -155,7 +163,7 @@ struct state {
     bool is_normal() const { return !status_prompt.has_value(); }
 
     // TODO: Every use of this function is probably a bad place for UI logic.
-    void note_error_message(std::string&& msg) { live_error_message = std::move(msg); }
+    void note_error_message(std::string&& msg);
     void clear_error_message() { live_error_message = ""; }
     std::string live_error_message;  // empty means there is none
 

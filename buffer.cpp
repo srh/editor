@@ -71,6 +71,25 @@ insert_result insert_chars_right(buffer *buf, const buffer_char *chs, size_t cou
     };
 }
 
+// TODO: This non-generic function basically sucks.
+void force_insert_chars_end_before_cursor(buffer *buf,
+                                          const buffer_char *chs, size_t count) {
+    const size_t og_cursor = buf->cursor();
+    const size_t og_size = buf->size();
+
+    // If cursor is at end of buffer, we insert before the cursor.
+    if (og_cursor != og_size) {
+        buf->aft.append(chs, count);
+    } else {
+        buf->bef.append(chs, count);
+        buf->virtual_column = current_column(*buf);
+        // I guess we don't touch first_visible_offset -- later we'll want
+        // scroll-to-cursor behavior with *Messages*.
+
+        // We _don't_ recenter cursor if offscreen.
+    }
+}
+
 void update_offset_for_delete_range(size_t *offset, size_t range_beg, size_t range_end) {
     if (*offset > range_end) {
         *offset -= (range_end - range_beg);

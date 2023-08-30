@@ -320,6 +320,7 @@ undo_killring_handled exit_cleanly(state *state, buffer *active_buf, bool *exit_
     return ret;
 }
 
+// TODO: When we switch to a buffer, or rotate to one, we should render the buffer with the cursor on screen.  No?  Well, if it's a *Messages* buffer... Hmmm.
 undo_killring_handled buffer_switch_action(state *state, buffer *active_buf) {
     undo_killring_handled ret = note_navigation_action(state, active_buf);
     if (state->status_prompt.has_value()) {
