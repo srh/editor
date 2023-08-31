@@ -200,15 +200,15 @@ void render_status_area(terminal_frame *frame, state& state) {
 void redraw_state(int term, const terminal_size& window, state& state) {
     terminal_frame frame = init_frame(window);
 
-    if (!too_small_to_render(state.topbuf().win_ctx.window)) {
+    ui_window_ctx *topbuf_ctx = state.win_ctx(state.buf_ptr);
+    if (!too_small_to_render(topbuf_ctx->window)) {
         // TODO: Support resizing.
-        runtime_check(window.cols == state.topbuf().win_ctx.window.cols, "window cols changed");
-        runtime_check(window.rows == state.topbuf().win_ctx.window.rows + STATUS_AREA_HEIGHT, "window rows changed");
+        runtime_check(window.cols == topbuf_ctx->window.cols, "window cols changed");
+        runtime_check(window.rows == topbuf_ctx->window.rows + STATUS_AREA_HEIGHT, "window rows changed");
 
         std::vector<render_coord> coords = { {state.topbuf().cursor(), std::nullopt} };
         terminal_coord window_topleft = {0, 0};
-        render_into_frame(&frame, window_topleft, *state.win_ctx(state.buf_ptr),
-                          state.buf_at(state.buf_ptr), &coords);
+        render_into_frame(&frame, window_topleft, *topbuf_ctx, state.topbuf(), &coords);
 
         // TODO: This is super-hacky -- this gets overwritten if the status area has a
         // prompt.  With multiple buffers, we need some concept of an active buffer, with
