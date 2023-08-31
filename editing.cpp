@@ -200,7 +200,7 @@ undo_killring_handled kill_region(state *state, buffer *buf) {
         state->note_error_message("No mark set");  // TODO: UI logic
         return handled_undo_killring(state, buf);
     }
-    size_t mark = *buf->mark;
+    size_t mark = buf->get_mark_offset(*buf->mark);
     size_t cursor = buf->cursor();
     if (mark > cursor) {
         delete_result delres = delete_right(buf, mark - cursor);
@@ -231,7 +231,7 @@ undo_killring_handled copy_region(state *state, buffer *buf) {
         state->note_error_message("No mark set");  // TODO: UI logic, and duplicated string
         return handled_undo_killring(state, buf);
     }
-    size_t mark = *buf->mark;
+    size_t mark = buf->get_mark_offset(*buf->mark);
     size_t cursor = buf->cursor();
     size_t region_beg = std::min(mark, cursor);
     size_t region_end = std::max(mark, cursor);

@@ -17,6 +17,14 @@ namespace qwi {
 
 static const std::string NO_ERROR{};
 
+void add_to_marks_as_of(buffer *buf, size_t first_offset, size_t count) {
+    for (size_t i = 0; i < buf->marks.size(); ++i) {
+        if (buf->marks[i] != SIZE_MAX && buf->marks[i] >= first_offset) {
+            buf->marks[i] = size_add(buf->marks[i], count);
+        }
+    }
+}
+
 insert_result insert_chars(buffer *buf, const buffer_char *chs, size_t count) {
     if (buf->read_only) {
         return {
@@ -29,12 +37,10 @@ insert_result insert_chars(buffer *buf, const buffer_char *chs, size_t count) {
 
     const size_t og_cursor = buf->cursor();
     buf->bef.append(chs, count);
-    if (buf->mark.has_value()) {
-        *buf->mark += (*buf->mark > og_cursor ? count : 0);
-    }
+    add_to_marks_as_of(buf, og_cursor + 1, count);
+
     // TODO: Don't recompute virtual_column every time.
     buf->virtual_column = current_column(*buf);
-    buf->first_visible_offset += (buf->first_visible_offset > og_cursor ? count : 0);
     recenter_cursor_if_offscreen(buf);
     return {
         .new_cursor = buf->cursor(),
@@ -55,13 +61,8 @@ insert_result insert_chars_right(buffer *buf, const buffer_char *chs, size_t cou
 
     const size_t og_cursor = buf->cursor();
     buf->aft.insert(0, chs, count);
-    if (buf->mark.has_value()) {
-        // TODO: Is ">= og_cursor" (unlike insert_chars) what we want here?  (Seems like it.)
-        *buf->mark += (*buf->mark >= og_cursor ? count : 0);
-    }
+    add_to_marks_as_of(buf, og_cursor, count);
     buf->virtual_column = current_column(*buf);
-    // TODO: Do we want ">= og_cursor" here?  Seems very context-dependent.
-    buf->first_visible_offset += (buf->first_visible_offset >= og_cursor ? count : 0);
     recenter_cursor_if_offscreen(buf);
     return {
         .new_cursor = buf->cursor(),
@@ -90,11 +91,19 @@ void force_insert_chars_end_before_cursor(buffer *buf,
     }
 }
 
-void update_offset_for_delete_range(size_t *offset, size_t range_beg, size_t range_end) {
-    if (*offset > range_end) {
-        *offset -= (range_end - range_beg);
-    } else if (*offset > range_beg) {
-        *offset = range_beg;
+void update_marks_for_delete_range(buffer *buf, size_t range_beg, size_t range_end) {
+    for (size_t i = 0; i < buf->marks.size(); ++i) {
+        if (buf->marks[i] == SIZE_MAX) {
+            continue;
+        }
+
+        size_t offset = buf->marks[i];
+        if (offset > range_end) {
+            offset -= (range_end - range_beg);
+        } else if (offset > range_beg) {
+            offset = range_beg;
+        }
+        buf->marks[i] = offset;
     }
 }
 
@@ -118,12 +127,9 @@ delete_result delete_left(buffer *buf, size_t og_count) {
     ret.side = Side::left;
 
     buf->bef.resize(new_cursor);
-    if (buf->mark.has_value()) {
-        update_offset_for_delete_range(&*buf->mark, new_cursor, og_cursor);
-    }
+    update_marks_for_delete_range(buf, new_cursor, og_cursor);
 
     buf->virtual_column = current_column(*buf);
-    update_offset_for_delete_range(&buf->first_visible_offset, new_cursor, og_cursor);
     recenter_cursor_if_offscreen(buf);
     if (count < og_count) {
         ret.error_message = "Beginning of buffer";  // TODO: Bad place for UI logic
@@ -150,13 +156,10 @@ delete_result delete_right(buffer *buf, size_t og_count) {
     ret.side = Side::right;
 
     buf->aft.erase(0, count);
-    if (buf->mark.has_value()) {
-        update_offset_for_delete_range(&*buf->mark, cursor, cursor + count);
-    }
+    update_marks_for_delete_range(buf, cursor, cursor + count);
 
     // TODO: We don't do this for doDeleteRight (or doAppendRight) in jsmacs -- the bug is in jsmacs!
     buf->virtual_column = current_column(*buf);
-    update_offset_for_delete_range(&buf->first_visible_offset, cursor, cursor + count);
     recenter_cursor_if_offscreen(buf);
     if (count < og_count) {
         ret.error_message = "End of buffer";  // TODO: Bad place for UI logic
@@ -184,7 +187,11 @@ void move_left_by(buffer *buf, size_t count) {
 }
 
 void set_mark(buffer *buf) {
-    buf->mark = buf->cursor();
+    if (buf->mark.has_value()) {
+        buf->replace_mark(*buf->mark, buf->cursor());
+    } else {
+        buf->mark = buf->add_mark(buf->cursor());
+    }
 }
 
 }  // namespace qwi

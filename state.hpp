@@ -29,9 +29,16 @@ struct buffer_id {
     uint64_t value;
 };
 
+struct mark_id {
+    // index into marks array
+    size_t index = SIZE_MAX;
+};
+
 struct buffer {
     buffer() = delete;
-    explicit buffer(buffer_id _id) : id(_id), undo_info(), non_modified_undo_node(undo_info.current_node) {}
+    explicit buffer(buffer_id _id) : id(_id), undo_info(), non_modified_undo_node(undo_info.current_node) {
+        first_visible_offset = add_mark(0);
+    }
     buffer_id id;
 
     // Used to choose in the list of buffers, unique to the buffer.  Program logic should
@@ -41,6 +48,23 @@ struct buffer {
     uint64_t name_number = 0;  // TODO: Maybe can be size_t.
 
     std::optional<std::string> married_file;
+
+private:
+    // SIZE_MAX is the value for invalid, removed, reusable marks.
+    // The values of these range within `0 <= marks[_] <= size()`.
+    std::vector<size_t> marks;
+
+    friend void add_to_marks_as_of(buffer *buf, size_t first_offset, size_t count);
+    friend void update_marks_for_delete_range(buffer *buf, size_t range_beg, size_t range_end);
+
+public:
+    // An excessively(?) simple interface for mark handling.
+    mark_id add_mark(size_t offset);
+    size_t get_mark_offset(mark_id id) const;
+    void remove_mark(mark_id id);
+
+    // Same as remove_mark and add_mark.
+    void replace_mark(mark_id, size_t offset);
 
     // Buffer content is private to ensure that everything respects read-only.
 private:
@@ -67,7 +91,7 @@ private:
 
 public:
     // Absolute position of the mark, if there is one.
-    std::optional<size_t> mark;
+    std::optional<mark_id> mark;
 
     bool read_only = false;
 
@@ -99,8 +123,7 @@ public:
     // This is and will continue to be the size of the text window -- does not include any
     // status bar rows, even if there is one per buffer.
     window_size window;
-    // 0 <= first_visible_offset <= size().
-    size_t first_visible_offset = 0;
+    mark_id first_visible_offset;
 
     // Returns distance_to_beginning_of_line(*this, this->cursor()).
     size_t cursor_distance_to_beginning_of_line() const;
@@ -147,7 +170,7 @@ struct ui_mode {
 
 struct state {
     // TODO: Remove term.
-    explicit state(int _term) : term(_term) {}
+    explicit state(int _term) : term(_term) { }
     int term = -1;
 
     // Sorted in order from least-recently-used -- `buf` is the active buffer and should

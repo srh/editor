@@ -191,6 +191,42 @@ buffer_number find_or_create_buf(state *state, const std::string& name, int term
     return ret;
 }
 
+mark_id buffer::add_mark(size_t offset) {
+    // TODO: Doesn't scale, and with region-based undo, it will need to scale.
+    for (size_t i = 0; i < marks.size(); ++i) {
+        if (marks[i] == SIZE_MAX) {
+            marks[i] = offset;
+            return mark_id{i};
+        }
+    }
+    mark_id ret{marks.size()};
+    marks.push_back(offset);
+    return ret;
+}
+
+size_t buffer::get_mark_offset(mark_id id) const {
+    logic_checkg(id.index < marks.size());
+    size_t mark_offset = marks[id.index];
+    logic_checkg(mark_offset != SIZE_MAX);
+    return mark_offset;
+}
+
+void buffer::remove_mark(mark_id id) {
+    logic_checkg(id.index < marks.size());
+    size_t mark_offset = marks[id.index];
+    logic_checkg(mark_offset != SIZE_MAX);
+    marks[id.index] = SIZE_MAX;
+}
+
+void buffer::replace_mark(mark_id id, size_t new_offset) {
+    logic_checkg(id.index < marks.size());
+    size_t mark_offset = marks[id.index];
+    logic_checkg(mark_offset != SIZE_MAX);
+    marks[id.index] = new_offset;
+}
+
+
+
 void state::note_error_message(std::string&& msg) {
     if (!msg.empty()) {
         buffer_number num = find_or_create_buf(this, "*Messages*", term, true /* read-only */);

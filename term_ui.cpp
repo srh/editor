@@ -91,7 +91,8 @@ void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
     // _after_ incrementing i for the completely rendered character.
 
     // TODO: We actually don't want to re-render a whole line
-    size_t i = buf.first_visible_offset - distance_to_beginning_of_line(buf, buf.first_visible_offset);
+    size_t first_visible_offset = buf.get_mark_offset(buf.first_visible_offset);
+    size_t i = first_visible_offset - distance_to_beginning_of_line(buf, first_visible_offset);
 
     std::vector<terminal_char> render_row(window.cols, terminal_char{0});
     size_t render_coords_begin = 0;
@@ -104,7 +105,7 @@ void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
     // window.cols.
     auto copy_row_if_visible = [&]() {
         col = 0;
-        if (i > buf.first_visible_offset) {
+        if (i > first_visible_offset) {
             // It simplifies code to throw in this (row < window.rows) check here, instead
             // of carefully calculating where we might need to check it.
             if (row < window.rows) {
@@ -204,7 +205,7 @@ bool cursor_is_offscreen(buffer *buf, size_t cursor) {
     // We might say this is generic code -- even if the buf is for a smaller window, this
     // terminal frame is artificially constructed.
 
-    if (cursor < buf->first_visible_offset) {
+    if (cursor < buf->get_mark_offset(buf->first_visible_offset)) {
         // Take this easy early exit.  Note that sometimes when cursor ==
         // buf->first_visible_offset we still will return true.
         return true;
@@ -234,7 +235,7 @@ void scroll_to_row(buffer *buf, const uint32_t rowno, const size_t buf_pos) {
         pos = pos - distance_to_beginning_of_line(*buf, pos);
         if (rows_stepbacked == rowno || pos == 0) {
             // First visible offset is pos, at beginning of line.
-            buf->first_visible_offset = pos;
+            buf->replace_mark(buf->first_visible_offset, pos);
             return;
         } else if (rows_stepbacked < rowno) {
             // pos > 0, as we tested.
@@ -258,7 +259,7 @@ void scroll_to_row(buffer *buf, const uint32_t rowno, const size_t buf_pos) {
     for (;; ++i) {
         if (i == buf_pos) {
             // idk how this would be possible; just a simple way to prove no infinite traversal.
-            buf->first_visible_offset = pos;
+            buf->replace_mark(buf->first_visible_offset, pos);
             break;
         }
 
@@ -272,7 +273,7 @@ void scroll_to_row(buffer *buf, const uint32_t rowno, const size_t buf_pos) {
             if (rows_stepbacked == rowno) {
                 // Now what?  If col > 0, then first_visible_offset is i.  If col == 0, then
                 // first_visible_offset is i + 1.
-                buf->first_visible_offset = i + (col == 0);
+                buf->replace_mark(buf->first_visible_offset, i + (col == 0));
 
                 goto done_loop;
             }
