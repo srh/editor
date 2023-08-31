@@ -207,7 +207,8 @@ void redraw_state(int term, const terminal_size& window, state& state) {
 
         std::vector<render_coord> coords = { {state.topbuf().cursor(), std::nullopt} };
         terminal_coord window_topleft = {0, 0};
-        render_into_frame(&frame, window_topleft, state.topbuf().win_ctx, state.topbuf(), &coords);
+        render_into_frame(&frame, window_topleft, *state.win_ctx(state.buf_ptr),
+                          state.buf_at(state.buf_ptr), &coords);
 
         // TODO: This is super-hacky -- this gets overwritten if the status area has a
         // prompt.  With multiple buffers, we need some concept of an active buffer, with
@@ -358,12 +359,12 @@ undo_killring_handled left_arrow_keypress(state *state, buffer *active_buf) {
     move_left(active_buf);
     return note_navigation_action(state, active_buf);
 }
-undo_killring_handled up_arrow_keypress(state *state, buffer *active_buf) {
-    move_up(&active_buf->win_ctx, active_buf);
+undo_killring_handled up_arrow_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    move_up(ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
-undo_killring_handled down_arrow_keypress(state *state, buffer *active_buf) {
-    move_down(&active_buf->win_ctx, active_buf);
+undo_killring_handled down_arrow_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    move_down(ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
 undo_killring_handled home_keypress(state *state, buffer *active_buf) {
@@ -410,16 +411,16 @@ undo_killring_handled ctrl_g_keypress(state *state, buffer *active_buf) {
     return cancel_action(state, active_buf);
 }
 
-undo_killring_handled ctrl_n_keypress(state *state, buffer *active_buf) {
-    return down_arrow_keypress(state, active_buf);
+undo_killring_handled ctrl_n_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return down_arrow_keypress(state, ui, active_buf);
 }
 
 undo_killring_handled ctrl_o_keypress(state *state, buffer *active_buf) {
     return open_file_action(state, active_buf);
 }
 
-undo_killring_handled ctrl_p_keypress(state *state, buffer *active_buf) {
-    return up_arrow_keypress(state, active_buf);
+undo_killring_handled ctrl_p_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return up_arrow_keypress(state, ui, active_buf);
 }
 
 undo_killring_handled ctrl_s_keypress(state *state, buffer *active_buf) {
@@ -501,6 +502,7 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
     check_read_tty_char(term, &ch);
 
     buffer *active_buf = state->status_prompt.has_value() ? &state->status_prompt->buf : &state->topbuf();
+    ui_window_ctx *win = &active_buf->win_ctx;
 
     if (ch >= 32 && ch < 127) {
         return character_keypress(state, active_buf, uint8_t(ch));
@@ -561,9 +563,9 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
                 case 'D':
                     return left_arrow_keypress(state, active_buf);
                 case 'A':
-                    return up_arrow_keypress(state, active_buf);
+                    return up_arrow_keypress(state, win, active_buf);
                 case 'B':
-                    return down_arrow_keypress(state, active_buf);
+                    return down_arrow_keypress(state, win, active_buf);
                 case 'H':
                     return home_keypress(state, active_buf);
                 case 'F':
@@ -626,9 +628,9 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
         case 'F': return ctrl_f_keypress(state, active_buf);
         case 'G': return ctrl_g_keypress(state, active_buf);
         case 'K': return ctrl_k_keypress(state, active_buf);
-        case 'N': return ctrl_n_keypress(state, active_buf);
+        case 'N': return ctrl_n_keypress(state, win, active_buf);
         case 'O': return ctrl_o_keypress(state, active_buf);
-        case 'P': return ctrl_p_keypress(state, active_buf);
+        case 'P': return ctrl_p_keypress(state, win, active_buf);
         case 'S': return ctrl_s_keypress(state, active_buf);
         case 'W': return ctrl_w_keypress(state, active_buf);
         case 'Y': return ctrl_y_keypress(state, active_buf);

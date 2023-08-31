@@ -206,13 +206,16 @@ private:
 public:
     buffer_id gen_buf_id() { return buffer_id{next_buf_id_value++}; }
 
-    // buf_ref vs. buffer_ptr vs. the buf_ptr field below -- stupid name-dodging.
-    buffer *buf_ref(buffer_number buf_number) {
+    // buf_at vs. buffer_ptr vs. the buf_ptr field below -- stupid name-dodging.
+    buffer& buf_at(buffer_number buf_number) {
         logic_checkg(buf_number.value < buflist.size());
-        return &buflist[buf_number.value];
+        return buflist[buf_number.value];
     }
 
-    ui_window_ctx *win_ctx(buffer_number n) { return &buf_ref(n)->win_ctx; }
+    // Note that the status prompt buf has a separate win_ctx not looked up by this
+    // function.  In general, win_ctx should take a window_number and a buffer_number.
+    // But right now there's only one window.
+    ui_window_ctx *win_ctx(buffer_number n) { return &buf_at(n).win_ctx; }
 
     // This is going to be a per-window value at some point.
     // 0 <= buf_ptr < buflist.size(), always (except at construction when buflist is empty).
