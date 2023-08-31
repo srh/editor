@@ -245,10 +245,10 @@ void push_printable_repr(buffer_string *str, char sch) {
     }
 }
 
-undo_killring_handled insert_printable_repr(state *state, buffer *buf, char sch) {
+undo_killring_handled insert_printable_repr(state *state, ui_window_ctx *ui, buffer *buf, char sch) {
     buffer_string str;
     push_printable_repr(&str, sch);
-    insert_result res = insert_chars(buf, str.data(), str.size());
+    insert_result res = insert_chars(ui, buf, str.data(), str.size());
     return note_action(state, buf, std::move(res));
 }
 
@@ -286,15 +286,17 @@ undo_killring_handled nop_keypress() {
 // *exit_loop can be assigned true; there is no need to assign it false.
 undo_killring_handled enter_keypress(int term, state *state, bool *exit_loop) {
     if (!state->status_prompt.has_value()) {
-        insert_result res = insert_char(&state->topbuf(), '\n');
-        return note_coalescent_action(state, &state->topbuf(), std::move(res));
+        ui_window_ctx *ui = state->win_ctx(state->buf_ptr);
+        buffer *buf = &state->buf_at(state->buf_ptr);
+        insert_result res = insert_char(ui, buf, '\n');
+        return note_coalescent_action(state, buf, std::move(res));
     }
 
     return enter_handle_status_prompt(term, state, exit_loop);
 }
 
-undo_killring_handled delete_keypress(state *state, buffer *buf) {
-    delete_result res = delete_char(buf);
+undo_killring_handled delete_keypress(state *state, ui_window_ctx *ui, buffer *buf) {
+    delete_result res = delete_char(ui, buf);
     // TODO: Here, and perhaps in general, handle cases where no characters were actually deleted.
     return note_coalescent_action(state, buf, std::move(res));
 }
@@ -319,44 +321,44 @@ undo_killring_handled f12_keypress(state *, buffer *) { return nop_keypress(); }
 
 undo_killring_handled shift_delete_keypress(state *, buffer *) { return unimplemented_keypress(); }
 
-undo_killring_handled character_keypress(state *state, buffer *active_buf, uint8_t uch) {
-    insert_result res = insert_char(active_buf, uch);
+undo_killring_handled character_keypress(state *state, ui_window_ctx *ui, buffer *active_buf, uint8_t uch) {
+    insert_result res = insert_char(ui, active_buf, uch);
     return note_coalescent_action(state, active_buf, std::move(res));
 }
 
-undo_killring_handled tab_keypress(state *state, buffer *active_buf) {
-    return character_keypress(state, active_buf, '\t');
+undo_killring_handled tab_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return character_keypress(state, ui, active_buf, '\t');
 }
 
-undo_killring_handled meta_f_keypress(state *state, buffer *active_buf) {
-    move_forward_word(active_buf);
+undo_killring_handled meta_f_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    move_forward_word(ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
-undo_killring_handled meta_b_keypress(state *state, buffer *active_buf) {
-    move_backward_word(active_buf);
+undo_killring_handled meta_b_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    move_backward_word(ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
 undo_killring_handled meta_q_keypress(state *state, buffer *active_buf) {
     return buffer_close_action(state, active_buf);
 }
-undo_killring_handled meta_y_keypress(state *state, buffer *active_buf) {
-    return alt_yank_from_clipboard(state, active_buf);
+undo_killring_handled meta_y_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return alt_yank_from_clipboard(state, ui, active_buf);
 }
-undo_killring_handled meta_d_keypress(state *state, buffer *active_buf) {
-    return delete_forward_word(state, active_buf);
+undo_killring_handled meta_d_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return delete_forward_word(state, ui, active_buf);
 }
-undo_killring_handled meta_backspace_keypress(state *state, buffer *active_buf) {
-    return delete_backward_word(state, active_buf);
+undo_killring_handled meta_backspace_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return delete_backward_word(state, ui, active_buf);
 }
 undo_killring_handled meta_w_keypress(state *state, buffer *active_buf) {
     return copy_region(state, active_buf);
 }
-undo_killring_handled right_arrow_keypress(state *state, buffer *active_buf) {
-    move_right(active_buf);
+undo_killring_handled right_arrow_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    move_right(ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
-undo_killring_handled left_arrow_keypress(state *state, buffer *active_buf) {
-    move_left(active_buf);
+undo_killring_handled left_arrow_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    move_left(ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
 undo_killring_handled up_arrow_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
@@ -367,25 +369,25 @@ undo_killring_handled down_arrow_keypress(state *state, ui_window_ctx *ui, buffe
     move_down(ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
-undo_killring_handled home_keypress(state *state, buffer *active_buf) {
-    move_home(active_buf);
+undo_killring_handled home_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    move_home(ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
-undo_killring_handled end_keypress(state *state, buffer *active_buf) {
-    move_end(active_buf);
+undo_killring_handled end_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    move_end(ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
 
-undo_killring_handled ctrl_backspace_keypress(state *state, buffer *active_buf) {
-    return delete_backward_word(state, active_buf);
+undo_killring_handled ctrl_backspace_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return delete_backward_word(state, ui, active_buf);
 }
 
-undo_killring_handled ctrl_a_keypress(state *state, buffer *active_buf) {
-    return home_keypress(state, active_buf);
+undo_killring_handled ctrl_a_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return home_keypress(state, ui, active_buf);
 }
 
-undo_killring_handled ctrl_b_keypress(state *state, buffer *active_buf) {
-    return left_arrow_keypress(state, active_buf);
+undo_killring_handled ctrl_b_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return left_arrow_keypress(state, ui, active_buf);
 }
 
 undo_killring_handled ctrl_c_keypress(state *state, buffer *active_buf, bool *exit_loop) {
@@ -395,16 +397,16 @@ undo_killring_handled ctrl_c_keypress(state *state, buffer *active_buf, bool *ex
     return ret;
 }
 
-undo_killring_handled ctrl_d_keypress(state *state, buffer *active_buf) {
-    return delete_keypress(state, active_buf);
+undo_killring_handled ctrl_d_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return delete_keypress(state, ui, active_buf);
 }
 
-undo_killring_handled ctrl_e_keypress(state *state, buffer *active_buf) {
-    return end_keypress(state, active_buf);
+undo_killring_handled ctrl_e_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return end_keypress(state, ui, active_buf);
 }
 
-undo_killring_handled ctrl_f_keypress(state *state, buffer *active_buf) {
-    return right_arrow_keypress(state, active_buf);
+undo_killring_handled ctrl_f_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return right_arrow_keypress(state, ui, active_buf);
 }
 
 undo_killring_handled ctrl_g_keypress(state *state, buffer *active_buf) {
@@ -428,22 +430,22 @@ undo_killring_handled ctrl_s_keypress(state *state, buffer *active_buf) {
     return save_file_action(state, active_buf);
 }
 
-undo_killring_handled backspace_keypress(state *state, buffer *active_buf) {
+undo_killring_handled backspace_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
     // TODO: Here, and perhaps elsewhere, handle undo where no characters were actually deleted.
-    delete_result res = backspace_char(active_buf);
+    delete_result res = backspace_char(ui, active_buf);
     return note_coalescent_action(state, active_buf, std::move(res));
 }
 
-undo_killring_handled ctrl_k_keypress(state *state, buffer *active_buf) {
-    return kill_line(state, active_buf);
+undo_killring_handled ctrl_k_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return kill_line(state, ui, active_buf);
 }
 
-undo_killring_handled ctrl_w_keypress(state *state, buffer *active_buf) {
-    return kill_region(state, active_buf);
+undo_killring_handled ctrl_w_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return kill_region(state, ui, active_buf);
 }
 
-undo_killring_handled ctrl_y_keypress(state *state, buffer *active_buf) {
-    return yank_from_clipboard(state, active_buf);
+undo_killring_handled ctrl_y_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return yank_from_clipboard(state, ui, active_buf);
 }
 
 undo_killring_handled ctrl_space_keypress(state *state, buffer *active_buf) {
@@ -451,9 +453,9 @@ undo_killring_handled ctrl_space_keypress(state *state, buffer *active_buf) {
     return note_backout_action(state, active_buf);
 }
 
-undo_killring_handled ctrl_underscore_keypress(state *state, buffer *active_buf) {
+undo_killring_handled ctrl_underscore_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
     no_yank(&state->clipboard);
-    perform_undo(state, active_buf);
+    perform_undo(state, ui, active_buf);
     return handled_undo_killring(state, active_buf);
 }
 
@@ -505,10 +507,10 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
     ui_window_ctx *win = &active_buf->win_ctx;
 
     if (ch >= 32 && ch < 127) {
-        return character_keypress(state, active_buf, uint8_t(ch));
+        return character_keypress(state, win, active_buf, uint8_t(ch));
     }
     if (ch == '\t') {
-        return tab_keypress(state, active_buf);
+        return tab_keypress(state, win, active_buf);
     }
     if (ch == '\r') {
         return enter_keypress(term, state, exit_loop);
@@ -533,7 +535,7 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
                     if (!numbers.second.has_value()) {
                         switch (numbers.first) {
                         case 3:
-                            return delete_keypress(state, active_buf);
+                            return delete_keypress(state, win, active_buf);
                         case 2:
                             return insert_keypress(state, active_buf);
 
@@ -559,29 +561,29 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
             } else {
                 switch (ch) {
                 case 'C':
-                    return right_arrow_keypress(state, active_buf);
+                    return right_arrow_keypress(state, win, active_buf);
                 case 'D':
-                    return left_arrow_keypress(state, active_buf);
+                    return left_arrow_keypress(state, win, active_buf);
                 case 'A':
                     return up_arrow_keypress(state, win, active_buf);
                 case 'B':
                     return down_arrow_keypress(state, win, active_buf);
                 case 'H':
-                    return home_keypress(state, active_buf);
+                    return home_keypress(state, win, active_buf);
                 case 'F':
-                    return end_keypress(state, active_buf);
+                    return end_keypress(state, win, active_buf);
                 default:
                     break;
                 }
             }
         } else {
             switch (ch) {
-            case 'f': return meta_f_keypress(state, active_buf);
-            case 'b': return meta_b_keypress(state, active_buf);
+            case 'f': return meta_f_keypress(state, win, active_buf);
+            case 'b': return meta_b_keypress(state, win, active_buf);
             case 'q': return meta_q_keypress(state, active_buf);
-            case 'y': return meta_y_keypress(state, active_buf);
-            case 'd': return meta_d_keypress(state, active_buf);
-            case ('?' ^ CTRL_XOR_MASK): return meta_backspace_keypress(state, active_buf);
+            case 'y': return meta_y_keypress(state, win, active_buf);
+            case 'd': return meta_d_keypress(state, win, active_buf);
+            case ('?' ^ CTRL_XOR_MASK): return meta_backspace_keypress(state, win, active_buf);
             case 'w': return meta_w_keypress(state, active_buf);
             case 'O': {
                 check_read_tty_char(term, &ch);
@@ -608,42 +610,42 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
             str.push_back(buffer_char::from_char(c));
         }
 
-        insert_result res = insert_chars(active_buf, str.data(), str.size());
+        insert_result res = insert_chars(win, active_buf, str.data(), str.size());
         return note_action(state, active_buf, std::move(res));
     }
 
     if (ch == 8) {
-        return ctrl_backspace_keypress(state, active_buf);
+        return ctrl_backspace_keypress(state, win, active_buf);
     }
 
     if (uint8_t(ch) <= 127) {
         switch (ch ^ CTRL_XOR_MASK) {
-        case '?': return backspace_keypress(state, active_buf);
+        case '?': return backspace_keypress(state, win, active_buf);
         case '@': return ctrl_space_keypress(state, active_buf); // Ctrl+Space same as C-@
-        case 'A': return ctrl_a_keypress(state, active_buf);
-        case 'B': return ctrl_b_keypress(state, active_buf);
+        case 'A': return ctrl_a_keypress(state, win, active_buf);
+        case 'B': return ctrl_b_keypress(state, win, active_buf);
         case 'C': return ctrl_c_keypress(state, active_buf, exit_loop);
-        case 'D': return ctrl_d_keypress(state, active_buf);
-        case 'E': return ctrl_e_keypress(state, active_buf);
-        case 'F': return ctrl_f_keypress(state, active_buf);
+        case 'D': return ctrl_d_keypress(state, win, active_buf);
+        case 'E': return ctrl_e_keypress(state, win, active_buf);
+        case 'F': return ctrl_f_keypress(state, win, active_buf);
         case 'G': return ctrl_g_keypress(state, active_buf);
-        case 'K': return ctrl_k_keypress(state, active_buf);
+        case 'K': return ctrl_k_keypress(state, win, active_buf);
         case 'N': return ctrl_n_keypress(state, win, active_buf);
         case 'O': return ctrl_o_keypress(state, active_buf);
         case 'P': return ctrl_p_keypress(state, win, active_buf);
         case 'S': return ctrl_s_keypress(state, active_buf);
-        case 'W': return ctrl_w_keypress(state, active_buf);
-        case 'Y': return ctrl_y_keypress(state, active_buf);
-        case '_': return ctrl_underscore_keypress(state, active_buf);
+        case 'W': return ctrl_w_keypress(state, win, active_buf);
+        case 'Y': return ctrl_y_keypress(state, win, active_buf);
+        case '_': return ctrl_underscore_keypress(state, win, active_buf);
         default:
             // For now we do push the printable repr for any unhandled chars, for debugging purposes.
             // TODO: Handle other possible control chars.
-            return insert_printable_repr(state, active_buf, ch);
+            return insert_printable_repr(state, win, active_buf, ch);
         }
     } else {
         // TODO: Handle high characters -- do we just insert them, or do we validate
         // UTF-8, or what?
-        return insert_printable_repr(state, active_buf, ch);
+        return insert_printable_repr(state, win, active_buf, ch);
     }
 }
 

@@ -45,14 +45,14 @@ size_t backward_word_distance(const buffer *buf) {
     return count;
 }
 
-void move_forward_word(buffer *buf) {
+void move_forward_word(ui_window_ctx *ui, buffer *buf) {
     size_t d = forward_word_distance(buf);
-    move_right_by(buf, d);
+    move_right_by(ui, buf, d);
 }
 
-void move_backward_word(buffer *buf) {
+void move_backward_word(ui_window_ctx *ui, buffer *buf) {
     size_t d = backward_word_distance(buf);
-    move_left_by(buf, d);
+    move_left_by(ui, buf, d);
 }
 
 // Maybe move_up and move_down should be in term_ui.cpp.
@@ -178,15 +178,15 @@ void move_down(ui_window_ctx *ui, buffer *buf) {
     recenter_cursor_if_offscreen(&buf->win_ctx, buf);
 }
 
-void move_home(buffer *buf) {
+void move_home(ui_window_ctx *ui, buffer *buf) {
     // TODO: Use uh, screen home and screen end?
     size_t distance = buf->cursor_distance_to_beginning_of_line();
-    move_left_by(buf, distance);
+    move_left_by(ui, buf, distance);
 }
 
-void move_end(buffer *buf) {
+void move_end(ui_window_ctx *ui, buffer *buf) {
     size_t distance = distance_to_eol(*buf, buf->cursor());
-    move_right_by(buf, distance);
+    move_right_by(ui, buf, distance);
 }
 
 }

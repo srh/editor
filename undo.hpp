@@ -66,8 +66,9 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
 
 struct buffer;
 struct state;
+struct ui_window_ctx;
 // TODO: Make error reporting object be a separate type, member object of state.
-void perform_undo(state *st, buffer *buf);
+void perform_undo(state *st, ui_window_ctx *ui, buffer *buf);
 
 }  // namespace qwi
 

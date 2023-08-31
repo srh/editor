@@ -44,17 +44,17 @@ undo_killring_handled buffer_close_action(state *state, buffer *active_buf);
 bool find_buffer_by_name(const state *state, const std::string& text, buffer_number *out);
 undo_killring_handled cancel_action(state *state, buffer *buf);
 
-undo_killring_handled delete_backward_word(state *state, buffer *buf);
-undo_killring_handled delete_forward_word(state *state, buffer *buf);
-undo_killring_handled kill_line(state *state, buffer *buf);
-undo_killring_handled kill_region(state *state, buffer *buf);
+undo_killring_handled delete_backward_word(state *state, ui_window_ctx *ui, buffer *buf);
+undo_killring_handled delete_forward_word(state *state, ui_window_ctx *ui, buffer *buf);
+undo_killring_handled kill_line(state *state, ui_window_ctx *ui, buffer *buf);
+undo_killring_handled kill_region(state *state, ui_window_ctx *ui, buffer *buf);
 undo_killring_handled copy_region(state *state, buffer *buf);
 
 void rotate_to_buffer(state *state, buffer_number buf_number);
 undo_killring_handled rotate_buf_right(state *state, buffer *active_buf);
 undo_killring_handled rotate_buf_left(state *state, buffer *active_buf);
-undo_killring_handled yank_from_clipboard(state *state, buffer *buf);
-undo_killring_handled alt_yank_from_clipboard(state *state, buffer *buf);
+undo_killring_handled yank_from_clipboard(state *state, ui_window_ctx *ui, buffer *buf);
+undo_killring_handled alt_yank_from_clipboard(state *state, ui_window_ctx *ui, buffer *buf);
 
 undo_killring_handled buffer_switch_action(state *state, buffer *active_buf);
 

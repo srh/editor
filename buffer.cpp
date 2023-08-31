@@ -25,7 +25,7 @@ void add_to_marks_as_of(buffer *buf, size_t first_offset, size_t count) {
     }
 }
 
-insert_result insert_chars(buffer *buf, const buffer_char *chs, size_t count) {
+insert_result insert_chars(ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count) {
     if (buf->read_only) {
         return {
             .new_cursor = buf->cursor(),
@@ -39,8 +39,8 @@ insert_result insert_chars(buffer *buf, const buffer_char *chs, size_t count) {
     buf->bef.append(chs, count);
     add_to_marks_as_of(buf, og_cursor + 1, count);
 
-    buf->win_ctx.virtual_column = std::nullopt;
-    recenter_cursor_if_offscreen(&buf->win_ctx, buf);
+    ui->virtual_column = std::nullopt;
+    recenter_cursor_if_offscreen(ui, buf);
     return {
         .new_cursor = buf->cursor(),
         .insertedText = buffer_string(chs, count),
@@ -48,7 +48,7 @@ insert_result insert_chars(buffer *buf, const buffer_char *chs, size_t count) {
         .error_message = NO_ERROR };
 }
 
-insert_result insert_chars_right(buffer *buf, const buffer_char *chs, size_t count) {
+insert_result insert_chars_right(ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count) {
     if (buf->read_only) {
         return {
             .new_cursor = buf->cursor(),
@@ -61,8 +61,10 @@ insert_result insert_chars_right(buffer *buf, const buffer_char *chs, size_t cou
     const size_t og_cursor = buf->cursor();
     buf->aft.insert(0, chs, count);
     add_to_marks_as_of(buf, og_cursor, count);
-    buf->win_ctx.virtual_column = std::nullopt;
-    recenter_cursor_if_offscreen(&buf->win_ctx, buf);
+
+    ui->virtual_column = std::nullopt;
+    recenter_cursor_if_offscreen(ui, buf);
+
     return {
         .new_cursor = buf->cursor(),
         .insertedText = buffer_string(chs, count),
@@ -72,7 +74,7 @@ insert_result insert_chars_right(buffer *buf, const buffer_char *chs, size_t cou
 }
 
 // TODO: This non-generic function basically sucks.
-void force_insert_chars_end_before_cursor(buffer *buf,
+void force_insert_chars_end_before_cursor(ui_window_ctx *ui, buffer *buf,
                                           const buffer_char *chs, size_t count) {
     const size_t og_cursor = buf->cursor();
     const size_t og_size = buf->size();
@@ -82,7 +84,7 @@ void force_insert_chars_end_before_cursor(buffer *buf,
         buf->aft.append(chs, count);
     } else {
         buf->bef.append(chs, count);
-        buf->win_ctx.virtual_column = std::nullopt;
+        ui->virtual_column = std::nullopt;
         // I guess we don't touch first_visible_offset -- later we'll want
         // scroll-to-cursor behavior with *Messages*.
 
@@ -106,7 +108,7 @@ void update_marks_for_delete_range(buffer *buf, size_t range_beg, size_t range_e
     }
 }
 
-delete_result delete_left(buffer *buf, size_t og_count) {
+delete_result delete_left(ui_window_ctx *ui, buffer *buf, size_t og_count) {
     if (buf->read_only) {
         return {
             .new_cursor = buf->cursor(),
@@ -128,15 +130,15 @@ delete_result delete_left(buffer *buf, size_t og_count) {
     buf->bef.resize(new_cursor);
     update_marks_for_delete_range(buf, new_cursor, og_cursor);
 
-    buf->win_ctx.virtual_column = std::nullopt;
-    recenter_cursor_if_offscreen(&buf->win_ctx, buf);
+    ui->virtual_column = std::nullopt;
+    recenter_cursor_if_offscreen(ui, buf);
     if (count < og_count) {
         ret.error_message = "Beginning of buffer";  // TODO: Bad place for UI logic
     }
     return ret;
 }
 
-delete_result delete_right(buffer *buf, size_t og_count) {
+delete_result delete_right(ui_window_ctx *ui, buffer *buf, size_t og_count) {
     if (buf->read_only) {
         return {
             .new_cursor = buf->cursor(),
@@ -158,31 +160,31 @@ delete_result delete_right(buffer *buf, size_t og_count) {
     update_marks_for_delete_range(buf, cursor, cursor + count);
 
     // TODO: We don't do this for doDeleteRight (or doAppendRight) in jsmacs -- the bug is in jsmacs!
-    buf->win_ctx.virtual_column = std::nullopt;
-    recenter_cursor_if_offscreen(&buf->win_ctx, buf);
+    ui->virtual_column = std::nullopt;
+    recenter_cursor_if_offscreen(ui, buf);
     if (count < og_count) {
         ret.error_message = "End of buffer";  // TODO: Bad place for UI logic
     }
     return ret;
 }
 
-void move_right_by(buffer *buf, size_t count) {
+void move_right_by(ui_window_ctx *ui, buffer *buf, size_t count) {
     count = std::min<size_t>(count, buf->aft.size());
     buf->bef.append(buf->aft, 0, count);
     buf->aft.erase(0, count);
     // TODO: Should we set virtual_column if count is 0?  (Can count be 0?)
-    buf->win_ctx.virtual_column = std::nullopt;
-    recenter_cursor_if_offscreen(&buf->win_ctx, buf);
+    ui->virtual_column = std::nullopt;
+    recenter_cursor_if_offscreen(ui, buf);
 }
 
-void move_left_by(buffer *buf, size_t count) {
+void move_left_by(ui_window_ctx *ui, buffer *buf, size_t count) {
     // TODO: Could both this and move_right_by be the same fn, using buf->set_cursor?
     count = std::min<size_t>(count, buf->bef.size());
     buf->aft.insert(0, buf->bef, buf->bef.size() - count, count);
     buf->bef.resize(buf->bef.size() - count);
     // TODO: Should we set virtual_column if count is 0?  (Can count be 0?)
-    buf->win_ctx.virtual_column = std::nullopt;
-    recenter_cursor_if_offscreen(&buf->win_ctx, buf);
+    ui->virtual_column = std::nullopt;
+    recenter_cursor_if_offscreen(ui, buf);
 }
 
 void set_mark(buffer *buf) {

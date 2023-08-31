@@ -159,32 +159,32 @@ undo_killring_handled cancel_action(state *state, buffer *buf) {
     return ret;
 }
 
-undo_killring_handled delete_backward_word(state *state, buffer *buf) {
+undo_killring_handled delete_backward_word(state *state, ui_window_ctx *ui, buffer *buf) {
     size_t d = backward_word_distance(buf);
-    delete_result delres = delete_left(buf, d);
+    delete_result delres = delete_left(ui, buf, d);
     record_yank(&state->clipboard, delres.deletedText, yank_side::left);
     state->note_error_message(std::move(delres.error_message));
     note_undo(buf, std::move(delres));
     return handled_undo_killring(state, buf);
 }
 
-undo_killring_handled delete_forward_word(state *state, buffer *buf) {
+undo_killring_handled delete_forward_word(state *state, ui_window_ctx *ui, buffer *buf) {
     size_t d = forward_word_distance(buf);
-    delete_result delres = delete_right(buf, d);
+    delete_result delres = delete_right(ui, buf, d);
     record_yank(&state->clipboard, delres.deletedText, yank_side::right);
     state->note_error_message(std::move(delres.error_message));
     note_undo(buf, std::move(delres));
     return handled_undo_killring(state, buf);
 }
 
-undo_killring_handled kill_line(state *state, buffer *buf) {
+undo_killring_handled kill_line(state *state, ui_window_ctx *ui, buffer *buf) {
     size_t eolDistance = distance_to_eol(*buf, buf->cursor());
 
     delete_result delres;
     if (eolDistance == 0 && buf->cursor() < buf->size()) {
-        delres = delete_right(buf, 1);
+        delres = delete_right(ui, buf, 1);
     } else {
-        delres = delete_right(buf, eolDistance);
+        delres = delete_right(ui, buf, eolDistance);
     }
     record_yank(&state->clipboard, delres.deletedText, yank_side::right);
     state->note_error_message(std::move(delres.error_message));
@@ -192,7 +192,7 @@ undo_killring_handled kill_line(state *state, buffer *buf) {
     return handled_undo_killring(state, buf);
 }
 
-undo_killring_handled kill_region(state *state, buffer *buf) {
+undo_killring_handled kill_region(state *state, ui_window_ctx *ui, buffer *buf) {
     if (!buf->mark.has_value()) {
         // TODO: Display error
         // (We do NOT want no_yank here.)  We do want to disrupt the undo action chain (if only because Emacs does that).
@@ -203,12 +203,12 @@ undo_killring_handled kill_region(state *state, buffer *buf) {
     size_t mark = buf->get_mark_offset(*buf->mark);
     size_t cursor = buf->cursor();
     if (mark > cursor) {
-        delete_result delres = delete_right(buf, mark - cursor);
+        delete_result delres = delete_right(ui, buf, mark - cursor);
         record_yank(&state->clipboard, delres.deletedText, yank_side::right);
         note_undo(buf, std::move(delres));
         return handled_undo_killring(state, buf);
     } else if (mark < cursor) {
-        delete_result delres = delete_left(buf, cursor - mark);
+        delete_result delres = delete_left(ui, buf, cursor - mark);
         record_yank(&state->clipboard, delres.deletedText, yank_side::left);
         note_undo(buf, std::move(delres));
         return handled_undo_killring(state, buf);
@@ -546,10 +546,10 @@ undo_killring_handled rotate_buf_left(state *state, buffer *active_buf) {
     return ret;
 }
 
-undo_killring_handled yank_from_clipboard(state *state, buffer *buf) {
+undo_killring_handled yank_from_clipboard(state *state, ui_window_ctx *ui, buffer *buf) {
     std::optional<const buffer_string *> text = do_yank(&state->clipboard);
     if (text.has_value()) {
-        insert_result res = insert_chars(buf, (*text)->data(), (*text)->size());
+        insert_result res = insert_chars(ui, buf, (*text)->data(), (*text)->size());
         note_undo(buf, std::move(res));
         return handled_undo_killring(state, buf);
     } else {
@@ -561,7 +561,7 @@ undo_killring_handled yank_from_clipboard(state *state, buffer *buf) {
     // helper.  Possibly false-DRY (someday).
 }
 
-undo_killring_handled alt_yank_from_clipboard(state *state, buffer *buf) {
+undo_killring_handled alt_yank_from_clipboard(state *state, ui_window_ctx *ui, buffer *buf) {
     if (state->clipboard.justYanked.has_value()) {
         // TODO: this code will be wrong with undo impled -- the deletion and insertion should be a single undo chunk -- not a problem here but is this a bug in jsmacs?
         size_t amount_to_delete = *state->clipboard.justYanked;
@@ -569,8 +569,8 @@ undo_killring_handled alt_yank_from_clipboard(state *state, buffer *buf) {
         std::optional<const buffer_string *> text = do_yank(&state->clipboard);
         logic_check(text.has_value(), "with justYanked non-null, do_yank returns null");
 
-        delete_result delres = delete_left(buf, amount_to_delete);
-        insert_result insres = insert_chars(buf, (*text)->data(), (*text)->size());
+        delete_result delres = delete_left(ui, buf, amount_to_delete);
+        insert_result insres = insert_chars(ui, buf, (*text)->data(), (*text)->size());
 
         // Add the reverse action to undo history.
         atomic_undo_item item = {

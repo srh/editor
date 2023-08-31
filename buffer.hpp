@@ -14,19 +14,19 @@ struct [[nodiscard]] insert_result {
     std::string error_message;  // "" or "Buffer is read only"
 };
 
-insert_result insert_chars(buffer *buf, const buffer_char *chs, size_t count);
+insert_result insert_chars(ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count);
 
-inline insert_result insert_char(buffer *buf, buffer_char sch) {
-    return insert_chars(buf, &sch, 1);
+inline insert_result insert_char(ui_window_ctx *ui, buffer *buf, buffer_char sch) {
+    return insert_chars(ui, buf, &sch, 1);
 }
-inline insert_result insert_char(buffer *buf, uint8_t uch) {
+inline insert_result insert_char(ui_window_ctx *ui, buffer *buf, uint8_t uch) {
     buffer_char ch = {uch};
-    return insert_chars(buf, &ch, 1);
+    return insert_chars(ui, buf, &ch, 1);
 }
 
-insert_result insert_chars_right(buffer *buf, const buffer_char *chs, size_t count);
+insert_result insert_chars_right(ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count);
 
-void force_insert_chars_end_before_cursor(buffer *buf,
+void force_insert_chars_end_before_cursor(ui_window_ctx *ui, buffer *buf,
                                           const buffer_char *chs, size_t count);
 
 // TODO: Maximal efficiency: don't construct a delete_result on exactly the funcalls that don't use it.
@@ -37,28 +37,28 @@ struct [[nodiscard]] delete_result {
     Side side;
     std::string error_message;
 };
-delete_result delete_left(buffer *buf, size_t count);
+delete_result delete_left(ui_window_ctx *ui, buffer *buf, size_t count);
 
-inline delete_result backspace_char(buffer *buf) {
-    return delete_left(buf, 1);
+inline delete_result backspace_char(ui_window_ctx *ui, buffer *buf) {
+    return delete_left(ui, buf, 1);
 }
 
-delete_result delete_right(buffer *buf, size_t count);
+delete_result delete_right(ui_window_ctx *ui, buffer *buf, size_t count);
 
-inline delete_result delete_char(buffer *buf) {
-    return delete_right(buf, 1);
+inline delete_result delete_char(ui_window_ctx *ui, buffer *buf) {
+    return delete_right(ui, buf, 1);
 }
 
-void move_right_by(buffer *buf, size_t count);
+void move_right_by(ui_window_ctx *ui, buffer *buf, size_t count);
 
-inline void move_right(buffer *buf) {
-    move_right_by(buf, 1);
+inline void move_right(ui_window_ctx *ui, buffer *buf) {
+    move_right_by(ui, buf, 1);
 }
 
-void move_left_by(buffer *buf, size_t count);
+void move_left_by(ui_window_ctx *ui, buffer *buf, size_t count);
 
-inline void move_left(buffer *buf) {
-    move_left_by(buf, 1);
+inline void move_left(ui_window_ctx *ui, buffer *buf) {
+    move_left_by(ui, buf, 1);
 }
 
 void set_mark(buffer *buf);

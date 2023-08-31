@@ -231,14 +231,16 @@ void state::note_error_message(std::string&& msg) {
     if (!msg.empty()) {
         buffer_number num = find_or_create_buf(this, "*Messages*", term, true /* read-only */);
         buffer *buf = buffer_ptr(this, num);
+        // TODO: This edit should _not_ be tied to any window!!!  Or it should be tied to _all_ live windows in some way...?
+        ui_window_ctx *ui = win_ctx(num);
 
         force_insert_chars_end_before_cursor(
-            buf,
+            ui, buf,
             as_buffer_chars(msg.data()), msg.size());
 
         char ch = '\n';
         force_insert_chars_end_before_cursor(
-            buf,
+            ui, buf,
             as_buffer_chars(&ch), 1);
         // We don't touch the buffer's undo history or yank history -- since we append at
         // the end of the buffer, the behavior doesn't need to adjust any undo offsets --
