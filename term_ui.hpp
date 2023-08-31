@@ -76,7 +76,7 @@ terminal_frame init_frame(const terminal_size& window);
 // render_coords must be sorted by buf_pos.
 // render_frame doesn't render the cursor -- that's computed with render_coords and rendered then.
 void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
-                       const buffer& buf, std::vector<render_coord> *render_coords);
+                       const ui_window_ctx& ui, const buffer& buf, std::vector<render_coord> *render_coords);
 
 
 bool too_small_to_render(const window_size& window);
@@ -87,10 +87,10 @@ constexpr bool INIT_FRAME_INITIALIZES_WITH_SPACES = true;
 
 size_t pos_current_column(const buffer& buf, const size_t pos);
 size_t current_column(const buffer& buf);
-void recenter_cursor_if_offscreen(buffer *buf);
+void recenter_cursor_if_offscreen(ui_window_ctx *ui, buffer *buf);
 
 // Changes buf->window; also resets virtual_column.
-void resize_buf_window(buffer *buf, const window_size& buf_window);
+void resize_buf_window(ui_window_ctx *ui, const window_size& buf_window);
 
 }  // namespace qwi
 

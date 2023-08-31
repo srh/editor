@@ -114,7 +114,7 @@ state initial_state(int term, const command_line_args& args, const terminal_size
         for (size_t i = 0; i < n_files; ++i) {
             // TODO: Maybe combine these ops and define the fn in editing.cpp
             state.buflist.push_back(open_file_into_detached_buffer(&state, args.files.at(i)));
-            state.buflist.back().set_window(buf_window);
+            state.buflist.back().win_ctx.set_window(buf_window);
             apply_number_to_buf(&state, buffer_number{i});
 
             // TODO: How do we handle duplicate file names?  Just allow identical buffer
@@ -184,8 +184,8 @@ void render_status_area(terminal_frame *frame, state& state) {
         std::vector<render_coord> coords = { {state.status_prompt->buf.cursor(), std::nullopt} };
         terminal_coord prompt_topleft = {.row = last_row, .col = uint32_t(message.size())};
         // TODO: Use resize_buf_window here, generally.
-        state.status_prompt->buf.set_window({.rows = 1, .cols = frame->window.cols - prompt_topleft.col});
-        render_into_frame(frame, prompt_topleft, state.status_prompt->buf, &coords);
+        state.status_prompt->buf.win_ctx.set_window({.rows = 1, .cols = frame->window.cols - prompt_topleft.col});
+        render_into_frame(frame, prompt_topleft, state.status_prompt->buf.win_ctx, state.status_prompt->buf, &coords);
 
         // TODO: This is super-hacky -- we overwrite the main buffer's cursor.
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
@@ -200,14 +200,14 @@ void render_status_area(terminal_frame *frame, state& state) {
 void redraw_state(int term, const terminal_size& window, state& state) {
     terminal_frame frame = init_frame(window);
 
-    if (!too_small_to_render(state.topbuf().window)) {
+    if (!too_small_to_render(state.topbuf().win_ctx.window)) {
         // TODO: Support resizing.
-        runtime_check(window.cols == state.topbuf().window.cols, "window cols changed");
-        runtime_check(window.rows == state.topbuf().window.rows + STATUS_AREA_HEIGHT, "window rows changed");
+        runtime_check(window.cols == state.topbuf().win_ctx.window.cols, "window cols changed");
+        runtime_check(window.rows == state.topbuf().win_ctx.window.rows + STATUS_AREA_HEIGHT, "window rows changed");
 
         std::vector<render_coord> coords = { {state.topbuf().cursor(), std::nullopt} };
         terminal_coord window_topleft = {0, 0};
-        render_into_frame(&frame, window_topleft, state.topbuf(), &coords);
+        render_into_frame(&frame, window_topleft, state.topbuf().win_ctx, state.topbuf(), &coords);
 
         // TODO: This is super-hacky -- this gets overwritten if the status area has a
         // prompt.  With multiple buffers, we need some concept of an active buffer, with
@@ -359,11 +359,11 @@ undo_killring_handled left_arrow_keypress(state *state, buffer *active_buf) {
     return note_navigation_action(state, active_buf);
 }
 undo_killring_handled up_arrow_keypress(state *state, buffer *active_buf) {
-    move_up(active_buf);
+    move_up(&active_buf->win_ctx, active_buf);
     return note_navigation_action(state, active_buf);
 }
 undo_killring_handled down_arrow_keypress(state *state, buffer *active_buf) {
-    move_down(active_buf);
+    move_down(&active_buf->win_ctx, active_buf);
     return note_navigation_action(state, active_buf);
 }
 undo_killring_handled home_keypress(state *state, buffer *active_buf) {

@@ -46,11 +46,29 @@ struct mark_id {
     size_t index = SIZE_MAX;
 };
 
+struct ui_window_ctx {
+    explicit ui_window_ctx(mark_id fvo) : first_visible_offset(fvo) { }
+
+    // Column that is maintained as we press up and down arrow keys past shorter lines.
+    // For now, this assumes a monospace font (maybe with 2x-width glyphs) on all GUIs.
+    // If it's nullopt, it should be treated equivalently as if we computed the cursor()'s column
+    // right now.
+    std::optional<size_t> virtual_column;
+
+    // This is and will continue to be the size of the text window -- does not include any
+    // status bar rows, even if there is one per buffer.
+    window_size window;
+    mark_id first_visible_offset;
+
+    void set_window(const window_size& win) { window = win; }
+};
+
+void ensure_virtual_column_initialized(ui_window_ctx *ui, const buffer *buf);
+
 struct buffer {
     buffer() = delete;
-    explicit buffer(buffer_id _id) : id(_id), undo_info(), non_modified_undo_node(undo_info.current_node) {
-        first_visible_offset = add_mark(0);
-    }
+    explicit buffer(buffer_id _id) : id(_id), undo_info(), non_modified_undo_node(undo_info.current_node),
+                                     win_ctx(add_mark(0)) { }
     buffer_id id;
 
     // Used to choose in the list of buffers, unique to the buffer.  Program logic should
@@ -127,23 +145,10 @@ public:
     bool modified_flag() const { return non_modified_undo_node != undo_info.current_node; }
 
     /* UI-specific stuff -- this could get factored out of buffer at some point */
-
-    // Column that is maintained as we press up and down arrow keys past shorter lines.
-    // For now, this assumes a monospace font (maybe with 2x-width glyphs) on all GUIs.
-    // If it's nullopt, it should be treated equivalently as if we computed the cursor()'s column
-    // right now.
-    std::optional<size_t> virtual_column;
-    void ensure_virtual_column_initialized();
-
-    // This is and will continue to be the size of the text window -- does not include any
-    // status bar rows, even if there is one per buffer.
-    window_size window;
-    mark_id first_visible_offset;
+    ui_window_ctx win_ctx;
 
     // Returns distance_to_beginning_of_line(*this, this->cursor()).
     size_t cursor_distance_to_beginning_of_line() const;
-
-    void set_window(const window_size& win) { window = win; }
 
     std::string copy_to_string() const;
 
@@ -201,6 +206,15 @@ private:
 public:
     buffer_id gen_buf_id() { return buffer_id{next_buf_id_value++}; }
 
+    // buf_ref vs. buffer_ptr vs. the buf_ptr field below -- stupid name-dodging.
+    buffer *buf_ref(buffer_number buf_number) {
+        logic_checkg(buf_number.value < buflist.size());
+        return &buflist[buf_number.value];
+    }
+
+    ui_window_ctx *win_ctx(buffer_number n) { return &buf_ref(n)->win_ctx; }
+
+    // This is going to be a per-window value at some point.
     // 0 <= buf_ptr < buflist.size(), always (except at construction when buflist is empty).
     buffer_number buf_ptr = {SIZE_MAX};
 

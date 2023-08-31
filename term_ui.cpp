@@ -26,9 +26,9 @@ size_t current_column(const buffer& buf) {
 }
 
 // TODO: Is this where we want this implemented?  Uh, sure.
-void buffer::ensure_virtual_column_initialized() {
-    if (!virtual_column.has_value()) {
-        virtual_column = current_column(*this);
+void ensure_virtual_column_initialized(ui_window_ctx *ui, const buffer *buf) {
+    if (!ui->virtual_column.has_value()) {
+        ui->virtual_column = current_column(*buf);
     }
 }
 
@@ -82,9 +82,9 @@ terminal_frame init_frame(const terminal_size& window) {
 // render_coords must be sorted by buf_pos.
 // render_frame doesn't render the cursor -- that's computed with render_coords and rendered then.
 void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
-                       const buffer& buf, std::vector<render_coord> *render_coords) {
+                       const ui_window_ctx& ui, const buffer& buf, std::vector<render_coord> *render_coords) {
     terminal_frame& frame = *frame_ptr;
-    const window_size window = buf.window;
+    const window_size window = ui.window;
     // Some very necessary checks for memory safety.
     runtime_check(u32_add(window_topleft.row, window.rows) <= frame.window.rows,
                   "buf window rows exceeds frame window");
@@ -99,7 +99,7 @@ void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
     // _after_ incrementing i for the completely rendered character.
 
     // TODO: We actually don't want to re-render a whole line
-    size_t first_visible_offset = buf.get_mark_offset(buf.first_visible_offset);
+    size_t first_visible_offset = buf.get_mark_offset(ui.first_visible_offset);
     size_t i = first_visible_offset - distance_to_beginning_of_line(buf, first_visible_offset);
 
     std::vector<terminal_char> render_row(window.cols, terminal_char{0});
@@ -204,8 +204,9 @@ bool too_small_to_render(const window_size& window) {
     return window.cols < 2 || window.rows == 0;
 }
 
-bool cursor_is_offscreen(buffer *buf, size_t cursor) {
-    if (too_small_to_render(buf->window)) {
+// TODO: Make params const.
+bool cursor_is_offscreen(ui_window_ctx *ui, buffer *buf, size_t cursor) {
+    if (too_small_to_render(ui->window)) {
         // Return false?
         return false;
     }
@@ -213,26 +214,26 @@ bool cursor_is_offscreen(buffer *buf, size_t cursor) {
     // We might say this is generic code -- even if the buf is for a smaller window, this
     // terminal frame is artificially constructed.
 
-    if (cursor < buf->get_mark_offset(buf->first_visible_offset)) {
+    if (cursor < buf->get_mark_offset(ui->first_visible_offset)) {
         // Take this easy early exit.  Note that sometimes when cursor ==
         // buf->first_visible_offset we still will return true.
         return true;
     }
 
-    terminal_size window = terminal_size{buf->window.rows, buf->window.cols};
+    terminal_size window = terminal_size{ui->window.rows, ui->window.cols};
     terminal_frame frame = init_frame(window);
     std::vector<render_coord> coords = { {cursor, std::nullopt} };
     terminal_coord window_topleft = { 0, 0 };
-    render_into_frame(&frame, window_topleft, *buf, &coords);
+    render_into_frame(&frame, window_topleft, *ui, *buf, &coords);
     return !coords[0].rendered_pos.has_value();
 }
 
 // Scrolls buf so that buf_pos is close to rowno.  (Sometimes it can't get there, e.g. we
 // can't scroll past front of buffer, or a very narrow window might force buf_pos's row <
 // rowno without equality).
-void scroll_to_row(buffer *buf, const uint32_t rowno, const size_t buf_pos) {
+void scroll_to_row(ui_window_ctx *ui, buffer *buf, const uint32_t rowno, const size_t buf_pos) {
     // We're going to back up and render one line at a time.
-    const size_t window_cols = buf->window.cols;
+    const size_t window_cols = ui->window.cols;
 
     size_t rows_stepbacked = 0;
     size_t pos = buf_pos;
@@ -243,7 +244,7 @@ void scroll_to_row(buffer *buf, const uint32_t rowno, const size_t buf_pos) {
         pos = pos - distance_to_beginning_of_line(*buf, pos);
         if (rows_stepbacked == rowno || pos == 0) {
             // First visible offset is pos, at beginning of line.
-            buf->replace_mark(buf->first_visible_offset, pos);
+            buf->replace_mark(ui->first_visible_offset, pos);
             return;
         } else if (rows_stepbacked < rowno) {
             // pos > 0, as we tested.
@@ -267,7 +268,7 @@ void scroll_to_row(buffer *buf, const uint32_t rowno, const size_t buf_pos) {
     for (;; ++i) {
         if (i == buf_pos) {
             // idk how this would be possible; just a simple way to prove no infinite traversal.
-            buf->replace_mark(buf->first_visible_offset, pos);
+            buf->replace_mark(ui->first_visible_offset, pos);
             break;
         }
 
@@ -281,7 +282,7 @@ void scroll_to_row(buffer *buf, const uint32_t rowno, const size_t buf_pos) {
             if (rows_stepbacked == rowno) {
                 // Now what?  If col > 0, then first_visible_offset is i.  If col == 0, then
                 // first_visible_offset is i + 1.
-                buf->replace_mark(buf->first_visible_offset, i + (col == 0));
+                buf->replace_mark(ui->first_visible_offset, i + (col == 0));
 
                 goto done_loop;
             }
@@ -294,20 +295,20 @@ void scroll_to_row(buffer *buf, const uint32_t rowno, const size_t buf_pos) {
 // Scrolls buf so that buf_pos is close to the middle (as close as possible, e.g. if it's
 // too close to the top of the buffer, it'll be above the middle).  buf_pos is probably
 // the cursor position.
-void scroll_to_mid(buffer *buf, size_t buf_pos) {
-    scroll_to_row(buf, buf->window.rows / 2, buf_pos);
+void scroll_to_mid(ui_window_ctx *ui, buffer *buf, size_t buf_pos) {
+    scroll_to_row(ui, buf, ui->window.rows / 2, buf_pos);
 }
 
-void recenter_cursor_if_offscreen(buffer *buf) {
-    if (cursor_is_offscreen(buf, buf->cursor())) {
-        scroll_to_mid(buf, buf->cursor());
+void recenter_cursor_if_offscreen(ui_window_ctx *ui, buffer *buf) {
+    if (cursor_is_offscreen(ui, buf, buf->cursor())) {
+        scroll_to_mid(ui, buf, buf->cursor());
     }
 }
 
-void resize_buf_window(buffer *buf, const window_size& buf_window) {
+void resize_buf_window(ui_window_ctx *ui, const window_size& buf_window) {
     // This means the window actually changed -- we need to set the column.
-    buf->set_window(buf_window);
-    buf->virtual_column = std::nullopt;
+    ui->set_window(buf_window);
+    ui->virtual_column = std::nullopt;
 }
 
 }  // namespace qwi

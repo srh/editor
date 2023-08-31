@@ -56,12 +56,12 @@ void move_backward_word(buffer *buf) {
 }
 
 // Maybe move_up and move_down should be in term_ui.cpp.
-void move_up(buffer *buf) {
-    const size_t window_cols = buf->window.cols;
+void move_up(ui_window_ctx *ui, buffer *buf) {
+    const size_t window_cols = ui->window.cols;
     // We're not interested in virtual_column as a "line column" -- just interested in the
     // visual distance to beginning of line.
-    buf->ensure_virtual_column_initialized();
-    const size_t target_column = *buf->virtual_column % window_cols;
+    ensure_virtual_column_initialized(ui, buf);
+    const size_t target_column = *ui->virtual_column % window_cols;
 
     // Basically we want the output of the following algorithm:
     // 1. Render the current line up to the cursor.
@@ -124,13 +124,13 @@ void move_up(buffer *buf) {
         return;
     }
     buf->set_cursor(prev_row_cursor_proposal);
-    recenter_cursor_if_offscreen(buf);
+    recenter_cursor_if_offscreen(ui, buf);
 }
 
-void move_down(buffer *buf) {
-    const size_t window_cols = buf->window.cols;
-    buf->ensure_virtual_column_initialized();
-    const size_t target_column = *buf->virtual_column % window_cols;
+void move_down(ui_window_ctx *ui, buffer *buf) {
+    const size_t window_cols = ui->window.cols;
+    ensure_virtual_column_initialized(ui, buf);
+    const size_t target_column = *ui->virtual_column % window_cols;
 
     // Remember we do some traversing in current_column.
     size_t line_col = current_column(*buf);
@@ -175,7 +175,7 @@ void move_down(buffer *buf) {
     }
 
     buf->set_cursor(candidate_index);
-    recenter_cursor_if_offscreen(buf);
+    recenter_cursor_if_offscreen(&buf->win_ctx, buf);
 }
 
 void move_home(buffer *buf) {

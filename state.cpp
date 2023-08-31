@@ -114,7 +114,7 @@ window_size main_buf_window_from_terminal_window(const terminal_size& term_windo
 void resize_window(state *st, const terminal_size& new_window) {
     window_size buf_window = main_buf_window_from_terminal_window(new_window);
     for (buffer& buf : st->buflist) {
-        resize_buf_window(&buf, buf_window);
+        resize_buf_window(&buf.win_ctx, buf_window);
     }
 
     // TODO: Resize prompt window.
@@ -180,7 +180,7 @@ buffer_number find_or_create_buf(state *state, const std::string& name, int term
     buf.name_str = name;
     terminal_size window = get_terminal_size(term);
     window_size buf_window = main_buf_window_from_terminal_window(window);
-    buf.set_window(buf_window);
+    buf.win_ctx.set_window(buf_window);
 
     // We insert the buf just before the current buf -- thus we increment buf_ptr.
     logic_checkg(state->buf_ptr.value < state->buflist.size());
