@@ -175,7 +175,7 @@ void move_down(ui_window_ctx *ui, buffer *buf) {
     }
 
     buf->set_cursor(candidate_index);
-    recenter_cursor_if_offscreen(&buf->win_ctx, buf);
+    recenter_cursor_if_offscreen(ui, buf);
 }
 
 void move_home(ui_window_ctx *ui, buffer *buf) {
