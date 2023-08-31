@@ -5,6 +5,7 @@
 
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "error.hpp"
@@ -28,6 +29,17 @@ struct buffer_number {
 struct buffer_id {
     uint64_t value;
 };
+
+}  // namespace qwi
+
+template<>
+struct std::hash<qwi::buffer_id> {
+    std::size_t operator()(const qwi::buffer_id& id) const noexcept {
+        return std::hash<uint64_t>{}(id.value);
+    }
+};
+
+namespace qwi {
 
 struct mark_id {
     // index into marks array
