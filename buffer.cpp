@@ -39,8 +39,7 @@ insert_result insert_chars(buffer *buf, const buffer_char *chs, size_t count) {
     buf->bef.append(chs, count);
     add_to_marks_as_of(buf, og_cursor + 1, count);
 
-    // TODO: Don't recompute virtual_column every time.
-    buf->virtual_column = current_column(*buf);
+    buf->virtual_column = std::nullopt;
     recenter_cursor_if_offscreen(buf);
     return {
         .new_cursor = buf->cursor(),
@@ -62,7 +61,7 @@ insert_result insert_chars_right(buffer *buf, const buffer_char *chs, size_t cou
     const size_t og_cursor = buf->cursor();
     buf->aft.insert(0, chs, count);
     add_to_marks_as_of(buf, og_cursor, count);
-    buf->virtual_column = current_column(*buf);
+    buf->virtual_column = std::nullopt;
     recenter_cursor_if_offscreen(buf);
     return {
         .new_cursor = buf->cursor(),
@@ -83,7 +82,7 @@ void force_insert_chars_end_before_cursor(buffer *buf,
         buf->aft.append(chs, count);
     } else {
         buf->bef.append(chs, count);
-        buf->virtual_column = current_column(*buf);
+        buf->virtual_column = std::nullopt;
         // I guess we don't touch first_visible_offset -- later we'll want
         // scroll-to-cursor behavior with *Messages*.
 
@@ -129,7 +128,7 @@ delete_result delete_left(buffer *buf, size_t og_count) {
     buf->bef.resize(new_cursor);
     update_marks_for_delete_range(buf, new_cursor, og_cursor);
 
-    buf->virtual_column = current_column(*buf);
+    buf->virtual_column = std::nullopt;
     recenter_cursor_if_offscreen(buf);
     if (count < og_count) {
         ret.error_message = "Beginning of buffer";  // TODO: Bad place for UI logic
@@ -159,7 +158,7 @@ delete_result delete_right(buffer *buf, size_t og_count) {
     update_marks_for_delete_range(buf, cursor, cursor + count);
 
     // TODO: We don't do this for doDeleteRight (or doAppendRight) in jsmacs -- the bug is in jsmacs!
-    buf->virtual_column = current_column(*buf);
+    buf->virtual_column = std::nullopt;
     recenter_cursor_if_offscreen(buf);
     if (count < og_count) {
         ret.error_message = "End of buffer";  // TODO: Bad place for UI logic
@@ -172,7 +171,7 @@ void move_right_by(buffer *buf, size_t count) {
     buf->bef.append(buf->aft, 0, count);
     buf->aft.erase(0, count);
     // TODO: Should we set virtual_column if count is 0?  (Can count be 0?)
-    buf->virtual_column = current_column(*buf);
+    buf->virtual_column = std::nullopt;
     recenter_cursor_if_offscreen(buf);
 }
 
@@ -182,7 +181,7 @@ void move_left_by(buffer *buf, size_t count) {
     buf->aft.insert(0, buf->bef, buf->bef.size() - count, count);
     buf->bef.resize(buf->bef.size() - count);
     // TODO: Should we set virtual_column if count is 0?  (Can count be 0?)
-    buf->virtual_column = current_column(*buf);
+    buf->virtual_column = std::nullopt;
     recenter_cursor_if_offscreen(buf);
 }
 

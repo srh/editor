@@ -130,7 +130,10 @@ public:
 
     // Column that is maintained as we press up and down arrow keys past shorter lines.
     // For now, this assumes a monospace font (maybe with 2x-width glyphs) on all GUIs.
-    size_t virtual_column = 0;
+    // If it's nullopt, it should be treated equivalently as if we computed the cursor()'s column
+    // right now.
+    std::optional<size_t> virtual_column;
+    void ensure_virtual_column_initialized();
 
     // This is and will continue to be the size of the text window -- does not include any
     // status bar rows, even if there is one per buffer.

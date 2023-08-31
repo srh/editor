@@ -60,7 +60,8 @@ void move_up(buffer *buf) {
     const size_t window_cols = buf->window.cols;
     // We're not interested in virtual_column as a "line column" -- just interested in the
     // visual distance to beginning of line.
-    const size_t target_column = buf->virtual_column % window_cols;
+    buf->ensure_virtual_column_initialized();
+    const size_t target_column = *buf->virtual_column % window_cols;
 
     // Basically we want the output of the following algorithm:
     // 1. Render the current line up to the cursor.
@@ -128,7 +129,8 @@ void move_up(buffer *buf) {
 
 void move_down(buffer *buf) {
     const size_t window_cols = buf->window.cols;
-    const size_t target_column = buf->virtual_column % window_cols;
+    buf->ensure_virtual_column_initialized();
+    const size_t target_column = *buf->virtual_column % window_cols;
 
     // Remember we do some traversing in current_column.
     size_t line_col = current_column(*buf);

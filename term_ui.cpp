@@ -25,6 +25,14 @@ size_t current_column(const buffer& buf) {
     return pos_current_column(buf, buf.cursor());
 }
 
+// TODO: Is this where we want this implemented?  Uh, sure.
+void buffer::ensure_virtual_column_initialized() {
+    if (!virtual_column.has_value()) {
+        virtual_column = current_column(*this);
+    }
+}
+
+
 constexpr uint8_t TAB_MOD_MASK = 7;  // 8 is hard-coded tab stop
 
 // Returns true if not '\n'.  Sets *line_col in any case.  Calls emit_drawn_chars(char *,
@@ -299,7 +307,7 @@ void recenter_cursor_if_offscreen(buffer *buf) {
 void resize_buf_window(buffer *buf, const window_size& buf_window) {
     // This means the window actually changed -- we need to set the column.
     buf->set_window(buf_window);
-    buf->virtual_column = current_column(*buf);
+    buf->virtual_column = std::nullopt;
 }
 
 }  // namespace qwi
