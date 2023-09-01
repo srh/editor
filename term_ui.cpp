@@ -81,9 +81,9 @@ terminal_frame init_frame(const terminal_size& window) {
 // render_coords must be sorted by buf_pos.
 // render_frame doesn't render the cursor -- that's computed with render_coords and rendered then.
 void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
-                       const ui_window_ctx& ui, const buffer& buf, std::vector<render_coord> *render_coords) {
+                       const window_size& window, const ui_window_ctx& ui, const buffer& buf,
+                       std::vector<render_coord> *render_coords) {
     terminal_frame& frame = *frame_ptr;
-    const window_size window = ui.window;
     // Some very necessary checks for memory safety.
     runtime_check(u32_add(window_topleft.row, window.rows) <= frame.window.rows,
                   "buf window rows exceeds frame window");
@@ -223,7 +223,7 @@ bool cursor_is_offscreen(ui_window_ctx *ui, buffer *buf, size_t cursor) {
     terminal_frame frame = init_frame(window);
     std::vector<render_coord> coords = { {cursor, std::nullopt} };
     terminal_coord window_topleft = { 0, 0 };
-    render_into_frame(&frame, window_topleft, *ui, *buf, &coords);
+    render_into_frame(&frame, window_topleft, ui->window, *ui, *buf, &coords);
     return !coords[0].rendered_pos.has_value();
 }
 
@@ -305,9 +305,7 @@ void recenter_cursor_if_offscreen(ui_window_ctx *ui, buffer *buf) {
 }
 
 void resize_buf_window(ui_window_ctx *ui, const window_size& buf_window) {
-    // This means the window actually changed -- we need to set the column.
-    ui->set_window(buf_window);
-    ui->virtual_column = std::nullopt;
+    ui->set_last_rendered_window(buf_window);
 }
 
 }  // namespace qwi

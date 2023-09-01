@@ -56,6 +56,10 @@ struct terminal_frame {
 
     // Same length and dimensions as `data`.
     std::vector<terminal_style> style_data;
+
+    // Doesn't really belong here -- we dump window size by buffer_id here, so we can
+    // update the buffer ui contexts with the last rendered window size after rendering.
+    std::vector<std::pair<buffer_id, window_size>> rendered_window_sizes;
 };
 
 struct window_coord { uint32_t row = 0, col = 0; };
@@ -76,7 +80,7 @@ terminal_frame init_frame(const terminal_size& window);
 // render_coords must be sorted by buf_pos.
 // render_frame doesn't render the cursor -- that's computed with render_coords and rendered then.
 void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
-                       const ui_window_ctx& ui, const buffer& buf, std::vector<render_coord> *render_coords);
+                       const window_size& window, const ui_window_ctx& ui, const buffer& buf, std::vector<render_coord> *render_coords);
 
 
 bool too_small_to_render(const window_size& window);

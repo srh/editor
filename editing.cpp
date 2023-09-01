@@ -381,7 +381,7 @@ void apply_number_to_buf(state *state, buffer_number buf_index_num) {
 
 buffer scratch_buffer(buffer_id id, const window_size& buf_window) {
     buffer ret(id);
-    ret.win_ctx.set_window(buf_window);
+    ret.win_ctx.set_last_rendered_window(buf_window);
     ret.name_str = "*scratch*";
     ret.name_number = 0;
     return ret;
@@ -419,7 +419,7 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
             // TODO: Gross!  So gross.
             terminal_size window = get_terminal_size(term);
             window_size buf_window = main_buf_window_from_terminal_window(window);
-            buf.win_ctx.set_window(buf_window);
+            buf.win_ctx.set_last_rendered_window(buf_window);
 
             logic_checkg(state->buf_ptr.value < state->buflist.size());
             state->buflist.insert(state->buflist.begin() + state->buf_ptr.value, std::move(buf));

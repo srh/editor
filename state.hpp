@@ -19,7 +19,10 @@ namespace qwi {
 struct insert_result;
 struct delete_result;
 
-struct window_size { uint32_t rows = 0, cols = 0; };
+struct window_size {
+    uint32_t rows = 0, cols = 0;
+    bool operator==(const window_size&) const = default;
+};
 
 struct buffer_number {
     // 0..n-1.  So state->bufs[value - 1] is the buffer, and state->buf is the zero buffer.
@@ -28,6 +31,7 @@ struct buffer_number {
 
 struct buffer_id {
     uint64_t value;
+    friend auto operator<=>(buffer_id x, buffer_id y) = default;
 };
 
 }  // namespace qwi
@@ -58,9 +62,15 @@ struct ui_window_ctx {
     // This is and will continue to be the size of the text window -- does not include any
     // status bar rows, even if there is one per buffer.
     window_size window;
+
     mark_id first_visible_offset;
 
-    void set_window(const window_size& win) { window = win; }
+    void set_last_rendered_window(const window_size& win) {
+        if (window != win) {
+            window = win;
+            virtual_column = std::nullopt;
+        }
+    }
 };
 
 void ensure_virtual_column_initialized(ui_window_ctx *ui, const buffer *buf);
@@ -211,21 +221,26 @@ public:
         logic_checkg(buf_number.value < buflist.size());
         return buflist[buf_number.value];
     }
+    const buffer& buf_at(buffer_number buf_number) const {
+        logic_checkg(buf_number.value < buflist.size());
+        return buflist[buf_number.value];
+    }
+
+    void note_rendered_window_sizes(
+        const std::vector<std::pair<buffer_id, window_size>>& window_sizes);
 
     // Note that the status prompt buf has a separate win_ctx not looked up by this
     // function.  In general, win_ctx should take a window_number and a buffer_number.
     // But right now there's only one window.
     ui_window_ctx *win_ctx(buffer_number n) { return &buf_at(n).win_ctx; }
+    const ui_window_ctx *win_ctx(buffer_number n) const { return &buf_at(n).win_ctx; }
 
     // This is going to be a per-window value at some point.
     // 0 <= buf_ptr < buflist.size(), always (except at construction when buflist is empty).
     buffer_number buf_ptr = {SIZE_MAX};
 
-    buffer& topbuf() {
-        logic_check(buf_ptr.value < buflist.size(), "topbuf: out of range.  buf_ptr = %zu, buflist.size() = %zu",
-                    buf_ptr.value, buflist.size());
-        return buflist[buf_ptr.value];
-    }
+    buffer& topbuf() { return buf_at(buf_ptr); }
+    const buffer& topbuf() const { return buf_at(buf_ptr); }
 
     std::optional<prompt> status_prompt;
     bool is_normal() const { return !status_prompt.has_value(); }

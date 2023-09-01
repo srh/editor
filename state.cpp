@@ -180,7 +180,7 @@ buffer_number find_or_create_buf(state *state, const std::string& name, int term
     buf.name_str = name;
     terminal_size window = get_terminal_size(term);
     window_size buf_window = main_buf_window_from_terminal_window(window);
-    buf.win_ctx.set_window(buf_window);
+    buf.win_ctx.set_last_rendered_window(buf_window);
 
     // We insert the buf just before the current buf -- thus we increment buf_ptr.
     logic_checkg(state->buf_ptr.value < state->buflist.size());
@@ -225,6 +225,25 @@ void buffer::replace_mark(mark_id id, size_t new_offset) {
     marks[id.index] = new_offset;
 }
 
+void state::note_rendered_window_sizes(
+    const std::vector<std::pair<buffer_id, window_size>>& window_sizes) {
+    std::unordered_map<buffer_id, window_size> m(window_sizes.begin(), window_sizes.end());
+
+    for (buffer& buf : buflist) {
+        auto it = m.find(buf.id);
+        if (it != m.end()) {
+            buf.win_ctx.set_last_rendered_window(it->second);
+        }
+    }
+
+    if (status_prompt.has_value()) {
+        auto it = m.find(status_prompt->buf.id);
+        if (it != m.end()) {
+            status_prompt->buf.win_ctx.set_last_rendered_window(it->second);
+        }
+    }
+
+}
 
 
 void state::note_error_message(std::string&& msg) {

@@ -114,7 +114,7 @@ state initial_state(int term, const command_line_args& args, const terminal_size
         for (size_t i = 0; i < n_files; ++i) {
             // TODO: Maybe combine these ops and define the fn in editing.cpp
             state.buflist.push_back(open_file_into_detached_buffer(&state, args.files.at(i)));
-            state.buflist.back().win_ctx.set_window(buf_window);
+            state.buflist.back().win_ctx.set_last_rendered_window(buf_window);
             apply_number_to_buf(&state, buffer_number{i});
 
             // TODO: How do we handle duplicate file names?  Just allow identical buffer
@@ -158,7 +158,7 @@ void render_string(terminal_frame *frame, const terminal_coord& coord, const buf
 }
 
 // TODO: Non-const reference for state param -- we set its status_prompt's buf's window.
-void render_status_area(terminal_frame *frame, state& state) {
+void render_status_area(terminal_frame *frame, const state& state) {
     uint32_t last_row = u32_sub(frame->window.rows, 1);
 
     if (!state.live_error_message.empty()) {
@@ -183,9 +183,10 @@ void render_status_area(terminal_frame *frame, state& state) {
 
         std::vector<render_coord> coords = { {state.status_prompt->buf.cursor(), std::nullopt} };
         terminal_coord prompt_topleft = {.row = last_row, .col = uint32_t(message.size())};
-        // TODO: Use resize_buf_window here, generally.
-        state.status_prompt->buf.win_ctx.set_window({.rows = 1, .cols = frame->window.cols - prompt_topleft.col});
-        render_into_frame(frame, prompt_topleft, state.status_prompt->buf.win_ctx, state.status_prompt->buf, &coords);
+
+        window_size winsize = {.rows = 1, .cols = frame->window.cols - prompt_topleft.col};
+        frame->rendered_window_sizes.emplace_back(state.status_prompt->buf.id, winsize);
+        render_into_frame(frame, prompt_topleft, winsize, state.status_prompt->buf.win_ctx, state.status_prompt->buf, &coords);
 
         // TODO: This is super-hacky -- we overwrite the main buffer's cursor.
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
@@ -196,19 +197,22 @@ void render_status_area(terminal_frame *frame, state& state) {
     }
 }
 
-// TODO: non-const reference for state, passed into render_status_area
-void redraw_state(int term, const terminal_size& window, state& state) {
+std::vector<std::pair<buffer_id, window_size>>
+redraw_state(int term, const terminal_size& window, const state& state) {
     terminal_frame frame = init_frame(window);
 
-    ui_window_ctx *topbuf_ctx = state.win_ctx(state.buf_ptr);
+    const ui_window_ctx *topbuf_ctx = state.win_ctx(state.buf_ptr);
     if (!too_small_to_render(topbuf_ctx->window)) {
         // TODO: Support resizing.
         runtime_check(window.cols == topbuf_ctx->window.cols, "window cols changed");
         runtime_check(window.rows == topbuf_ctx->window.rows + STATUS_AREA_HEIGHT, "window rows changed");
 
+        window_size winsize = topbuf_ctx->window;
+        frame.rendered_window_sizes.emplace_back(state.topbuf().id, winsize);
+
         std::vector<render_coord> coords = { {state.topbuf().cursor(), std::nullopt} };
         terminal_coord window_topleft = {0, 0};
-        render_into_frame(&frame, window_topleft, *topbuf_ctx, state.topbuf(), &coords);
+        render_into_frame(&frame, window_topleft, winsize, *topbuf_ctx, state.topbuf(), &coords);
 
         // TODO: This is super-hacky -- this gets overwritten if the status area has a
         // prompt.  With multiple buffers, we need some concept of an active buffer, with
@@ -227,6 +231,8 @@ void redraw_state(int term, const terminal_size& window, state& state) {
     }
 
     write_frame(term, frame);
+
+    return std::move(frame.rendered_window_sizes);
 }
 
 // Cheap fn for debugging purposes.
@@ -653,7 +659,11 @@ void main_loop(int term, const command_line_args& args) {
     terminal_size window = get_terminal_size(term);
     state state = initial_state(term, args, window);
 
-    redraw_state(term, window, state);
+    {
+        std::vector<std::pair<buffer_id, window_size>> window_sizes
+            = redraw_state(term, window, state);
+        state.note_rendered_window_sizes(window_sizes);
+    }
 
     bool exit = false;
     for (; !exit; ) {
@@ -667,10 +677,14 @@ void main_loop(int term, const command_line_args& args) {
         // TODO: Use SIGWINCH.  Procrastinating this for as long as possible.
         terminal_size new_window = get_terminal_size(term);
         if (new_window != window) {
-            resize_window(&state, new_window);
+            // resize_window(&state, new_window);
             window = new_window;
         }
-        redraw_state(term, window, state);
+        {
+            std::vector<std::pair<buffer_id, window_size>> window_sizes
+                = redraw_state(term, window, state);
+            state.note_rendered_window_sizes(window_sizes);
+        }
     }
 }
 
