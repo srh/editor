@@ -290,7 +290,7 @@ undo_killring_handled nop_keypress() {
 }
 
 // *exit_loop can be assigned true; there is no need to assign it false.
-undo_killring_handled enter_keypress(int term, state *state, bool *exit_loop) {
+undo_killring_handled enter_keypress(const terminal_size& term_size, state *state, bool *exit_loop) {
     if (!state->status_prompt.has_value()) {
         ui_window_ctx *ui = state->win_ctx(state->buf_ptr);
         buffer *buf = &state->buf_at(state->buf_ptr);
@@ -298,7 +298,7 @@ undo_killring_handled enter_keypress(int term, state *state, bool *exit_loop) {
         return note_coalescent_action(state, buf, std::move(res));
     }
 
-    return enter_handle_status_prompt(term, state, exit_loop);
+    return enter_handle_status_prompt(term_size, state, exit_loop);
 }
 
 undo_killring_handled delete_keypress(state *state, ui_window_ctx *ui, buffer *buf) {
@@ -504,7 +504,8 @@ bool read_tty_numeric_escape(int term, std::string *chars_read, char firstDigit,
     }
 }
 
-undo_killring_handled read_and_process_tty_input(int term, state *state, bool *exit_loop) {
+// term_size needs to be the most up-to-date terminal window size.
+undo_killring_handled read_and_process_tty_input(int term, const terminal_size& term_size, state *state, bool *exit_loop) {
     // TODO: When term is non-blocking, we'll need to wait for readiness...?
     char ch;
     check_read_tty_char(term, &ch);
@@ -519,7 +520,7 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
         return tab_keypress(state, win, active_buf);
     }
     if (ch == '\r') {
-        return enter_keypress(term, state, exit_loop);
+        return enter_keypress(term_size, state, exit_loop);
     }
     if (ch == 28) {
         // Ctrl+backslash
@@ -667,7 +668,7 @@ void main_loop(int term, const command_line_args& args) {
 
     bool exit = false;
     for (; !exit; ) {
-        undo_killring_handled handled = read_and_process_tty_input(term, &state, &exit);
+        undo_killring_handled handled = read_and_process_tty_input(term, window, &state, &exit);
         {
             // Undo and killring behavior has been handled exhaustively in all branches of
             // read_and_process_tty_input -- here's where we consume that fact.

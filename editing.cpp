@@ -387,7 +387,7 @@ buffer scratch_buffer(buffer_id id, const window_size& buf_window) {
     return ret;
 }
 
-undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *exit_loop) {
+undo_killring_handled enter_handle_status_prompt(const terminal_size& term_size, state *state, bool *exit_loop) {
     switch (state->status_prompt->typ) {
     case prompt::type::file_save: {
         // killring important, undo not because we're destructing the status_prompt buf.
@@ -417,8 +417,7 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
             buffer buf = open_file_into_detached_buffer(state, text);
 
             // TODO: Gross!  So gross.
-            terminal_size window = get_terminal_size(term);
-            window_size buf_window = main_buf_window_from_terminal_window(window);
+            window_size buf_window = main_buf_window_from_terminal_window(term_size);
             buf.win_ctx.set_last_rendered_window(buf_window);
 
             logic_checkg(state->buf_ptr.value < state->buflist.size());
@@ -468,8 +467,7 @@ undo_killring_handled enter_handle_status_prompt(int term, state *state, bool *e
             // buflist must never be empty
             if (state->buflist.empty()) {
                 // TODO: Gross!  So gross.
-                terminal_size window = get_terminal_size(term);
-                window_size buf_window = main_buf_window_from_terminal_window(window);
+                window_size buf_window = main_buf_window_from_terminal_window(term_size);
                 state->buflist.push_back(scratch_buffer(state->gen_buf_id(), buf_window));
                 // state->buf_ptr is already 0, thus correct.
             }
