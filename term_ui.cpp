@@ -304,9 +304,11 @@ void recenter_cursor_if_offscreen(ui_window_ctx *ui, buffer *buf) {
     }
 }
 
+#if 0
 void resize_buf_window(ui_window_ctx *ui, const window_size& buf_window) {
     ui->set_last_rendered_window(buf_window);
 }
+#endif
 
 }  // namespace qwi
 

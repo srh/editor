@@ -111,6 +111,7 @@ window_size main_buf_window_from_terminal_window(const terminal_size& term_windo
     };
 }
 
+#if 0
 void resize_window(state *st, const terminal_size& new_window) {
     window_size buf_window = main_buf_window_from_terminal_window(new_window);
     for (buffer& buf : st->buflist) {
@@ -119,6 +120,7 @@ void resize_window(state *st, const terminal_size& new_window) {
 
     // TODO: Resize prompt window.
 }
+#endif
 
 void record_yank(clip_board *clb, const buffer_string& deletedText, yank_side side) {
     if (clb->justRecorded) {

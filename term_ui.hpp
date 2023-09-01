@@ -93,8 +93,10 @@ size_t pos_current_column(const buffer& buf, const size_t pos);
 size_t current_column(const buffer& buf);
 void recenter_cursor_if_offscreen(ui_window_ctx *ui, buffer *buf);
 
+#if 0
 // Changes buf->window; also resets virtual_column.
 void resize_buf_window(ui_window_ctx *ui, const window_size& buf_window);
+#endif
 
 }  // namespace qwi
 
