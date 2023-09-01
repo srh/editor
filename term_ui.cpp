@@ -47,7 +47,6 @@ char_rendering compute_char_rendering(const buffer_char bch, size_t *line_col) {
     } else {
         if (ch == '\t') {
             size_t next_line_col = size_add((*line_col) | TAB_MOD_MASK, 1);
-            //             12345678
             terminal_char buf[8] = { { ' ' }, { ' ' }, { ' ' }, { ' ' },
                                      { ' ' }, { ' ' }, { ' ' }, { ' ' } };
             std::copy(buf, buf + 8, ret.buf);
