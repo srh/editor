@@ -370,6 +370,10 @@ undo_killring_handled meta_d_keypress(state *state, ui_window_ctx *ui, buffer *a
 undo_killring_handled meta_backspace_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
     return delete_backward_word(state, ui, active_buf);
 }
+undo_killring_handled meta_s_keypress(state *state, buffer *active_buf) {
+    return save_as_file_action(state, active_buf);
+}
+
 undo_killring_handled meta_w_keypress(state *state, buffer *active_buf) {
     return copy_region(state, active_buf);
 }
@@ -607,6 +611,7 @@ undo_killring_handled read_and_process_tty_input(int term, const terminal_size& 
             case 'q': return meta_q_keypress(state, active_buf);
             case 'y': return meta_y_keypress(state, win, active_buf);
             case 'd': return meta_d_keypress(state, win, active_buf);
+            case 's': return meta_s_keypress(state, active_buf);
             case ('?' ^ CTRL_XOR_MASK): return meta_backspace_keypress(state, win, active_buf);
             case 'w': return meta_w_keypress(state, active_buf);
             case 'O': {
@@ -777,7 +782,9 @@ void print_version(FILE *fp) {
 
 void print_help(FILE *fp) {
     print_version(fp);
-    fprintf(fp, "Usage: --help | --version | [files...] [-- files..]\n");
+    fprintf(fp,
+            "Usage: --help | --version | [files...] [-- files..]\n"
+            "  Press M-h (meta-h or alt-h) in-app for keyboard shortcuts.\n");
 }
 
 int main(int argc, const char **argv) {

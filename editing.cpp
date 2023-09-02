@@ -300,6 +300,21 @@ undo_killring_handled save_file_action(state *state, buffer *active_buf) {
     return ret;
 }
 
+undo_killring_handled save_as_file_action(state *state, buffer *active_buf) {
+    // Specifically, I don't want to break the undo chain here.
+    undo_killring_handled ret = note_noundo_killring_action(state, active_buf);
+    if (state->status_prompt.has_value()) {
+        // TODO: We'll have to handle M-x C-s or C-x C-s somehow -- probably by generic
+        // logic at the keypress level.
+
+        // Ignore keypress.
+        return ret;
+    }
+
+    state->status_prompt = {prompt::type::file_save, buffer(state->gen_buf_id()), prompt::message_unused};
+    return ret;
+}
+
 std::vector<std::string> modified_buffers(state *state) {
     std::vector<std::string> ret;
     for (size_t i = 0, e = state->buflist.size(); i < e; ++i) {
@@ -601,6 +616,7 @@ undo_killring_handled help_menu(state *state) {
         "C-c exit\n"
         "M-h help\n"
         "C-s save\n"
+        "M-s save as...\n"
         "F5/F6 switch buffers left/right\n"
         "F7 switch buffer by name\n"
         "M-f/M-b forward/backward word\n"
