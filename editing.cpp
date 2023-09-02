@@ -115,6 +115,13 @@ undo_killring_handled note_navigation_action(state *state, buffer *buf) {
     return note_backout_action(state, buf);
 }
 
+// For the purposes of undo or killring, an action which did not happen.  One completely
+// out of the context of editing, I guess.
+undo_killring_handled note_nop_action(state *state) {
+    (void)state;
+    return undo_killring_handled{};
+}
+
 // Currently a nop, we might need a generic action or code adjustments in the future.
 // (Current callers also invoke note_navigation_action.)
 void note_navigate_away_from_buf(buffer *buf) {
@@ -586,6 +593,26 @@ undo_killring_handled alt_yank_from_clipboard(state *state, ui_window_ctx *ui, b
         note_nop_undo(buf);
         return handled_undo_killring(state, buf);
     }
+}
+
+undo_killring_handled help_menu(state *state) {
+    buffer buf(state->gen_buf_id(), to_buffer_string(
+        "Help:\n"
+        "C-c exit\n"
+        "M-h help\n"
+        "C-s save\n"
+        "F5/F6 switch buffers left/right\n"
+        "F7 switch buffer by name\n"
+        "M-f/M-b forward/backward word\n"
+        "C-w cut (or append to cut)\n"
+        "M-w copy\n"
+        "C-y paste\n"
+        "M-y (immediately after C-y) paste next in killring\n"
+        "C-k kill line (and create/append to killring entry)\n"));
+    state->popup_display = popup{
+        std::move(buf),
+    };
+    return note_nop_action(state);
 }
 
 }  // namespace qwi

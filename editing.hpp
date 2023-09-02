@@ -57,6 +57,7 @@ undo_killring_handled yank_from_clipboard(state *state, ui_window_ctx *ui, buffe
 undo_killring_handled alt_yank_from_clipboard(state *state, ui_window_ctx *ui, buffer *buf);
 
 undo_killring_handled buffer_switch_action(state *state, buffer *active_buf);
+undo_killring_handled help_menu(state *state);
 
 }  // namespace qwi
 

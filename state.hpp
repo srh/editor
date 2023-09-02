@@ -79,6 +79,10 @@ struct buffer {
     buffer() = delete;
     explicit buffer(buffer_id _id) : id(_id), undo_info(), non_modified_undo_node(undo_info.current_node),
                                      win_ctx(add_mark(0)) { }
+    explicit buffer(buffer_id _id, buffer_string&& str)
+        : id(_id), bef(std::move(str)), undo_info(), non_modified_undo_node(undo_info.current_node),
+          win_ctx(add_mark(0)) { }
+
     buffer_id id;
 
     // Used to choose in the list of buffers, unique to the buffer.  Program logic should
@@ -175,6 +179,10 @@ struct prompt {
     std::string messageText;  // only for save_prompt
 };
 
+struct popup {
+    buffer buf;
+};
+
 struct clip_board {
     // TODO: There are no limits on kill ring size.
     // A list of strings stored in the clipboard.
@@ -244,6 +252,8 @@ public:
 
     std::optional<prompt> status_prompt;
     bool is_normal() const { return !status_prompt.has_value(); }
+
+    std::optional<popup> popup_display;
 
     // TODO: Every use of this function is probably a bad place for UI logic.
     void note_error_message(std::string&& msg);

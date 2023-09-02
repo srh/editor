@@ -201,26 +201,36 @@ std::vector<std::pair<buffer_id, window_size>>
 redraw_state(int term, const terminal_size& window, const state& state) {
     terminal_frame frame = init_frame(window);
 
-    const ui_window_ctx *topbuf_ctx = state.win_ctx(state.buf_ptr);
-    if (!too_small_to_render(topbuf_ctx->window)) {
-        // TODO: Support resizing.
-        runtime_check(window.cols == topbuf_ctx->window.cols, "window cols changed");
-        runtime_check(window.rows == topbuf_ctx->window.rows + STATUS_AREA_HEIGHT, "window rows changed");
+    if (state.popup_display.has_value()) {
+        window_size winsize = {window.rows, window.cols};
+        frame.rendered_window_sizes.emplace_back(state.popup_display->buf.id, winsize);
 
-        window_size winsize = topbuf_ctx->window;
-        frame.rendered_window_sizes.emplace_back(state.topbuf().id, winsize);
-
-        std::vector<render_coord> coords = { {state.topbuf().cursor(), std::nullopt} };
         terminal_coord window_topleft = {0, 0};
-        render_into_frame(&frame, window_topleft, winsize, *topbuf_ctx, state.topbuf(), &coords);
+        std::vector<render_coord> coords;
+        render_into_frame(&frame, window_topleft, winsize, state.popup_display->buf.win_ctx /* TODO */,
+                          state.popup_display->buf, &coords);
+    } else {
+        const ui_window_ctx *topbuf_ctx = state.win_ctx(state.buf_ptr);
+        if (!too_small_to_render(topbuf_ctx->window)) {
+            // TODO: Support resizing.
+            runtime_check(window.cols == topbuf_ctx->window.cols, "window cols changed");
+            runtime_check(window.rows == topbuf_ctx->window.rows + STATUS_AREA_HEIGHT, "window rows changed");
 
-        // TODO: This is super-hacky -- this gets overwritten if the status area has a
-        // prompt.  With multiple buffers, we need some concept of an active buffer, with
-        // an active cursor.
-        // TODO: Also, we don't render our inactive cursor, and we should.
-        frame.cursor = add(window_topleft, coords[0].rendered_pos);
+            window_size winsize = topbuf_ctx->window;
+            frame.rendered_window_sizes.emplace_back(state.topbuf().id, winsize);
 
-        render_status_area(&frame, state);
+            std::vector<render_coord> coords = { {state.topbuf().cursor(), std::nullopt} };
+            terminal_coord window_topleft = {0, 0};
+            render_into_frame(&frame, window_topleft, winsize, *topbuf_ctx, state.topbuf(), &coords);
+
+            // TODO: This is super-hacky -- this gets overwritten if the status area has a
+            // prompt.  With multiple buffers, we need some concept of an active buffer, with
+            // an active cursor.
+            // TODO: Also, we don't render our inactive cursor, and we should.
+            frame.cursor = add(window_topleft, coords[0].rendered_pos);
+
+            render_status_area(&frame, state);
+        }
     }
 
     if (!state.ui_config.ansi_terminal) {
@@ -343,6 +353,10 @@ undo_killring_handled meta_f_keypress(state *state, ui_window_ctx *ui, buffer *a
 undo_killring_handled meta_b_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
     move_backward_word(ui, active_buf);
     return note_navigation_action(state, active_buf);
+}
+undo_killring_handled meta_h_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    (void)ui, (void)active_buf;
+    return help_menu(state);
 }
 undo_killring_handled meta_q_keypress(state *state, buffer *active_buf) {
     return buffer_close_action(state, active_buf);
@@ -510,6 +524,8 @@ undo_killring_handled read_and_process_tty_input(int term, const terminal_size& 
     char ch;
     check_read_tty_char(term, &ch);
 
+    state->popup_display = std::nullopt;
+
     buffer *active_buf = state->status_prompt.has_value() ? &state->status_prompt->buf : &state->topbuf();
     ui_window_ctx *win = &active_buf->win_ctx;
 
@@ -587,6 +603,7 @@ undo_killring_handled read_and_process_tty_input(int term, const terminal_size& 
             switch (ch) {
             case 'f': return meta_f_keypress(state, win, active_buf);
             case 'b': return meta_b_keypress(state, win, active_buf);
+            case 'h': return meta_h_keypress(state, win, active_buf);
             case 'q': return meta_q_keypress(state, active_buf);
             case 'y': return meta_y_keypress(state, win, active_buf);
             case 'd': return meta_d_keypress(state, win, active_buf);
