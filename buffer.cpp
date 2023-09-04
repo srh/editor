@@ -36,7 +36,8 @@ insert_result insert_chars(ui_window_ctx *ui, buffer *buf, const buffer_char *ch
     }
 
     const size_t og_cursor = buf->cursor();
-    buf->bef.append(chs, count);
+    buf->bef_.append(chs, count);
+    buf->bef_stats_ = append_stats(buf->bef_stats_, compute_stats(chs, count));
     add_to_marks_as_of(buf, og_cursor + 1, count);
 
     ui->virtual_column = std::nullopt;
@@ -59,7 +60,8 @@ insert_result insert_chars_right(ui_window_ctx *ui, buffer *buf, const buffer_ch
     }
 
     const size_t og_cursor = buf->cursor();
-    buf->aft.insert(0, chs, count);
+    buf->aft_.insert(0, chs, count);
+    buf->aft_stats_ = append_stats(compute_stats(chs, count), buf->aft_stats_);
     add_to_marks_as_of(buf, og_cursor, count);
 
     ui->virtual_column = std::nullopt;
@@ -79,11 +81,15 @@ void force_insert_chars_end_before_cursor(ui_window_ctx *ui, buffer *buf,
     const size_t og_cursor = buf->cursor();
     const size_t og_size = buf->size();
 
+    region_stats stats = compute_stats(chs, count);
+
     // If cursor is at end of buffer, we insert before the cursor.
     if (og_cursor != og_size) {
-        buf->aft.append(chs, count);
+        buf->aft_stats_ = append_stats(buf->aft_stats_, stats);
+        buf->aft_.append(chs, count);
     } else {
-        buf->bef.append(chs, count);
+        buf->bef_stats_ = append_stats(buf->bef_stats_, stats);
+        buf->bef_.append(chs, count);
         ui->virtual_column = std::nullopt;
         // I guess we don't touch first_visible_offset -- later we'll want
         // scroll-to-cursor behavior with *Messages*.
@@ -118,16 +124,18 @@ delete_result delete_left(ui_window_ctx *ui, buffer *buf, size_t og_count) {
         };
     }
 
-    const size_t count = std::min<size_t>(og_count, buf->bef.size());
-    size_t og_cursor = buf->bef.size();
+    const size_t count = std::min<size_t>(og_count, buf->bef_.size());
+    size_t og_cursor = buf->bef_.size();
     size_t new_cursor = og_cursor - count;
 
     delete_result ret;
     ret.new_cursor = new_cursor;
-    ret.deletedText.assign(buf->bef, new_cursor, count);
+    ret.deletedText.assign(buf->bef_, new_cursor, count);
     ret.side = Side::left;
 
-    buf->bef.resize(new_cursor);
+    buf->bef_stats_ = subtract_stats_right(buf->bef_stats_,
+                                           buf->bef_.data(), new_cursor, buf->bef_.size());
+    buf->bef_.resize(new_cursor);
     update_marks_for_delete_range(buf, new_cursor, og_cursor);
 
     ui->virtual_column = std::nullopt;
@@ -149,14 +157,15 @@ delete_result delete_right(ui_window_ctx *ui, buffer *buf, size_t og_count) {
     }
 
     size_t cursor = buf->cursor();
-    const size_t count = std::min<size_t>(og_count, buf->aft.size());
+    const size_t count = std::min<size_t>(og_count, buf->aft_.size());
 
     delete_result ret;
     ret.new_cursor = cursor;
-    ret.deletedText.assign(buf->aft, 0, count);
+    ret.deletedText.assign(buf->aft_, 0, count);
     ret.side = Side::right;
 
-    buf->aft.erase(0, count);
+    buf->aft_stats_ = subtract_stats_left(buf->aft_stats_, compute_stats(buf->aft_.data(), count));
+    buf->aft_.erase(0, count);
     update_marks_for_delete_range(buf, cursor, cursor + count);
 
     // TODO: We don't do this for doDeleteRight (or doAppendRight) in jsmacs -- the bug is in jsmacs!
@@ -169,19 +178,16 @@ delete_result delete_right(ui_window_ctx *ui, buffer *buf, size_t og_count) {
 }
 
 void move_right_by(ui_window_ctx *ui, buffer *buf, size_t count) {
-    count = std::min<size_t>(count, buf->aft.size());
-    buf->bef.append(buf->aft, 0, count);
-    buf->aft.erase(0, count);
+    count = std::min<size_t>(count, buf->size() - buf->cursor());
+    buf->set_cursor(buf->cursor() + count);
     // TODO: Should we set virtual_column if count is 0?  (Can count be 0?)
     ui->virtual_column = std::nullopt;
     recenter_cursor_if_offscreen(ui, buf);
 }
 
 void move_left_by(ui_window_ctx *ui, buffer *buf, size_t count) {
-    // TODO: Could both this and move_right_by be the same fn, using buf->set_cursor?
-    count = std::min<size_t>(count, buf->bef.size());
-    buf->aft.insert(0, buf->bef, buf->bef.size() - count, count);
-    buf->bef.resize(buf->bef.size() - count);
+    count = std::min<size_t>(count, buf->cursor());
+    buf->set_cursor(buf->cursor() - count);
     // TODO: Should we set virtual_column if count is 0?  (Can count be 0?)
     ui->virtual_column = std::nullopt;
     recenter_cursor_if_offscreen(ui, buf);

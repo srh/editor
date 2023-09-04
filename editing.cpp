@@ -271,8 +271,8 @@ void save_buf_to_married_file_and_mark_unmodified(buffer *buf) {
     logic_check(buf->married_file.has_value(), "save_buf_to_married_file with unmarried buf");
     std::ofstream fstream(*buf->married_file, std::ios::binary | std::ios::trunc);
     // TODO: Write a temporary file and rename it.  Use pwrite.  Etc.
-    fstream.write(as_chars(buf->bef.data()), buf->bef.size());
-    fstream.write(as_chars(buf->aft.data()), buf->aft.size());
+    fstream.write(as_chars(buf->bef_.data()), buf->bef_.size());
+    fstream.write(as_chars(buf->aft_.data()), buf->aft_.size());
     fstream.close();
     // TODO: Better error handling
     runtime_check(!fstream.fail(), "error writing to file %s", buf->married_file->c_str());
@@ -371,7 +371,7 @@ buffer open_file_into_detached_buffer(state *state, const std::string& dirty_pat
     buffer ret(state->gen_buf_id());
     ret.name_str = std::move(name);
     ret.married_file = path.string();
-    ret.aft = std::move(data);
+    ret.aft_ = std::move(data);
     return ret;
 }
 

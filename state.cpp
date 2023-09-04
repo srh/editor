@@ -11,28 +11,31 @@
 namespace qwi {
 
 size_t buffer::cursor_distance_to_beginning_of_line() const {
-    size_t ix = bef.find_last_of(buffer_char{'\n'});
-    // this works in the std::string::npos case too
-    return bef.size() - ix - 1;
+    return bef_stats_.last_line_size;
 }
 
 void buffer::set_cursor(size_t pos) {
-    if (pos < bef.size()) {
-        aft.insert(aft.begin(), bef.begin() + pos, bef.end());
-        bef.resize(pos);
+    if (pos < bef_.size()) {
+        bef_stats_ = subtract_stats_right(bef_stats_, bef_.data(), pos, bef_.size());
+        aft_stats_ = append_stats(compute_stats(bef_.data() + pos, bef_.size() - pos), aft_stats_);
+        aft_.insert(aft_.begin(), bef_.begin() + pos, bef_.end());
+        bef_.resize(pos);
     } else {
-        size_t aft_pos = pos - bef.size();
-        logic_check(aft_pos <= aft.size(), "set_cursor outside buf range");
-        bef.append(aft.data(), aft_pos);
-        aft.erase(0, aft_pos);
+        size_t aft_pos = pos - bef_.size();
+        logic_check(aft_pos <= aft_.size(), "set_cursor outside buf range");
+        region_stats segstats = compute_stats(aft_.data(), aft_pos);
+        bef_stats_ = append_stats(bef_stats_, segstats);
+        aft_stats_ = subtract_stats_left(aft_stats_, segstats);
+        bef_.append(aft_.data(), aft_pos);
+        aft_.erase(0, aft_pos);
     }
 }
 
 std::string buffer::copy_to_string() const {
     std::string ret;
-    ret.reserve(bef.size() + aft.size());
-    ret.append(as_chars(bef.data()), bef.size());
-    ret.append(as_chars(aft.data()), aft.size());
+    ret.reserve(bef_.size() + aft_.size());
+    ret.append(as_chars(bef_.data()), bef_.size());
+    ret.append(as_chars(aft_.data()), aft_.size());
     return ret;
 }
 
@@ -41,19 +44,20 @@ buffer_string buffer::copy_substr(size_t beg, size_t end) const {
                 beg, end, size());
     buffer_string ret;
     ret.reserve(end - beg);
-    if (end <= bef.size()) {
-        ret = bef.substr(beg, end - beg);
-    } else if (beg < bef.size()) {
-        ret = bef.substr(beg, bef.size() - beg) + aft.substr(0, end - bef.size());
+    if (end <= bef_.size()) {
+        ret = bef_.substr(beg, end - beg);
+    } else if (beg < bef_.size()) {
+        ret = bef_.substr(beg, bef_.size() - beg) + aft_.substr(0, end - bef_.size());
     } else {
-        ret = aft.substr(beg - bef.size(), end - beg);
+        ret = aft_.substr(beg - bef_.size(), end - beg);
     }
     return ret;
 }
 
 buffer buffer::from_data(buffer_id id, buffer_string&& data) {
     buffer ret(id);
-    ret.bef = std::move(data);
+    ret.bef_stats_ = compute_stats(data);
+    ret.bef_ = std::move(data);
     return ret;
 }
 

@@ -192,7 +192,15 @@ void render_status_area(terminal_frame *frame, const state& state) {
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
     } else {
         buffer_string str = buffer_name(&state, state.buf_ptr);
-        str += to_buffer_string(state.topbuf().modified_flag() ? " **" : "   ");
+        // TODO: Probably, I want the line number info not to be bold.
+        str += to_buffer_string(state.topbuf().modified_flag() ? " ** (" : "    (");
+        size_t line, col;
+        state.buf_at(state.buf_ptr).line_info(&line, &col);
+        str += to_buffer_string(std::to_string(line));  // TODO: Gross
+        str += buffer_char{','};
+        str += to_buffer_string(std::to_string(col));  // TODO: Gross
+        str += buffer_char{')'};
+
         render_string(frame, {.row = last_row, .col = 0}, str, terminal_style::bold());
     }
 }

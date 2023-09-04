@@ -75,12 +75,96 @@ struct ui_window_ctx {
 
 void ensure_virtual_column_initialized(ui_window_ctx *ui, const buffer *buf);
 
+struct region_stats {
+    // Given two strings x and y, we can efficiently compute region_stats of (x + y) from
+    // region_stats of x and y respectively.
+
+    size_t newline_count = 0;
+    size_t last_line_size = 0;
+};
+
+inline region_stats append_stats(const region_stats& left, const region_stats& right) {
+    region_stats ret = {
+        .newline_count = left.newline_count + right.newline_count,
+        .last_line_size = right.last_line_size + (right.newline_count == 0 ? left.last_line_size : 0)
+    };
+    return ret;
+}
+
+inline size_t find_after_last(const buffer_char *data, size_t count, buffer_char ch) {
+    size_t i = count - 1;
+    // Playing games with underflow.
+    for (size_t i = count - 1; i != size_t(-1); --i) {
+        if (data[i] == ch) {
+            break;
+        }
+    }
+    return i;
+}
+
+inline region_stats compute_stats(const buffer_char *data, size_t count) {
+    size_t beginning_of_line = find_after_last(data, count, buffer_char{'\n'});
+
+    size_t newline_count = 0;
+    for (size_t i = 0; i < count; ++i) {
+        newline_count += (data[i] == buffer_char{'\n'});
+    }
+
+    return {
+        .newline_count = newline_count,
+        .last_line_size = count - beginning_of_line,
+    };
+}
+
+inline region_stats compute_stats(const buffer_string& str) {
+    return compute_stats(str.data(), str.size());
+}
+
+// Computes stats after we delete data at the right side of the region.
+inline region_stats subtract_stats_right(const region_stats& stats, const buffer_char *data, size_t new_count, size_t count) {
+    logic_checkg(new_count <= count);
+
+    size_t removed_newlines = 0;
+    for (size_t i = new_count; i < count; ++i) {
+        if (data[i] == buffer_char{'\n'}) {
+            removed_newlines += 1;
+        }
+    }
+    if (removed_newlines == 0) {
+        return {
+            .newline_count = stats.newline_count,
+            .last_line_size = stats.last_line_size - (count - new_count),
+        };
+    } else {
+        size_t beginning_of_line = find_after_last(data, new_count, buffer_char{'\n'});
+        return {
+            .newline_count = stats.newline_count - removed_newlines,
+            .last_line_size = new_count - beginning_of_line,
+        };
+    }
+}
+
+
+// Computes stats after we delete data (with stats `removed_stats`) at the left side of the region.
+inline region_stats subtract_stats_left(const region_stats& stats, const region_stats& removed_stats) {
+    logic_checkg(removed_stats.newline_count <= stats.newline_count);
+    size_t new_newlines = stats.newline_count - removed_stats.newline_count;
+    return {
+        .newline_count = new_newlines,
+        .last_line_size = stats.last_line_size - (new_newlines == 0 ? removed_stats.last_line_size : 0),
+    };
+}
+
+
 struct buffer {
     buffer() = delete;
     explicit buffer(buffer_id _id) : id(_id), undo_info(), non_modified_undo_node(undo_info.current_node),
                                      win_ctx(add_mark(0)) { }
     explicit buffer(buffer_id _id, buffer_string&& str)
-        : id(_id), bef(std::move(str)), undo_info(), non_modified_undo_node(undo_info.current_node),
+        : id(_id),
+          bef_(std::move(str)),
+          bef_stats_(compute_stats(bef_ /* careful about initialization order */)),
+          undo_info(), non_modified_undo_node(undo_info.current_node),
           win_ctx(add_mark(0)) { }
 
     buffer_id id;
@@ -114,8 +198,11 @@ public:
 private:
 
     // We just have strings for text before/after the cursor.  Very bad perf.
-    buffer_string bef;
-    buffer_string aft;
+    buffer_string bef_;
+    region_stats bef_stats_;
+
+    buffer_string aft_;
+    region_stats aft_stats_;
 
     // True friends, necessary mutation functions.
     friend insert_result insert_chars(ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count);
@@ -134,19 +221,24 @@ private:
     friend buffer open_file_into_detached_buffer(state *state, const std::string& dirty_path);
 
 public:
+    void line_info(size_t *line, size_t *col) const {
+        *line = bef_stats_.newline_count + 1;
+        *col = bef_stats_.last_line_size;
+    }
+
     // Absolute position of the mark, if there is one.
     std::optional<mark_id> mark;
 
     bool read_only = false;
 
-    size_t cursor() const { return bef.size(); }
+    size_t cursor() const { return bef_.size(); }
     void set_cursor(size_t pos);
-    size_t size() const { return bef.size() + aft.size(); }
+    size_t size() const { return bef_.size() + aft_.size(); }
     buffer_char at(size_t i) const {
-        return i < bef.size() ? bef[i] : aft.at(i - bef.size());
+        return i < bef_.size() ? bef_[i] : aft_.at(i - bef_.size());
     }
     buffer_char get(size_t i) const {
-        return i < bef.size() ? bef[i] : aft[i - bef.size()];
+        return i < bef_.size() ? bef_[i] : aft_[i - bef_.size()];
     }
 
     /* Undo info -- tracked per-buffer, apparently.  In principle, undo history could be a
@@ -225,6 +317,7 @@ public:
     buffer_id gen_buf_id() { return buffer_id{next_buf_id_value++}; }
 
     // buf_at vs. buffer_ptr vs. the buf_ptr field below -- stupid name-dodging.
+    // TODO: Dedup this with buffer_ptr.
     buffer& buf_at(buffer_number buf_number) {
         logic_checkg(buf_number.value < buflist.size());
         return buflist[buf_number.value];
