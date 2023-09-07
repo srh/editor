@@ -53,7 +53,10 @@ region_stats subtract_stats_right(const region_stats& stats, const buffer_char *
     }
 }
 
-region_stats subtract_stats_left(const region_stats& stats, const region_stats& removed_stats) {
+region_stats subtract_stats_left(const region_stats& stats, const region_stats& removed_stats,
+                                 const buffer_char *data, size_t new_count) {
+    (void)data, (void)new_count;  // Unused until we properly implement tab characters.
+
     logic_checkg(removed_stats.newline_count <= stats.newline_count);
     size_t new_newlines = stats.newline_count - removed_stats.newline_count;
     return {

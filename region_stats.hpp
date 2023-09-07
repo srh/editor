@@ -31,7 +31,9 @@ inline region_stats compute_stats(const buffer_string& str) {
 region_stats subtract_stats_right(const region_stats& stats, const buffer_char *data, size_t new_count, size_t count);
 
 // Computes stats after we delete data (with stats `removed_stats`) at the left side of the region.
-region_stats subtract_stats_left(const region_stats& stats, const region_stats& removed_stats);
+// [data, data + new_count) is the buffer _after_ subtracting stats.
+region_stats subtract_stats_left(const region_stats& stats, const region_stats& removed_stats,
+                                 const buffer_char *data, size_t new_count);
 
 }  // namespace qwi
 

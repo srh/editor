@@ -164,7 +164,8 @@ delete_result delete_right(ui_window_ctx *ui, buffer *buf, size_t og_count) {
     ret.deletedText.assign(buf->aft_, 0, count);
     ret.side = Side::right;
 
-    buf->aft_stats_ = subtract_stats_left(buf->aft_stats_, compute_stats(buf->aft_.data(), count));
+    buf->aft_stats_ = subtract_stats_left(buf->aft_stats_, compute_stats(buf->aft_.data(), count),
+                                          buf->aft_.data() + count, buf->aft_.size() - count);
     buf->aft_.erase(0, count);
     update_marks_for_delete_range(buf, cursor, cursor + count);
 

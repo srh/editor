@@ -25,7 +25,7 @@ void buffer::set_cursor(size_t pos) {
         logic_check(aft_pos <= aft_.size(), "set_cursor outside buf range");
         region_stats segstats = compute_stats(aft_.data(), aft_pos);
         bef_stats_ = append_stats(bef_stats_, segstats);
-        aft_stats_ = subtract_stats_left(aft_stats_, segstats);
+        aft_stats_ = subtract_stats_left(aft_stats_, segstats, aft_.data() + aft_pos, aft_.size() - aft_pos);
         bef_.append(aft_.data(), aft_pos);
         aft_.erase(0, aft_pos);
     }
