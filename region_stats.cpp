@@ -8,12 +8,12 @@ namespace qwi {
 size_t find_after_last(const buffer_char *data, size_t count, buffer_char ch) {
     size_t i = count - 1;
     // Playing games with underflow.
-    for (size_t i = count - 1; i != size_t(-1); --i) {
+    for (; i != size_t(-1); --i) {
         if (data[i] == ch) {
             break;
         }
     }
-    return i;
+    return i + 1;
 }
 
 region_stats compute_stats(const buffer_char *data, size_t count) {
