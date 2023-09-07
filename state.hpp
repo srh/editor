@@ -188,7 +188,7 @@ struct prompt {
     type typ;
     buffer buf;
     constexpr static const char *const message_unused = "";
-    std::string messageText;  // only for save_prompt
+    std::string messageText;  // only for exit_without_save
 };
 
 struct popup {
