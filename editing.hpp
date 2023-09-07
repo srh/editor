@@ -11,15 +11,14 @@ struct [[nodiscard]] undo_killring_handled { };
 
 // Callers will need to handle undo.
 #if 0
-undo_killring_handled undo_will_need_handling() {
+inline undo_killring_handled undo_will_need_handling() {
     return undo_killring_handled{};
 }
-undo_killring_handled killring_will_need_handling() {
+inline undo_killring_handled killring_will_need_handling() {
     return undo_killring_handled{};
 }
 #endif  // 0
 
-// TODO: We still need to check every usage of this to see if error messages are reset.
 inline undo_killring_handled handled_undo_killring(state *state, buffer *buf) {
     (void)state, (void)buf;
     return undo_killring_handled{};

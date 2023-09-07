@@ -5,10 +5,12 @@
 #include <sys/ioctl.h>
 #include <termios.h>
 
+#include <optional>
 #include <utility>
 
 #include "error.hpp"
 #include "io.hpp"
+#include "term_ui.hpp"  // for CTRL_XOR_MASK -- not happy about this include dependency
 
 void get_and_check_tcattr(int fd, struct termios *out) {
     int res = tcgetattr(fd, out);
@@ -153,4 +155,201 @@ terminal_size get_terminal_size(int fd) {
     runtime_check(term_size.ws_row > 0 && term_size.ws_col > 0, "terminal window size is zero");
 
     return terminal_size{term_size.ws_row, term_size.ws_col};
+}
+
+bool read_tty_char(int term_fd, char *out) {
+    char readbuf[1];
+    ssize_t res;
+    do {
+        res = read(term_fd, readbuf, 1);
+    } while (res == -1 && errno == EINTR);
+
+    // TODO: Of course, we'd want to auto-save the file upon this and all sorts of exceptions.
+    runtime_check(res != -1 || errno == EAGAIN, "unexpected error on terminal read: %s", runtime_check_strerror);
+
+    if (res != 0) {
+        *out = readbuf[0];
+        return true;
+    }
+    return false;
+}
+
+void check_read_tty_char(int term_fd, char *out) {
+    bool success = read_tty_char(term_fd, out);
+    runtime_check(success, "zero-length read from tty configured with VMIN=1");
+}
+
+// Reads remainder of "\e[\d+(;\d+)?~" character escapes after the first digit was read.
+bool read_tty_numeric_escape(int term, std::string *chars_read, char firstDigit, std::pair<uint8_t, std::optional<uint8_t>> *out) {
+    logic_checkg(isdigit(firstDigit));
+    uint32_t number = firstDigit - '0';
+    std::optional<uint8_t> first_number;
+
+    for (;;) {
+        char ch;
+        check_read_tty_char(term, &ch);
+        chars_read->push_back(ch);
+        if (isdigit(ch)) {
+            uint32_t new_number = number * 10 + (ch - '0');
+            if (new_number > UINT8_MAX) {
+                // TODO: We'd probably want to report this to the user somehow, or still
+                // consume the entire escape code (for now we just render its characters.
+                return false;
+            }
+            number = new_number;
+        } else if (ch == '~') {
+            if (first_number.has_value()) {
+                out->first = *first_number;
+                out->second = number;
+            } else {
+                out->first = number;
+                out->second = std::nullopt;
+            }
+            return true;
+        } else if (ch == ';') {
+            if (first_number.has_value()) {
+                // TODO: We want to consume the whole keyboard escape code and ignore it together.
+                return false;
+            }
+            // TODO: Should we enforce a digit after the first semicolon, or allow "\e[\d+;~" as the code does now?
+            first_number = number;
+            number = 0;
+        }
+    }
+}
+
+keypress read_tty_keypress(int term, std::string *chars_read_out) {
+    // TODO: When term is non-blocking, we'll need to wait for readiness...?
+    char ch;
+    check_read_tty_char(term, &ch);
+
+    using special_key = keypress::special_key;
+    if (ch >= 32 && ch < 127) {
+        return keypress::ascii(ch);
+    }
+    if (ch == '\t') {
+        return keypress::special(special_key::Tab);
+    }
+    if (ch == '\r') {
+        return keypress::special(special_key::Enter);
+    }
+    if (ch == 27) {
+        chars_read_out->clear();
+        std::string& chars_read = *chars_read_out;
+        check_read_tty_char(term, &ch);
+        chars_read.push_back(ch);
+        // TODO: Handle all possible escapes...
+        if (ch == '[') {
+            check_read_tty_char(term, &ch);
+            chars_read.push_back(ch);
+
+            if (isdigit(ch)) {
+                std::pair<uint8_t, std::optional<uint8_t>> numbers;
+                if (read_tty_numeric_escape(term, &chars_read, ch, &numbers)) {
+                    special_key special = keypress::invalid_special();
+                    switch (numbers.first) {
+                    case 2: special = special_key::Insert; break;
+                    case 3: special = special_key::Delete; break;
+                    case 5: special = special_key::PageUp; break;
+                    case 6: special = special_key::PageDown; break;
+                    case 15: special = special_key::F5; break;
+                    case 17: special = special_key::F6; break;
+                    case 18: special = special_key::F7; break;
+                    case 19: special = special_key::F8; break;
+                    case 20: special = special_key::F9; break;
+                    case 21: special = special_key::F10; break;
+                        // TODO: F11
+                    case 24: special = special_key::F12; break;
+                    default:
+                        break;
+                    }
+
+                    if (special != keypress::invalid_special()) {
+                        if (*numbers.second == 2) {
+                            return keypress::special(special, keypress::SHIFT);
+                        } else if (*numbers.second == 3) {
+                            return keypress::special(special, keypress::META);
+                        } else if (*numbers.second == 4) {
+                            return keypress::special(special, keypress::META | keypress::SHIFT);
+                        } else if (*numbers.second == 5) {
+                            return keypress::special(special, keypress::CTRL);
+                        } else if (*numbers.second == 6) {
+                            return keypress::special(special, keypress::CTRL | keypress::SHIFT);
+                        } else if (*numbers.second == 7) {
+                            return keypress::special(special, keypress::CTRL | keypress::META);
+                        }
+                    }
+                    // If special == 0, we fall through to incomplete_parse.
+                }
+            } else {
+                switch (ch) {
+                case 'C':
+                    return keypress::special(special_key::Right);
+                case 'D':
+                    return keypress::special(special_key::Left);
+                case 'A':
+                    return keypress::special(special_key::Up);
+                case 'B':
+                    return keypress::special(special_key::Down);
+                case 'H':
+                    return keypress::special(special_key::Home);
+                case 'F':
+                    return keypress::special(special_key::End);
+                default:
+                    break;
+                }
+            }
+        } else {
+            if (ch == 'O') {
+                check_read_tty_char(term, &ch);
+                chars_read.push_back(ch);
+                switch (ch) {
+                case 'P': return keypress::special(special_key::F1);
+                case 'Q': return keypress::special(special_key::F2);
+                case 'R': return keypress::special(special_key::F3);
+                case 'S': return keypress::special(special_key::F4);
+                default:
+                    break;
+                }
+            } else if (ch == ('?' ^ CTRL_XOR_MASK)) {
+                return keypress::special(special_key::Backspace, keypress::META);
+            } else {
+                if (32 <= ch && ch < 127) {
+                    return keypress::ascii(ch, keypress::META);
+                }
+                if (uint8_t(ch) <= 127) {
+                    // TODO: Meta+Ctrl characters.
+                }
+            }
+        }
+
+        return keypress::incomplete_parse(chars_read);
+    }
+
+    if (ch == 8) {
+        return keypress::special(special_key::Backspace, keypress::CTRL);
+    }
+
+    if (uint8_t(ch) <= 127) {
+        // Special case for backspace key (when ch == 127).
+        if (ch == ('?' ^ CTRL_XOR_MASK)) {
+            return keypress::special(special_key::Backspace);
+        }
+        if (ch == ('@' ^ CTRL_XOR_MASK)) {
+            return keypress::ascii(' ', keypress::CTRL);  // Ctrl+Space same as C-@
+        }
+
+        return { .value = uint8_t(ch) ^ CTRL_XOR_MASK, .modmask = keypress::CTRL };
+    } else {
+        // TODO: Handle high characters -- do we just insert them, or do we validate
+        // UTF-8, or what?
+        return { .value = uint8_t(ch), .modmask = 0 };
+    }
+}
+
+keypress read_tty_keypress(int term) {
+    std::string chars_read;
+    keypress ret = read_tty_keypress(term, &chars_read);
+    ret.chars_read = std::move(chars_read);
+    return ret;
 }

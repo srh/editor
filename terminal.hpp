@@ -6,11 +6,16 @@
 #include <stdint.h>
 
 #include "error.hpp"
+#include "keyboard.hpp"
 
 // We _don't_ include <termios.h> in this header, to avoid all the macro pollution.
 struct termios;
 
 struct file_descriptor;
+
+// Used in rendering of control characters -- also used for a human-readable switch
+// statement in main.cpp input processing.
+constexpr uint8_t CTRL_XOR_MASK = 64;
 
 #define TERMINAL_ESCAPE_SEQUENCE "\x1b["
 #define TESC(x) TERMINAL_ESCAPE_SEQUENCE #x
@@ -39,5 +44,8 @@ struct terminal_restore {
 
     NO_COPY(terminal_restore);
 };
+
+void check_read_tty_char(int term_fd, char *out);
+keypress read_tty_keypress(int term);
 
 #endif  // QWERTILLION_TERMINAL_HPP_

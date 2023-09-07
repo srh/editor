@@ -17,10 +17,6 @@ namespace qwi {
    clean separation.  Includes terminal_frame and render_into_frame because some general
    buffer-update code makes use of it (instead of slickly duplicating its logic). */
 
-// Used in rendering of control characters -- also used for a human-readable switch
-// statement in main.cpp input processing.
-constexpr uint8_t CTRL_XOR_MASK = 64;
-
 struct terminal_char {
     uint8_t value;
     char as_char() const { return char(value); }

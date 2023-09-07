@@ -211,21 +211,21 @@ mark_id buffer::add_mark(size_t offset) {
 }
 
 size_t buffer::get_mark_offset(mark_id id) const {
-    logic_checkg(id.index < marks.size());
+    logic_check(id.index < marks.size(), "get_mark_offset");
     size_t mark_offset = marks[id.index];
     logic_checkg(mark_offset != SIZE_MAX);
     return mark_offset;
 }
 
 void buffer::remove_mark(mark_id id) {
-    logic_checkg(id.index < marks.size());
+    logic_check(id.index < marks.size(), "remove_mark");
     size_t mark_offset = marks[id.index];
     logic_checkg(mark_offset != SIZE_MAX);
     marks[id.index] = SIZE_MAX;
 }
 
 void buffer::replace_mark(mark_id id, size_t new_offset) {
-    logic_checkg(id.index < marks.size());
+    logic_check(id.index < marks.size(), "replace_mark");
     size_t mark_offset = marks[id.index];
     logic_checkg(mark_offset != SIZE_MAX);
     marks[id.index] = new_offset;

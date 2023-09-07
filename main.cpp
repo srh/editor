@@ -278,28 +278,6 @@ undo_killring_handled insert_printable_repr(state *state, ui_window_ctx *ui, buf
     return note_action(state, buf, std::move(res));
 }
 
-bool read_tty_char(int term_fd, char *out) {
-    char readbuf[1];
-    ssize_t res;
-    do {
-        res = read(term_fd, readbuf, 1);
-    } while (res == -1 && errno == EINTR);
-
-    // TODO: Of course, we'd want to auto-save the file upon this and all sorts of exceptions.
-    runtime_check(res != -1 || errno == EAGAIN, "unexpected error on terminal read: %s", runtime_check_strerror);
-
-    if (res != 0) {
-        *out = readbuf[0];
-        return true;
-    }
-    return false;
-}
-
-void check_read_tty_char(int term_fd, char *out) {
-    bool success = read_tty_char(term_fd, out);
-    runtime_check(success, "zero-length read from tty configured with VMIN=1");
-}
-
 // TODO: All keypresses should be implemented.
 undo_killring_handled unimplemented_keypress() {
     return undo_killring_handled{};
@@ -493,128 +471,49 @@ undo_killring_handled ctrl_underscore_keypress(state *state, ui_window_ctx *ui, 
     return handled_undo_killring(state, active_buf);
 }
 
-// Reads remainder of "\e[\d+(;\d+)?~" character escapes after the first digit was read.
-bool read_tty_numeric_escape(int term, std::string *chars_read, char firstDigit, std::pair<uint8_t, std::optional<uint8_t>> *out) {
-    logic_checkg(isdigit(firstDigit));
-    uint32_t number = firstDigit - '0';
-    std::optional<uint8_t> first_number;
-
-    for (;;) {
-        char ch;
-        check_read_tty_char(term, &ch);
-        chars_read->push_back(ch);
-        if (isdigit(ch)) {
-            uint32_t new_number = number * 10 + (ch - '0');
-            if (new_number > UINT8_MAX) {
-                // TODO: We'd probably want to report this to the user somehow, or still
-                // consume the entire escape code (for now we just render its characters.
-                return false;
-            }
-            number = new_number;
-        } else if (ch == '~') {
-            if (first_number.has_value()) {
-                out->first = *first_number;
-                out->second = number;
-            } else {
-                out->first = number;
-                out->second = std::nullopt;
-            }
-            return true;
-        } else if (ch == ';') {
-            if (first_number.has_value()) {
-                // TODO: We want to consume the whole keyboard escape code and ignore it together.
-                return false;
-            }
-            // TODO: Should we enforce a digit after the first semicolon, or allow "\e[\d+;~" as the code does now?
-            first_number = number;
-            number = 0;
-        }
-    }
-}
-
 // term_size needs to be the most up-to-date terminal window size.
 undo_killring_handled read_and_process_tty_input(int term, const terminal_size& term_size, state *state, bool *exit_loop) {
     // TODO: When term is non-blocking, we'll need to wait for readiness...?
-    char ch;
-    check_read_tty_char(term, &ch);
+    keypress kp = read_tty_keypress(term);
 
     state->popup_display = std::nullopt;
 
     buffer *active_buf = state->status_prompt.has_value() ? &state->status_prompt->buf : &state->topbuf();
     ui_window_ctx *win = &active_buf->win_ctx;
 
-    if (ch >= 32 && ch < 127) {
-        return character_keypress(state, win, active_buf, uint8_t(ch));
-    }
-    if (ch == '\t') {
-        return tab_keypress(state, win, active_buf);
-    }
-    if (ch == '\r') {
-        return enter_keypress(term_size, state, exit_loop);
-    }
-    if (ch == 28) {
-        // Ctrl+backslash
-        *exit_loop = true;
-        return undo_killring_handled{};
-    }
-    if (ch == 27) {
-        std::string chars_read;
-        check_read_tty_char(term, &ch);
-        chars_read.push_back(ch);
-        // TODO: Handle all possible escapes...
-        if (ch == '[') {
-            check_read_tty_char(term, &ch);
-            chars_read.push_back(ch);
+    if (kp.isMisparsed) {
+        state->note_error_message("Unparsed escape sequence: \\e" + kp.chars_read);
 
-            if (isdigit(ch)) {
-                std::pair<uint8_t, std::optional<uint8_t>> numbers;
-                if (read_tty_numeric_escape(term, &chars_read, ch, &numbers)) {
-                    if (!numbers.second.has_value()) {
-                        switch (numbers.first) {
-                        case 3:
-                            return delete_keypress(state, win, active_buf);
-                        case 2:
-                            return insert_keypress(state, active_buf);
+        return undo_killring_handled{};  // TODO: Is this what we want?
+    } else {
+        state->note_error_message("Successfully parsed escape sequence: \\e" + kp.chars_read);
+    }
 
-                        // (Yes, the escape codes aren't as contiguous as you'd expect.)
-                        case 15: return f5_keypress(state, active_buf);  // F5
-                        case 17: return f6_keypress(state, active_buf);  // F6
-                        case 18: return f7_keypress(state, active_buf);  // F7
-                        case 19: return f8_keypress(state, active_buf);  // F8
-                        case 20: return f9_keypress(state, active_buf);  // F9
-                        case 21: return f10_keypress(state, active_buf);  // F10
-                            // TODO: F11
-                        case 24: return f12_keypress(state, active_buf);  // F12
-                        default:
-                            break;
-                        }
-                    } else {
-                        uint8_t numbers_second = *numbers.second;
-                        if (numbers.first == 3 && numbers_second == 2) {
-                            return shift_delete_keypress(state, active_buf);
-                        }
-                    }
-                }
-            } else {
-                switch (ch) {
-                case 'C':
-                    return right_arrow_keypress(state, win, active_buf);
-                case 'D':
-                    return left_arrow_keypress(state, win, active_buf);
-                case 'A':
-                    return up_arrow_keypress(state, win, active_buf);
-                case 'B':
-                    return down_arrow_keypress(state, win, active_buf);
-                case 'H':
-                    return home_keypress(state, win, active_buf);
-                case 'F':
-                    return end_keypress(state, win, active_buf);
-                default:
-                    break;
-                }
+    if (kp.value >= 0 && kp.modmask == 0) {
+        // TODO: What if kp.value >= 256?
+        return character_keypress(state, win, active_buf, uint8_t(kp.value));
+    }
+    using special_key = keypress::special_key;
+    if (kp.modmask != 0) {
+        if (kp == keypress::ascii('\\', keypress::CTRL)) {
+            // Ctrl+backslash
+            *exit_loop = true;
+            return undo_killring_handled{};
+        }
+
+        if (kp == keypress::special(special_key::Backspace, keypress::CTRL)) {
+            return ctrl_backspace_keypress(state, win, active_buf);
+        }
+
+        if (kp == keypress::special(special_key::Delete, keypress::SHIFT)) {
+            return shift_delete_keypress(state, active_buf);
+        }
+
+        if (kp.modmask == keypress::META) {
+            if (-kp.value == special_key::Backspace) {
+                return meta_backspace_keypress(state, win, active_buf);
             }
-        } else {
-            switch (ch) {
+            switch (kp.value) {
             case 'f': return meta_f_keypress(state, win, active_buf);
             case 'b': return meta_b_keypress(state, win, active_buf);
             case 'h': return meta_h_keypress(state, win, active_buf);
@@ -622,70 +521,68 @@ undo_killring_handled read_and_process_tty_input(int term, const terminal_size& 
             case 'y': return meta_y_keypress(state, win, active_buf);
             case 'd': return meta_d_keypress(state, win, active_buf);
             case 's': return meta_s_keypress(state, active_buf);
-            case ('?' ^ CTRL_XOR_MASK): return meta_backspace_keypress(state, win, active_buf);
-            case 'w': return meta_w_keypress(state, active_buf);
-            case 'O': {
-                check_read_tty_char(term, &ch);
-                chars_read.push_back(ch);
-                switch (ch) {
-                case 'P': return f1_keypress(state, active_buf);  // F1
-                case 'Q': return f2_keypress(state, active_buf);  // F2
-                case 'R': return f3_keypress(state, active_buf);  // F3
-                case 'S': return f4_keypress(state, active_buf);  // F4
-                default:
-                    break;
-                }
-            } break;
             default:
+                // TODO: What here?
+                break;
+            }
+        } else if (kp.modmask == keypress::CTRL) {
+            switch (kp.value) {
+            case ' ': return ctrl_space_keypress(state, active_buf);
+            case 'A': return ctrl_a_keypress(state, win, active_buf);
+            case 'B': return ctrl_b_keypress(state, win, active_buf);
+            case 'C': return ctrl_c_keypress(state, active_buf, exit_loop);
+            case 'D': return ctrl_d_keypress(state, win, active_buf);
+            case 'E': return ctrl_e_keypress(state, win, active_buf);
+            case 'F': return ctrl_f_keypress(state, win, active_buf);
+            case 'G': return ctrl_g_keypress(state, active_buf);
+            case 'K': return ctrl_k_keypress(state, win, active_buf);
+            case 'N': return ctrl_n_keypress(state, win, active_buf);
+            case 'O': return ctrl_o_keypress(state, active_buf);
+            case 'P': return ctrl_p_keypress(state, win, active_buf);
+            case 'S': return ctrl_s_keypress(state, active_buf);
+            case 'W': return ctrl_w_keypress(state, win, active_buf);
+            case 'Y': return ctrl_y_keypress(state, win, active_buf);
+            case '_': return ctrl_underscore_keypress(state, win, active_buf);
+            default:
+                // TODO: Push printable repr.
+                // return insert_printable_repr(state, win, active_buf, ch);
                 break;
             }
         }
 
-        // Insert for the user (the developer, me) unrecognized escape codes.
-        buffer_string str;
-        str.push_back(buffer_char::from_char('\\'));
-        str.push_back(buffer_char::from_char('e'));
-        for (char c : chars_read) {
-            str.push_back(buffer_char::from_char(c));
-        }
-
-        insert_result res = insert_chars(win, active_buf, str.data(), str.size());
-        return note_action(state, active_buf, std::move(res));
-    }
-
-    if (ch == 8) {
-        return ctrl_backspace_keypress(state, win, active_buf);
-    }
-
-    if (uint8_t(ch) <= 127) {
-        switch (ch ^ CTRL_XOR_MASK) {
-        case '?': return backspace_keypress(state, win, active_buf);
-        case '@': return ctrl_space_keypress(state, active_buf); // Ctrl+Space same as C-@
-        case 'A': return ctrl_a_keypress(state, win, active_buf);
-        case 'B': return ctrl_b_keypress(state, win, active_buf);
-        case 'C': return ctrl_c_keypress(state, active_buf, exit_loop);
-        case 'D': return ctrl_d_keypress(state, win, active_buf);
-        case 'E': return ctrl_e_keypress(state, win, active_buf);
-        case 'F': return ctrl_f_keypress(state, win, active_buf);
-        case 'G': return ctrl_g_keypress(state, active_buf);
-        case 'K': return ctrl_k_keypress(state, win, active_buf);
-        case 'N': return ctrl_n_keypress(state, win, active_buf);
-        case 'O': return ctrl_o_keypress(state, active_buf);
-        case 'P': return ctrl_p_keypress(state, win, active_buf);
-        case 'S': return ctrl_s_keypress(state, active_buf);
-        case 'W': return ctrl_w_keypress(state, win, active_buf);
-        case 'Y': return ctrl_y_keypress(state, win, active_buf);
-        case '_': return ctrl_underscore_keypress(state, win, active_buf);
+    } else if (kp.modmask == 0) {
+        switch (static_cast<keypress::special_key>(-kp.value)) {
+        case special_key::Tab: return tab_keypress(state, win, active_buf);
+        case special_key::Enter: return enter_keypress(term_size, state, exit_loop);
+        case special_key::Delete: return delete_keypress(state, win, active_buf);
+        case special_key::Insert: return insert_keypress(state, active_buf);
+        case special_key::F1: return f1_keypress(state, active_buf);
+        case special_key::F2: return f2_keypress(state, active_buf);
+        case special_key::F3: return f3_keypress(state, active_buf);
+        case special_key::F4: return f4_keypress(state, active_buf);
+        case special_key::F5: return f5_keypress(state, active_buf);
+        case special_key::F6: return f6_keypress(state, active_buf);
+        case special_key::F7: return f7_keypress(state, active_buf);
+        case special_key::F8: return f8_keypress(state, active_buf);
+        case special_key::F9: return f9_keypress(state, active_buf);
+        case special_key::F10: return f10_keypress(state, active_buf);
+        case special_key::F11: return f11_keypress(state, active_buf);
+        case special_key::F12: return f12_keypress(state, active_buf);
+        case special_key::Backspace: return backspace_keypress(state, win, active_buf);
+        case special_key::Right: return right_arrow_keypress(state, win, active_buf);
+        case special_key::Left: return left_arrow_keypress(state, win, active_buf);
+        case special_key::Up: return up_arrow_keypress(state, win, active_buf);
+        case special_key::Down: return down_arrow_keypress(state, win, active_buf);
+        case special_key::Home: return home_keypress(state, win, active_buf);
+        case special_key::End: return end_keypress(state, win, active_buf);
         default:
-            // For now we do push the printable repr for any unhandled chars, for debugging purposes.
-            // TODO: Handle other possible control chars.
-            return insert_printable_repr(state, win, active_buf, ch);
+            break;
         }
-    } else {
-        // TODO: Handle high characters -- do we just insert them, or do we validate
-        // UTF-8, or what?
-        return insert_printable_repr(state, win, active_buf, ch);
     }
+
+    state->note_error_message("Unprocessed keypress: " + std::to_string(kp.value) + ", modmask = " + std::to_string(kp.modmask));
+
+    return undo_killring_handled{};  // TODO: Is this what we want?
 }
 
 void main_loop(int term, const command_line_args& args) {
