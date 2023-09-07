@@ -7,6 +7,9 @@
 
 namespace qwi {
 
+constexpr uint8_t TAB_WIDTH = 8;
+constexpr uint8_t TAB_MOD_MASK = TAB_WIDTH - 1;  // 8 is hard-coded tab stop
+
 // TODO: buffer_string and buffer_char don't belong in this header.
 struct buffer_char {
     uint8_t value;

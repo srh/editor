@@ -32,9 +32,6 @@ void ensure_virtual_column_initialized(ui_window_ctx *ui, const buffer *buf) {
     }
 }
 
-
-constexpr uint8_t TAB_MOD_MASK = 7;  // 8 is hard-coded tab stop
-
 // Returns true if not '\n'.  Sets *line_col in any case.  Calls emit_drawn_chars(char *,
 // size_t) once to pass out chars to be rendered in the terminal (except when a newline is
 // encountered).  Always passes a count of 1 or greater to emit_drawn_chars.
