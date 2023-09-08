@@ -259,6 +259,7 @@ void state::note_error_message(std::string&& msg) {
         // TODO: This edit should _not_ be tied to any window!!!  Or it should be tied to _all_ live windows in some way...?
         ui_window_ctx *ui = win_ctx(num);
 
+        size_t og_cursor = buf->cursor();
         force_insert_chars_end_before_cursor(
             ui, buf,
             as_buffer_chars(msg.data()), msg.size());
@@ -267,10 +268,21 @@ void state::note_error_message(std::string&& msg) {
         force_insert_chars_end_before_cursor(
             ui, buf,
             as_buffer_chars(&ch), 1);
-        // We don't touch the buffer's undo history or yank history -- since we append at
-        // the end of the buffer, the behavior doesn't need to adjust any undo offsets --
-        // a concept we never had before.  (And so far we don't even have the concept of user
-        // turning off read-only mode and editing the buffer.)
+
+        // We ALMOST don't touch the buffer's undo history or yank history -- since we
+        // append at the end of the buffer, the behavior doesn't need to adjust any undo
+        // offsets -- a concept we never had before.  (And so far we don't even have the
+        // concept of user turning off read-only mode and editing the buffer.)
+        //
+        // The exception is that char coalescence needs to be broken, because if the
+        // cursor's at the end of the buffer, we move it around.
+        if (og_cursor != buf->cursor()) {
+            add_coalescence_break(&buf->undo_info);
+
+            // TODO: If we are _yanking_ the current *Messages* buffer, _and_ the cursor
+            // is at the end of the *Messages* buffer (which is active) we need to call
+            // no_yank as well.  Not a crashing bug, but a bug nonetheless.
+        }
     }
     live_error_message = std::move(msg);
 }
