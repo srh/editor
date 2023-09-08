@@ -11,15 +11,14 @@ struct region_stats {
 
     size_t newline_count = 0;
     size_t last_line_size = 0;
+
+    // If newline_count_ == 0 and the line has tab charcters, this is a value from 1 to
+    // `TAB_WIDTH`, the size of the first tab character in the string.  Otherwise, this
+    // value is 0.
+    size_t first_tab_size = 0;
 };
 
-inline region_stats append_stats(const region_stats& left, const region_stats& right) {
-    region_stats ret = {
-        .newline_count = left.newline_count + right.newline_count,
-        .last_line_size = right.last_line_size + (right.newline_count == 0 ? left.last_line_size : 0)
-    };
-    return ret;
-}
+region_stats append_stats(const region_stats& left, const region_stats& right);
 
 region_stats compute_stats(const buffer_char *data, size_t count);
 

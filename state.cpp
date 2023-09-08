@@ -11,7 +11,7 @@
 namespace qwi {
 
 size_t buffer::cursor_distance_to_beginning_of_line() const {
-    return bef_stats_.last_line_size;
+    return distance_to_beginning_of_line(*this, bef_.size());
 }
 
 void buffer::set_cursor(size_t pos) {
