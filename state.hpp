@@ -3,6 +3,7 @@
 
 #include <inttypes.h>
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -228,7 +229,10 @@ struct state {
     //
     // Is never empty (after initial_state() returns).
     // NOTE: "Is never empty" may be a UI-specific constraint!  It seems reasonable for GUIs to support having no tabs open.
-    std::vector<buffer> buflist;
+    //
+    // Carries a pointer dereference because a lot of code passes buffer*, and we have
+    // note_error_message which may resize the buflist (by adding *Messages*) at any time.
+    std::vector<std::unique_ptr<buffer>> buflist;
 
 private:
     uint64_t next_buf_id_value = 0;
@@ -240,11 +244,11 @@ public:
     // TODO: Dedup this with buffer_ptr.
     buffer& buf_at(buffer_number buf_number) {
         logic_checkg(buf_number.value < buflist.size());
-        return buflist[buf_number.value];
+        return *buflist[buf_number.value];
     }
     const buffer& buf_at(buffer_number buf_number) const {
         logic_checkg(buf_number.value < buflist.size());
-        return buflist[buf_number.value];
+        return *buflist[buf_number.value];
     }
 
     void note_rendered_window_sizes(
@@ -281,12 +285,12 @@ public:
 // An unstable pointer.
 inline buffer *buffer_ptr(state *state, buffer_number buf_number) {
     logic_checkg(buf_number.value < state->buflist.size());
-    return &state->buflist[buf_number.value];
+    return state->buflist[buf_number.value].get();
 }
 
 inline const buffer *buffer_ptr(const state *state, buffer_number buf_number) {
     logic_checkg(buf_number.value < state->buflist.size());
-    return &state->buflist[buf_number.value];
+    return state->buflist[buf_number.value].get();
 }
 
 // TODO: Rename to be buffer_name_linear_time

@@ -67,7 +67,7 @@ std::string buffer_name_str(const state *state, buffer_number buf_number) {
 
     bool seen = false;
     for (size_t i = 0, e = state->buflist.size(); i < e; ++i) {
-        if (i != buf_number.value && state->buflist[i].name_str == buf->name_str) {
+        if (i != buf_number.value && state->buflist[i]->name_str == buf->name_str) {
             seen = true;
             break;
         }
@@ -118,8 +118,8 @@ window_size main_buf_window_from_terminal_window(const terminal_size& term_windo
 #if 0
 void resize_window(state *st, const terminal_size& new_window) {
     window_size buf_window = main_buf_window_from_terminal_window(new_window);
-    for (buffer& buf : st->buflist) {
-        resize_buf_window(&buf.win_ctx, buf_window);
+    for (std::unique_ptr<buffer>& buf : st->buflist) {
+        resize_buf_window(&buf->win_ctx, buf_window);
     }
 
     // TODO: Resize prompt window.
@@ -191,7 +191,7 @@ buffer_number find_or_create_buf(state *state, const std::string& name, int term
     // We insert the buf just before the current buf -- thus we increment buf_ptr.
     logic_checkg(state->buf_ptr.value < state->buflist.size());
     ret = state->buf_ptr;
-    state->buflist.insert(state->buflist.begin() + state->buf_ptr.value, std::move(buf));
+    state->buflist.insert(state->buflist.begin() + state->buf_ptr.value, std::make_unique<buffer>(std::move(buf)));
     state->buf_ptr.value += 1;
     apply_number_to_buf(state, ret);
     return ret;
@@ -235,10 +235,10 @@ void state::note_rendered_window_sizes(
     const std::vector<std::pair<buffer_id, window_size>>& window_sizes) {
     std::unordered_map<buffer_id, window_size> m(window_sizes.begin(), window_sizes.end());
 
-    for (buffer& buf : buflist) {
-        auto it = m.find(buf.id);
+    for (const std::unique_ptr<buffer>& buf : buflist) {
+        auto it = m.find(buf->id);
         if (it != m.end()) {
-            buf.win_ctx.set_last_rendered_window(it->second);
+            buf->win_ctx.set_last_rendered_window(it->second);
         }
     }
 

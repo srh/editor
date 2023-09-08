@@ -318,7 +318,7 @@ undo_killring_handled save_as_file_action(state *state, buffer *active_buf) {
 std::vector<std::string> modified_buffers(state *state) {
     std::vector<std::string> ret;
     for (size_t i = 0, e = state->buflist.size(); i < e; ++i) {
-        if (state->buflist[i].modified_flag()) {
+        if (state->buflist[i]->modified_flag()) {
             // TODO: O(n^2), gross.
             ret.push_back(buffer_name_str(state, buffer_number{i}));
         }
@@ -377,11 +377,11 @@ buffer open_file_into_detached_buffer(state *state, const std::string& dirty_pat
 
 void apply_number_to_buf(state *state, buffer_number buf_index_num) {
     size_t buf_index = buf_index_num.value;
-    buffer& the_buf = state->buflist.at(buf_index);
+    buffer& the_buf = state->buf_at(buf_index_num);
     const std::string& name = the_buf.name_str;
     std::unordered_set<uint64_t> numbers;
     for (size_t i = 0, e = state->buflist.size(); i < e; ++i) {
-        buffer& existing = state->buflist[i];
+        buffer& existing = *state->buflist[i];
         if (i != buf_index && existing.name_str == name) {
             auto res = numbers.insert(existing.name_number);
             logic_check(res.second,
@@ -443,7 +443,8 @@ undo_killring_handled enter_handle_status_prompt(const terminal_size& term_size,
             buf.win_ctx.set_last_rendered_window(buf_window);
 
             logic_checkg(state->buf_ptr.value < state->buflist.size());
-            state->buflist.insert(state->buflist.begin() + state->buf_ptr.value, std::move(buf));
+            state->buflist.insert(state->buflist.begin() + state->buf_ptr.value,
+                                  std::make_unique<buffer>(std::move(buf)));
             apply_number_to_buf(state, state->buf_ptr);
 
             // state->buf_ptr now points at our freshly opened buf -- its value is unchanged.
@@ -490,7 +491,7 @@ undo_killring_handled enter_handle_status_prompt(const terminal_size& term_size,
             if (state->buflist.empty()) {
                 // TODO: Gross!  So gross.
                 window_size buf_window = main_buf_window_from_terminal_window(term_size);
-                state->buflist.push_back(scratch_buffer(state->gen_buf_id(), buf_window));
+                state->buflist.push_back(std::make_unique<buffer>(scratch_buffer(state->gen_buf_id(), buf_window)));
                 // state->buf_ptr is already 0, thus correct.
             }
             close_status_prompt(state);
