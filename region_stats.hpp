@@ -7,13 +7,19 @@ namespace qwi {
 
 struct region_stats {
     // Given two strings x and y, we can efficiently compute region_stats of (x + y) from
-    // region_stats of x and y respectively.
+    // region_stats of x and y respectively.  Note that this assumes the tab width is
+    // consistently TAB_WIDTH -- column numbers would, of course, have to be recomputed if
+    // tab width dynamically changes.
+
+    // The zero value of this type happens to be the region_stats computed on the empty string.
 
     size_t newline_count = 0;
+
+    // The size in columns of the last line -- as defined by compute_char_rendering.
     size_t last_line_size = 0;
 
-    // If newline_count_ == 0 and the line has tab charcters, this is a value from 1 to
-    // `TAB_WIDTH`, the size of the first tab character in the string.  Otherwise, this
+    // If newline_count_ == 0 and the line has tab characters, this is a value from 1 to
+    // TAB_WIDTH, the size of the first tab character in the string.  Otherwise, this
     // value is 0.
     size_t first_tab_size = 0;
 };
