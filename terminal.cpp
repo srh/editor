@@ -179,8 +179,14 @@ void check_read_tty_char(int term_fd, char *out) {
     runtime_check(success, "zero-length read from tty configured with VMIN=1");
 }
 
+struct parsed_numeric_escape {
+    uint8_t first;
+    std::optional<uint8_t> second;
+    char terminator;  // ~, A, B, C, D, for now
+};
+
 // Reads remainder of "\e[\d+(;\d+)?~" character escapes after the first digit was read.
-bool read_tty_numeric_escape(int term, std::string *chars_read, char firstDigit, std::pair<uint8_t, std::optional<uint8_t>> *out) {
+bool read_tty_numeric_escape(int term, std::string *chars_read, char firstDigit, parsed_numeric_escape *out) {
     logic_checkg(isdigit(firstDigit));
     uint32_t number = firstDigit - '0';
     std::optional<uint8_t> first_number;
@@ -197,7 +203,7 @@ bool read_tty_numeric_escape(int term, std::string *chars_read, char firstDigit,
                 return false;
             }
             number = new_number;
-        } else if (ch == '~') {
+        } else if (ch == '~' || ch == 'A' || ch == 'B' || ch == 'C' || ch == 'D') {
             if (first_number.has_value()) {
                 out->first = *first_number;
                 out->second = number;
@@ -205,6 +211,7 @@ bool read_tty_numeric_escape(int term, std::string *chars_read, char firstDigit,
                 out->first = number;
                 out->second = std::nullopt;
             }
+            out->terminator = ch;
             return true;
         } else if (ch == ';') {
             if (first_number.has_value()) {
@@ -214,6 +221,8 @@ bool read_tty_numeric_escape(int term, std::string *chars_read, char firstDigit,
             // TODO: Should we enforce a digit after the first semicolon, or allow "\e[\d+;~" as the code does now?
             first_number = number;
             number = 0;
+        } else {
+            return false;
         }
     }
 }
@@ -244,10 +253,19 @@ keypress read_tty_keypress(int term, std::string *chars_read_out) {
             chars_read.push_back(ch);
 
             if (isdigit(ch)) {
-                std::pair<uint8_t, std::optional<uint8_t>> numbers;
+                parsed_numeric_escape numbers;
                 if (read_tty_numeric_escape(term, &chars_read, ch, &numbers)) {
                     special_key special = keypress::invalid_special();
                     switch (numbers.first) {
+                    case 1: {
+                        switch (numbers.terminator) {
+                        case 'A': special = special_key::Up; break;
+                        case 'B': special = special_key::Down; break;
+                        case 'C': special = special_key::Right; break;
+                        case 'D': special = special_key::Left; break;
+                        default: break;
+                        }
+                    } break;
                     case 2: special = special_key::Insert; break;
                     case 3: special = special_key::Delete; break;
                     case 5: special = special_key::PageUp; break;
@@ -265,18 +283,25 @@ keypress read_tty_keypress(int term, std::string *chars_read_out) {
                     }
 
                     if (special != keypress::invalid_special()) {
-                        if (*numbers.second == 2) {
-                            return keypress::special(special, keypress::SHIFT);
-                        } else if (*numbers.second == 3) {
-                            return keypress::special(special, keypress::META);
-                        } else if (*numbers.second == 4) {
-                            return keypress::special(special, keypress::META | keypress::SHIFT);
-                        } else if (*numbers.second == 5) {
-                            return keypress::special(special, keypress::CTRL);
-                        } else if (*numbers.second == 6) {
-                            return keypress::special(special, keypress::CTRL | keypress::SHIFT);
-                        } else if (*numbers.second == 7) {
-                            return keypress::special(special, keypress::CTRL | keypress::META);
+                        if (!numbers.second.has_value()) {
+                            return keypress::special(special, 0);
+                        } else {
+                            switch (*numbers.second) {
+                            case 2:
+                                return keypress::special(special, keypress::SHIFT);
+                            case 3:
+                                return keypress::special(special, keypress::META);
+                            case 4:
+                                return keypress::special(special, keypress::META | keypress::SHIFT);
+                            case 5:
+                                return keypress::special(special, keypress::CTRL);
+                            case 6:
+                                return keypress::special(special, keypress::CTRL | keypress::SHIFT);
+                            case 7:
+                                return keypress::special(special, keypress::CTRL | keypress::META);
+                            default:
+                                break;
+                            }
                         }
                     }
                     // If special == 0, we fall through to incomplete_parse.
