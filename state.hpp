@@ -272,6 +272,7 @@ public:
 
     std::optional<popup> popup_display;
 
+    void add_message(const std::string& msg);
     // TODO: Every use of this function is probably a bad place for UI logic.
     void note_error_message(std::string&& msg);
     void clear_error_message() { live_error_message = ""; }

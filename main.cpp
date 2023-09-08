@@ -484,9 +484,10 @@ undo_killring_handled read_and_process_tty_input(int term, const terminal_size& 
     if (kp.isMisparsed) {
         state->note_error_message("Unparsed escape sequence: \\e" + kp.chars_read);
 
-        return undo_killring_handled{};  // TODO: Is this what we want?
+        // Do nothing for undo or killring.
+        return handled_undo_killring(state, active_buf);
     } else {
-        state->note_error_message("Successfully parsed escape sequence: \\e" + kp.chars_read);
+        state->add_message("Successfully parsed escape sequence: \\e" + kp.chars_read);
     }
 
     if (kp.value >= 0 && kp.modmask == 0) {
@@ -582,7 +583,8 @@ undo_killring_handled read_and_process_tty_input(int term, const terminal_size& 
 
     state->note_error_message("Unprocessed keypress: " + std::to_string(kp.value) + ", modmask = " + std::to_string(kp.modmask));
 
-    return undo_killring_handled{};  // TODO: Is this what we want?
+    // Do nothing for undo or killring.
+    return handled_undo_killring(state, active_buf);
 }
 
 void main_loop(int term, const command_line_args& args) {

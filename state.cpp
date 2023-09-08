@@ -251,8 +251,7 @@ void state::note_rendered_window_sizes(
 
 }
 
-
-void state::note_error_message(std::string&& msg) {
+void state::add_message(const std::string& msg) {
     if (!msg.empty()) {
         buffer_number num = find_or_create_buf(this, "*Messages*", term, true /* read-only */);
         buffer *buf = buffer_ptr(this, num);
@@ -284,6 +283,10 @@ void state::note_error_message(std::string&& msg) {
             // no_yank as well.  Not a crashing bug, but a bug nonetheless.
         }
     }
+}
+
+void state::note_error_message(std::string&& msg) {
+    add_message(msg);
     live_error_message = std::move(msg);
 }
 
