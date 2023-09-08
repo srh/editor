@@ -496,24 +496,11 @@ undo_killring_handled read_and_process_tty_input(int term, const terminal_size& 
     }
     using special_key = keypress::special_key;
     if (kp.modmask != 0) {
-        if (kp == keypress::ascii('\\', keypress::CTRL)) {
-            // Ctrl+backslash
-            *exit_loop = true;
-            return undo_killring_handled{};
-        }
-
-        if (kp == keypress::special(special_key::Backspace, keypress::CTRL)) {
-            return ctrl_backspace_keypress(state, win, active_buf);
-        }
-
         if (kp == keypress::special(special_key::Delete, keypress::SHIFT)) {
             return shift_delete_keypress(state, active_buf);
         }
 
         if (kp.modmask == keypress::META) {
-            if (-kp.value == special_key::Backspace) {
-                return meta_backspace_keypress(state, win, active_buf);
-            }
             switch (kp.value) {
             case 'f': return meta_f_keypress(state, win, active_buf);
             case 'b': return meta_b_keypress(state, win, active_buf);
@@ -522,8 +509,9 @@ undo_killring_handled read_and_process_tty_input(int term, const terminal_size& 
             case 'y': return meta_y_keypress(state, win, active_buf);
             case 'd': return meta_d_keypress(state, win, active_buf);
             case 's': return meta_s_keypress(state, active_buf);
+            case -static_cast<keypress::key_type>(special_key::Backspace):
+                return meta_backspace_keypress(state, win, active_buf);
             default:
-                // TODO: What here?
                 break;
             }
         } else if (kp.modmask == keypress::CTRL) {
@@ -543,10 +531,13 @@ undo_killring_handled read_and_process_tty_input(int term, const terminal_size& 
             case 'S': return ctrl_s_keypress(state, active_buf);
             case 'W': return ctrl_w_keypress(state, win, active_buf);
             case 'Y': return ctrl_y_keypress(state, win, active_buf);
+            case '\\':
+                *exit_loop = true;
+                return undo_killring_handled{};
             case '_': return ctrl_underscore_keypress(state, win, active_buf);
+            case -static_cast<keypress::key_type>(special_key::Backspace):
+                return ctrl_backspace_keypress(state, win, active_buf);
             default:
-                // TODO: Push printable repr.
-                // return insert_printable_repr(state, win, active_buf, ch);
                 break;
             }
         }
