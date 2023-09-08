@@ -320,6 +320,21 @@ keypress read_tty_keypress(int term, std::string *chars_read_out) {
                     return keypress::special(special_key::Home);
                 case 'F':
                     return keypress::special(special_key::End);
+                case '[': {
+                    // The Linux console uses these instead of \eOA-\eOD for F1-F4.
+                    check_read_tty_char(term, &ch);
+                    chars_read.push_back(ch);
+                    switch (ch) {
+                    case 'A': return keypress::special(special_key::F1); break;
+                    case 'B': return keypress::special(special_key::F2); break;
+                    case 'C': return keypress::special(special_key::F3); break;
+                    case 'D': return keypress::special(special_key::F4); break;
+                    case 'E': return keypress::special(special_key::F5); break;
+                        // We stop here?
+                    default:
+                        break;
+                    }
+                } break;
                 default:
                     break;
                 }
