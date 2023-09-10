@@ -323,6 +323,8 @@ keypress read_tty_keypress(int term, std::string *chars_read_out) {
                     return keypress::special(special_key::Home);
                 case 'F':
                     return keypress::special(special_key::End);
+                case 'Z':
+                    return keypress::special(special_key::Tab, keypress::SHIFT);
                 case '[': {
                     // The Linux console uses these instead of \eOA-\eOD for F1-F4.
                     check_read_tty_char(term, &ch);
