@@ -6,9 +6,6 @@
 
 namespace qwi {
 
-// Generated and returned to indicate that the code exhaustively handles undo and killring behavior.
-struct [[nodiscard]] undo_killring_handled { };
-
 // Callers will need to handle undo.
 #if 0
 inline undo_killring_handled undo_will_need_handling() {

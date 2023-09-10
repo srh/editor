@@ -136,7 +136,7 @@ undo_killring_handled buffer_close_action(state *state, buffer *active_buf) {
     }
 
     // TODO: Only complain if the buffer has been modified.  (Add a modified flag.)
-    state->status_prompt = {prompt::type::buffer_close, buffer(state->gen_buf_id()), prompt::message_unused};
+    state->status_prompt = {prompt::type::buffer_close, buffer(state->gen_buf_id()), prompt::message_unused, prompt::procedure_unused()};
     return ret;
 }
 
@@ -262,7 +262,7 @@ undo_killring_handled open_file_action(state *state, buffer *active_buf) {
         return ret;
     }
 
-    state->status_prompt = {prompt::type::file_open, buffer(state->gen_buf_id()), prompt::message_unused};
+    state->status_prompt = {prompt::type::file_open, buffer(state->gen_buf_id()), prompt::message_unused, prompt::procedure_unused()};
     return ret;
 }
 
@@ -295,7 +295,7 @@ undo_killring_handled save_file_action(state *state, buffer *active_buf) {
         save_buf_to_married_file_and_mark_unmodified(&state->topbuf());
     } else {
         // TODO: How/where should we set the prompt's buf's window?
-        state->status_prompt = {prompt::type::file_save, buffer(state->gen_buf_id()), prompt::message_unused};
+        state->status_prompt = {prompt::type::file_save, buffer(state->gen_buf_id()), prompt::message_unused, prompt::procedure_unused()};
     }
     return ret;
 }
@@ -311,7 +311,7 @@ undo_killring_handled save_as_file_action(state *state, buffer *active_buf) {
         return ret;
     }
 
-    state->status_prompt = {prompt::type::file_save, buffer(state->gen_buf_id()), prompt::message_unused};
+    state->status_prompt = {prompt::type::file_save, buffer(state->gen_buf_id()), prompt::message_unused, prompt::procedure_unused()};
     return ret;
 }
 
@@ -335,7 +335,7 @@ undo_killring_handled exit_cleanly(state *state, buffer *active_buf, bool *exit_
 
     std::vector<std::string> bufnames = modified_buffers(state);
     if (!bufnames.empty()) {
-        state->status_prompt = {prompt::type::exit_without_save, buffer(state->gen_buf_id()), string_join(", ", bufnames)};
+        state->status_prompt = {prompt::type::exit_without_save, buffer(state->gen_buf_id()), string_join(", ", bufnames), prompt::procedure_unused()};
     } else {
         *exit_loop = true;
     }
@@ -354,7 +354,7 @@ undo_killring_handled buffer_switch_action(state *state, buffer *active_buf) {
     }
 
     buffer_string data = buffer_name(state, state->buf_ptr);
-    state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(state->gen_buf_id(), std::move(data)), prompt::message_unused};
+    state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(state->gen_buf_id(), std::move(data)), prompt::message_unused, prompt::procedure_unused()};
     return ret;
 }
 
@@ -411,6 +411,14 @@ buffer scratch_buffer(buffer_id id) {
 
 undo_killring_handled enter_handle_status_prompt(state *state, bool *exit_loop) {
     switch (state->status_prompt->typ) {
+    case prompt::type::proc: {
+        // TODO: Maybe every branch of this function should start with these lines, and
+        // have to re-initiate the prompt later.
+        prompt status_prompt = std::move(*state->status_prompt);
+        close_status_prompt(state);  // sets state->status_prompt to nullopt.
+
+        return (status_prompt.procedure)(state, status_prompt.buf, exit_loop);
+    } break;
     case prompt::type::file_save: {
         // killring important, undo not because we're destructing the status_prompt buf.
         undo_killring_handled ret = note_backout_action(state, &state->status_prompt->buf);

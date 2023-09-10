@@ -3,6 +3,7 @@
 
 #include <inttypes.h>
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -191,12 +192,19 @@ public:
     static buffer from_data(buffer_id id, buffer_string&& data);
 };
 
+// Generated and returned to indicate that the code exhaustively handles undo and killring behavior.
+struct [[nodiscard]] undo_killring_handled { };
+
 struct prompt {
-    enum class type { file_open, file_save, buffer_switch, buffer_close, exit_without_save };
+    enum class type { file_open, file_save, buffer_switch, buffer_close, exit_without_save, proc };
     type typ;
     buffer buf;
+
     constexpr static const char *const message_unused = "";
     std::string messageText;  // only for exit_without_save
+
+    std::function<undo_killring_handled(state *st, const buffer& prompt_buf, bool *exit_loop)> procedure;  // only for proc
+    static decltype(procedure) procedure_unused() { return decltype(procedure)(); }
 };
 
 struct popup {

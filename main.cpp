@@ -98,7 +98,6 @@ void draw_empty_frame_for_exit(int fd, const terminal_size& window) {
     write_frame(fd, frame);
 }
 
-// TODO: State no longer needs term?
 state initial_state(const command_line_args& args) {
     const size_t n_files = args.files.size();
 
@@ -175,6 +174,10 @@ void render_status_area(terminal_frame *frame, const state& state) {
         case prompt::type::buffer_close: message = "close without saving? (yes/no): "; break;
         case prompt::type::exit_without_save:
             message = "exit without saving? (" + state.status_prompt->messageText + ") (yes/no): ";
+            break;
+        case prompt::type::proc:
+            // TODO: Such a gratuitous copy.
+            message = state.status_prompt->messageText;
             break;
         }
 
