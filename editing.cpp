@@ -394,6 +394,28 @@ undo_killring_handled exit_cleanly(state *state, buffer *active_buf, bool *exit_
     return ret;
 }
 
+prompt buffer_switch_prompt(buffer_id promptBufId, buffer_string&& data) {
+    // TODO: UI logic
+    return {prompt::type::proc, buffer::from_data(promptBufId, std::move(data)), "switch to buffer: ",
+        [](state *state, buffer&& promptBuf, bool *) {
+            // killring important, undo not because we're destructing the status_prompt buf.
+            undo_killring_handled ret = note_backout_action(state, &promptBuf);
+            std::string text = promptBuf.copy_to_string();
+            if (text != "") {
+                buffer_number buf_number;
+                if (find_buffer_by_name(state, text, &buf_number)) {
+                    rotate_to_buffer(state, buf_number);
+                } else {
+                    state->note_error_message("Buffer not found");
+                }
+            } else {
+                state->note_error_message("No buffer name given");
+            }
+
+            return ret;
+        }};
+}
+
 // TODO: When we switch to a buffer, or rotate to one, we should render the buffer with the cursor on screen.  No?  Well, if it's a *Messages* buffer... Hmmm.
 undo_killring_handled buffer_switch_action(state *state, buffer *active_buf) {
     undo_killring_handled ret = note_navigation_action(state, active_buf);
@@ -406,7 +428,7 @@ undo_killring_handled buffer_switch_action(state *state, buffer *active_buf) {
     }
 
     buffer_string data = buffer_name(state, state->buf_ptr);
-    state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(state->gen_buf_id(), std::move(data)), prompt::message_unused, prompt::procedure_unused()};
+    state->status_prompt = buffer_switch_prompt(state->gen_buf_id(), std::move(data));
     return ret;
 }
 
@@ -466,25 +488,6 @@ undo_killring_handled enter_handle_status_prompt(state *state, bool *exit_loop) 
         close_status_prompt(state);  // sets state->status_prompt to nullopt.
 
         return (status_prompt.procedure)(state, std::move(status_prompt.buf), exit_loop);
-    } break;
-    case prompt::type::buffer_switch: {
-        // killring important, undo not because we're destructing the status_prompt buf.
-        undo_killring_handled ret = note_backout_action(state, &state->status_prompt->buf);
-        std::string text = state->status_prompt->buf.copy_to_string();
-        // TODO: Implement displaying errors to the user.
-        if (text != "") {
-            buffer_number buf_number;
-            if (find_buffer_by_name(state, text, &buf_number)) {
-                rotate_to_buffer(state, buf_number);
-            } else {
-                state->note_error_message("Buffer not found");
-            }
-        } else {
-            state->note_error_message("No buffer name given");
-        }
-
-        close_status_prompt(state);
-        return ret;
     } break;
     case prompt::type::buffer_close: {
         // killring important, undo not because we're destructing the status_prompt buf.
