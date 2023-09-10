@@ -159,7 +159,6 @@ void render_string(terminal_frame *frame, const terminal_coord& coord, const buf
     }
 }
 
-// TODO: Non-const reference for state param -- we set its status_prompt's buf's window.
 void render_status_area(terminal_frame *frame, const state& state) {
     uint32_t last_row = u32_sub(frame->window.rows, 1);
 

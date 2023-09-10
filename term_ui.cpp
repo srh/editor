@@ -200,8 +200,7 @@ bool too_small_to_render(const window_size& window) {
     return window.cols < 2 || window.rows == 0;
 }
 
-// TODO: Make params const.
-bool cursor_is_offscreen(ui_window_ctx *ui, buffer *buf, size_t cursor) {
+bool cursor_is_offscreen(const ui_window_ctx *ui, const buffer *buf, size_t cursor) {
     if (!ui->rendered_window.has_value()) {
         // We treat as infinite window, and specifically any buf without a window should
         // have no scrolling.
