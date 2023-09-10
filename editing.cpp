@@ -372,6 +372,7 @@ buffer open_file_into_detached_buffer(state *state, const std::string& dirty_pat
     ret.name_str = std::move(name);
     ret.married_file = path.string();
     ret.aft_ = std::move(data);
+    ret.aft_stats_ = compute_stats(ret.aft_);
     return ret;
 }
 
