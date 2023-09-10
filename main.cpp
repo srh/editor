@@ -98,16 +98,15 @@ void draw_empty_frame_for_exit(int fd, const terminal_size& window) {
     write_frame(fd, frame);
 }
 
-state initial_state(int term, const command_line_args& args, const terminal_size& window) {
+// TODO: State no longer needs term?
+state initial_state(const command_line_args& args) {
     const size_t n_files = args.files.size();
 
-    window_size buf_window = main_buf_window_from_terminal_window(window);
-
-    state state(term);
+    state state;
     if (n_files == 0) {
         state.buf_ptr.value = 0;
         state.buflist.push_back(std::make_unique<buffer>(
-                                    scratch_buffer(state.gen_buf_id(), buf_window)));
+                                    scratch_buffer(state.gen_buf_id())));
     } else {
         state.buf_ptr.value = 0;
         state.buflist.reserve(n_files);
@@ -116,7 +115,6 @@ state initial_state(int term, const command_line_args& args, const terminal_size
             // TODO: Maybe combine these ops and define the fn in editing.cpp
             state.buflist.push_back(
                 std::make_unique<buffer>(open_file_into_detached_buffer(&state, args.files.at(i))));
-            state.buflist.back()->win_ctx.set_last_rendered_window(buf_window);
             apply_number_to_buf(&state, buffer_number{i});
 
             // TODO: How do we handle duplicate file names?  Just allow identical buffer
@@ -283,7 +281,7 @@ undo_killring_handled nop_keypress() {
 }
 
 // *exit_loop can be assigned true; there is no need to assign it false.
-undo_killring_handled enter_keypress(const terminal_size& term_size, state *state, bool *exit_loop) {
+undo_killring_handled enter_keypress(state *state, bool *exit_loop) {
     if (!state->status_prompt.has_value()) {
         ui_window_ctx *ui = state->win_ctx(state->buf_ptr);
         buffer *buf = &state->buf_at(state->buf_ptr);
@@ -291,7 +289,7 @@ undo_killring_handled enter_keypress(const terminal_size& term_size, state *stat
         return note_coalescent_action(state, buf, std::move(res));
     }
 
-    return enter_handle_status_prompt(term_size, state, exit_loop);
+    return enter_handle_status_prompt(state, exit_loop);
 }
 
 undo_killring_handled delete_keypress(state *state, ui_window_ctx *ui, buffer *buf) {
@@ -466,8 +464,7 @@ undo_killring_handled ctrl_underscore_keypress(state *state, ui_window_ctx *ui, 
     return handled_undo_killring(state, active_buf);
 }
 
-// term_size needs to be the most up-to-date terminal window size.
-undo_killring_handled read_and_process_tty_input(int term, const terminal_size& term_size, state *state, bool *exit_loop) {
+undo_killring_handled read_and_process_tty_input(int term, state *state, bool *exit_loop) {
     // TODO: When term is non-blocking, we'll need to wait for readiness...?
     keypress kp = read_tty_keypress(term);
 
@@ -540,7 +537,7 @@ undo_killring_handled read_and_process_tty_input(int term, const terminal_size& 
     } else if (kp.modmask == 0) {
         switch (static_cast<keypress::special_key>(-kp.value)) {
         case special_key::Tab: return tab_keypress(state, win, active_buf);
-        case special_key::Enter: return enter_keypress(term_size, state, exit_loop);
+        case special_key::Enter: return enter_keypress(state, exit_loop);
         case special_key::Delete: return delete_keypress(state, win, active_buf);
         case special_key::Insert: return insert_keypress(state, active_buf);
         case special_key::F1: return f1_keypress(state, active_buf);
@@ -574,9 +571,9 @@ undo_killring_handled read_and_process_tty_input(int term, const terminal_size& 
 }
 
 void main_loop(int term, const command_line_args& args) {
-    terminal_size window = get_terminal_size(term);
-    state state = initial_state(term, args, window);
+    state state = initial_state(args);
 
+    terminal_size window = get_terminal_size(term);
     {
         std::vector<std::pair<buffer_id, window_size>> window_sizes
             = redraw_state(term, window, state);
@@ -585,7 +582,7 @@ void main_loop(int term, const command_line_args& args) {
 
     bool exit = false;
     for (; !exit; ) {
-        undo_killring_handled handled = read_and_process_tty_input(term, window, &state, &exit);
+        undo_killring_handled handled = read_and_process_tty_input(term, &state, &exit);
         {
             // Undo and killring behavior has been handled exhaustively in all branches of
             // read_and_process_tty_input -- here's where we consume that fact.

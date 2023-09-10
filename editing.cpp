@@ -402,15 +402,14 @@ void apply_number_to_buf(state *state, buffer_number buf_index_num) {
     the_buf.name_number = n;
 }
 
-buffer scratch_buffer(buffer_id id, const window_size& buf_window) {
+buffer scratch_buffer(buffer_id id) {
     buffer ret(id);
-    ret.win_ctx.set_last_rendered_window(buf_window);
     ret.name_str = "*scratch*";
     ret.name_number = 0;
     return ret;
 }
 
-undo_killring_handled enter_handle_status_prompt(const terminal_size& term_size, state *state, bool *exit_loop) {
+undo_killring_handled enter_handle_status_prompt(state *state, bool *exit_loop) {
     switch (state->status_prompt->typ) {
     case prompt::type::file_save: {
         // killring important, undo not because we're destructing the status_prompt buf.
@@ -438,10 +437,6 @@ undo_killring_handled enter_handle_status_prompt(const terminal_size& term_size,
         if (text != "") {
             // TODO: Handle error!
             buffer buf = open_file_into_detached_buffer(state, text);
-
-            // TODO: Gross!  So gross.
-            window_size buf_window = main_buf_window_from_terminal_window(term_size);
-            buf.win_ctx.set_last_rendered_window(buf_window);
 
             logic_checkg(state->buf_ptr.value < state->buflist.size());
             state->buflist.insert(state->buflist.begin() + state->buf_ptr.value,
@@ -491,8 +486,7 @@ undo_killring_handled enter_handle_status_prompt(const terminal_size& term_size,
             // buflist must never be empty
             if (state->buflist.empty()) {
                 // TODO: Gross!  So gross.
-                window_size buf_window = main_buf_window_from_terminal_window(term_size);
-                state->buflist.push_back(std::make_unique<buffer>(scratch_buffer(state->gen_buf_id(), buf_window)));
+                state->buflist.push_back(std::make_unique<buffer>(scratch_buffer(state->gen_buf_id())));
                 // state->buf_ptr is already 0, thus correct.
             }
             close_status_prompt(state);

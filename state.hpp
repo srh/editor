@@ -227,9 +227,7 @@ struct ui_mode {
 };
 
 struct state {
-    // TODO: Remove term.
-    explicit state(int _term) : term(_term) { }
-    int term = -1;
+    state() = default;
 
     // Sorted in order from least-recently-used -- `buf` is the active buffer and should
     // get pushed onto the end of bufs after some other buf takes its place.

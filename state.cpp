@@ -175,7 +175,7 @@ void no_yank(clip_board *clb) {
     clb->justYanked = std::nullopt;
 }
 
-buffer_number find_or_create_buf(state *state, const std::string& name, const terminal_size& term_size, bool make_read_only) {
+buffer_number find_or_create_buf(state *state, const std::string& name, bool make_read_only) {
     buffer_number ret;
     if (find_buffer_by_name(state, name, &ret)) {
         return ret;
@@ -184,8 +184,6 @@ buffer_number find_or_create_buf(state *state, const std::string& name, const te
     buffer buf(state->gen_buf_id());
     buf.read_only = make_read_only;
     buf.name_str = name;
-    window_size buf_window = main_buf_window_from_terminal_window(term_size);
-    buf.win_ctx.set_last_rendered_window(buf_window);
 
     // We insert the buf just before the current buf -- thus we increment buf_ptr.
     logic_checkg(state->buf_ptr.value < state->buflist.size());
@@ -252,10 +250,9 @@ void state::note_rendered_window_sizes(
 
 void state::add_message(const std::string& msg) {
     if (!msg.empty()) {
-        terminal_size term_size = get_terminal_size(term);
-        buffer_number num = find_or_create_buf(this, "*Messages*", term_size, true /* read-only */);
+        buffer_number num = find_or_create_buf(this, "*Messages*", true /* read-only */);
         buffer *buf = buffer_ptr(this, num);
-        // TODO: This edit should _not_ be tied to any window!!!  Or it should be tied to _all_ live windows in some way...?
+        // TODO: This edit should _not_ be tied to any window!!!  In a way that makes sense there are multiple windows.  Or it should be tied to _all_ live windows in some way...?
         ui_window_ctx *ui = win_ctx(num);
 
         size_t og_cursor = buf->cursor();

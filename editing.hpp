@@ -36,8 +36,8 @@ undo_killring_handled exit_cleanly(state *state, buffer *active_buf, bool *exit_
 undo_killring_handled buffer_switch_action(state *state, buffer *active_buf);
 buffer open_file_into_detached_buffer(state *state, const std::string& dirty_path);
 void apply_number_to_buf(state *state, buffer_number buf_index_num);
-buffer scratch_buffer(buffer_id id, const window_size& buf_window);
-undo_killring_handled enter_handle_status_prompt(const terminal_size& term_size, state *state, bool *exit_loop);
+buffer scratch_buffer(buffer_id id);
+undo_killring_handled enter_handle_status_prompt(state *state, bool *exit_loop);
 undo_killring_handled note_coalescent_action(state *state, buffer *buf, delete_result&& d_res);
 
 undo_killring_handled buffer_close_action(state *state, buffer *active_buf);
