@@ -10,7 +10,10 @@
 
 #include "error.hpp"
 #include "io.hpp"
-#include "term_ui.hpp"  // for CTRL_XOR_MASK -- not happy about this include dependency
+
+inline void assume_ASCII() { }  // Used wherever we assume the ASCII character set in
+                                // terminal handling... hopefully with exhaustive
+                                // coverage.
 
 void get_and_check_tcattr(int fd, struct termios *out) {
     int res = tcgetattr(fd, out);
@@ -352,6 +355,7 @@ keypress read_tty_keypress(int term, std::string *chars_read_out) {
                     break;
                 }
             } else if (ch == ('?' ^ CTRL_XOR_MASK)) {
+                assume_ASCII();
                 return keypress::special(special_key::Backspace, keypress::META);
             } else {
                 if (32 <= ch && ch < 127) {
@@ -371,15 +375,26 @@ keypress read_tty_keypress(int term, std::string *chars_read_out) {
     }
 
     if (uint8_t(ch) <= 127) {
+        uint8_t maskch = uint8_t(ch) ^ CTRL_XOR_MASK;
         // Special case for backspace key (when ch == 127).
-        if (ch == ('?' ^ CTRL_XOR_MASK)) {
+        if (maskch == '?') {
+            assume_ASCII();
             return keypress::special(special_key::Backspace);
         }
-        if (ch == ('@' ^ CTRL_XOR_MASK)) {
+        if (maskch == '@') {
+            assume_ASCII();
             return keypress::ascii(' ', keypress::CTRL);  // Ctrl+Space same as C-@
         }
+        if (maskch >= 'A' && maskch <= 'Z') {
+            assume_ASCII();
+            // TODO: Generally, here and elsewhere in terminal parsing, we have a strong
+            // assumption of the ASCII character set.  What if there's an EBCDIC terminal?
+            // How does that work?
+            const uint8_t ALPHA_SHIFT_MASK = 32;
+            return keypress::ascii(maskch ^ ALPHA_SHIFT_MASK, keypress::CTRL);
+        }
 
-        return { .value = uint8_t(ch) ^ CTRL_XOR_MASK, .modmask = keypress::CTRL };
+        return { .value = maskch, .modmask = keypress::CTRL };
     } else {
         // TODO: Handle high characters -- do we just insert them, or do we validate
         // UTF-8, or what?

@@ -546,20 +546,20 @@ undo_killring_handled process_keypress_in_buf(const keypress& kp, state *state,
         } else if (kp.modmask == keypress::CTRL) {
             switch (kp.value) {
             case ' ': return ctrl_space_keypress(state, active_buf);
-            case 'A': return ctrl_a_keypress(state, win, active_buf);
-            case 'B': return ctrl_b_keypress(state, win, active_buf);
-            case 'C': return ctrl_c_keypress(state, active_buf, exit_loop);
-            case 'D': return ctrl_d_keypress(state, win, active_buf);
-            case 'E': return ctrl_e_keypress(state, win, active_buf);
-            case 'F': return ctrl_f_keypress(state, win, active_buf);
-            case 'G': return ctrl_g_keypress(state, active_buf);
-            case 'K': return ctrl_k_keypress(state, win, active_buf);
-            case 'N': return ctrl_n_keypress(state, win, active_buf);
-            case 'O': return ctrl_o_keypress(state, active_buf);
-            case 'P': return ctrl_p_keypress(state, win, active_buf);
-            case 'S': return ctrl_s_keypress(state, active_buf);
-            case 'W': return ctrl_w_keypress(state, win, active_buf);
-            case 'Y': return ctrl_y_keypress(state, win, active_buf);
+            case 'a': return ctrl_a_keypress(state, win, active_buf);
+            case 'b': return ctrl_b_keypress(state, win, active_buf);
+            case 'c': return ctrl_c_keypress(state, active_buf, exit_loop);
+            case 'd': return ctrl_d_keypress(state, win, active_buf);
+            case 'e': return ctrl_e_keypress(state, win, active_buf);
+            case 'f': return ctrl_f_keypress(state, win, active_buf);
+            case 'g': return ctrl_g_keypress(state, active_buf);
+            case 'k': return ctrl_k_keypress(state, win, active_buf);
+            case 'n': return ctrl_n_keypress(state, win, active_buf);
+            case 'o': return ctrl_o_keypress(state, active_buf);
+            case 'p': return ctrl_p_keypress(state, win, active_buf);
+            case 's': return ctrl_s_keypress(state, active_buf);
+            case 'w': return ctrl_w_keypress(state, win, active_buf);
+            case 'y': return ctrl_y_keypress(state, win, active_buf);
             case '\\':
                 *exit_loop = true;
                 return undo_killring_handled{};
