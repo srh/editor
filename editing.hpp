@@ -20,6 +20,10 @@ inline undo_killring_handled handled_undo_killring(state *state, buffer *buf) {
     (void)state, (void)buf;
     return undo_killring_handled{};
 }
+inline undo_killring_handled handled_undo_killring_no_buf(state *state) {
+    (void)state;
+    return undo_killring_handled{};
+}
 
 undo_killring_handled note_backout_action(state *state, buffer *buf);
 undo_killring_handled note_navigation_action(state *state, buffer *buf);

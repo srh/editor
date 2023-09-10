@@ -276,18 +276,6 @@ undo_killring_handled nop_keypress() {
     return undo_killring_handled{};
 }
 
-// *exit_loop can be assigned true; there is no need to assign it false.
-undo_killring_handled enter_keypress(state *state, bool *exit_loop) {
-    if (!state->status_prompt.has_value()) {
-        ui_window_ctx *ui = state->win_ctx(state->buf_ptr);
-        buffer *buf = &state->buf_at(state->buf_ptr);
-        insert_result res = insert_char(ui, buf, '\n');
-        return note_coalescent_action(state, buf, std::move(res));
-    }
-
-    return enter_handle_status_prompt(state, exit_loop);
-}
-
 undo_killring_handled delete_keypress(state *state, ui_window_ctx *ui, buffer *buf) {
     delete_result res = delete_char(ui, buf);
     // TODO: Here, and perhaps in general, handle cases where no characters were actually deleted.
@@ -470,21 +458,40 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
 
     state->popup_display = std::nullopt;
 
-    buffer *active_buf = state->status_prompt.has_value() ? &state->status_prompt->buf : &state->topbuf();
-    ui_window_ctx *win = &active_buf->win_ctx;
-
     if (kp.isMisparsed) {
         state->note_error_message("Unparsed escape sequence: \\e" + kp.chars_read);
 
         // Do nothing for undo or killring.
-        return handled_undo_killring(state, active_buf);
-    } else {
-        state->add_message("Successfully parsed escape sequence: \\e" + kp.chars_read);
+        return handled_undo_killring_no_buf(state);
+    }
+    // TODO: Get rid of this.
+    state->add_message("Successfully parsed escape sequence: \\e" + kp.chars_read);
+
+    if (!state->status_prompt.has_value()) {
+        buffer *active_buf = &state->topbuf();
+        ui_window_ctx *win = &active_buf->win_ctx;
+        return process_keypress_in_buf(kp, state, win, active_buf, exit_loop);
+    }
+
+    // Status prompt may intercept some keypresses, then pass on to its buf.
+
+    // TODO: There's a very good chance we're going to overwrite the status_prompt in some
+    // cases, then pass active_buf to some generic undo/killring function.  Right now the
+    // memory safety is protected by dynamic logic.
+
+    buffer *active_buf = &state->status_prompt->buf;
+    ui_window_ctx *win = &active_buf->win_ctx;
+
+    // Status prompt has at least a few special key presses.
+    // TODO: Factor this out to a separate function.  Then add C-g handling.
+    if (kp == keypress::special(keypress::special_key::Enter)) {
+        return enter_handle_status_prompt(state, exit_loop);
     }
 
     return process_keypress_in_buf(kp, state, win, active_buf, exit_loop);
 }
 
+// Processes a keypress when we're focused in a buffer.
 undo_killring_handled process_keypress_in_buf(const keypress& kp, state *state,
                                               ui_window_ctx *win, buffer *active_buf,
                                               bool *exit_loop) {
@@ -544,7 +551,7 @@ undo_killring_handled process_keypress_in_buf(const keypress& kp, state *state,
     } else if (kp.modmask == 0) {
         switch (static_cast<keypress::special_key>(-kp.value)) {
         case special_key::Tab: return tab_keypress(state, win, active_buf);
-        case special_key::Enter: return enter_keypress(state, exit_loop);
+        case special_key::Enter: return character_keypress(state, win, active_buf, uint8_t('\n'));
         case special_key::Delete: return delete_keypress(state, win, active_buf);
         case special_key::Insert: return insert_keypress(state, active_buf);
         case special_key::F1: return f1_keypress(state, active_buf);
