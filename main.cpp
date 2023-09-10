@@ -448,11 +448,12 @@ undo_killring_handled ctrl_underscore_keypress(state *state, ui_window_ctx *ui, 
     return handled_undo_killring(state, active_buf);
 }
 
-undo_killring_handled process_keypress_in_buf(const keypress& kp, state *state,
-                                              ui_window_ctx *win, buffer *active_buf,
-                                              bool *exit_loop);
+undo_killring_handled process_keyprefix_in_buf(
+    state *state, ui_window_ctx *win, buffer *active_buf, bool *exit_loop);
 
-bool process_keypress_in_status_prompt(const keypress& kp, state *state, bool *exit_loop) {
+bool process_keyprefix_in_status_prompt(state *state, bool *exit_loop) {
+    keypress kp = state->keyprefix.at(0);
+
     logic_checkg(state->status_prompt.has_value());
     if (kp.equals(keypress::special_key::Enter)) {
         // TODO: Do we want enter_handle_status_prompt to return an undo_killring_handled value?
@@ -487,13 +488,18 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
         // Do nothing for undo or killring.
         return handled_undo_killring_no_buf(state);
     }
-    // TODO: Get rid of this.
-    state->add_message("Successfully parsed escape sequence: \\e" + kp.chars_read);
+    if (!kp.chars_read.empty()) {
+        // TODO: Get rid of this.
+        state->add_message("Successfully parsed escape sequence: \\e" + kp.chars_read);
+    }
+
+    // Append to keyprefix and process it later.
+    state->keyprefix.push_back(kp);
 
     if (!state->status_prompt.has_value()) {
         buffer *active_buf = &state->topbuf();
         ui_window_ctx *win = &active_buf->win_ctx;
-        return process_keypress_in_buf(kp, state, win, active_buf, exit_loop);
+        return process_keyprefix_in_buf(state, win, active_buf, exit_loop);
     }
 
     // Status prompt may intercept some keypresses, then pass on to its buf.
@@ -505,19 +511,22 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
     buffer *active_buf = &state->status_prompt->buf;
     ui_window_ctx *win = &active_buf->win_ctx;
 
-    if (process_keypress_in_status_prompt(kp, state, exit_loop)) {
+    if (process_keyprefix_in_status_prompt(state, exit_loop)) {
         // Undo/killring supposedly handled (and return value swallowed) by
-        // process_keypress_in_status_prompt.
+        // process_keyprefix_in_status_prompt.
         return undo_killring_handled{};
     }
 
-    return process_keypress_in_buf(kp, state, win, active_buf, exit_loop);
+    return process_keyprefix_in_buf(state, win, active_buf, exit_loop);
 }
 
 // Processes a keypress when we're focused in a buffer.
-undo_killring_handled process_keypress_in_buf(const keypress& kp, state *state,
-                                              ui_window_ctx *win, buffer *active_buf,
-                                              bool *exit_loop) {
+undo_killring_handled process_keyprefix_in_buf(
+    state *state, ui_window_ctx *win, buffer *active_buf, bool *exit_loop) {
+
+    keypress kp = state->keyprefix.at(0);
+    // TODO: We'll need to handle compound key prefixes.
+    state->keyprefix.clear();
 
     if (kp.value >= 0 && kp.modmask == 0) {
         // TODO: What if kp.value >= 256?

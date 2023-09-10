@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "error.hpp"
+#include "keyboard.hpp"
 #include "region_stats.hpp"
 #include "undo.hpp"
 
@@ -277,6 +278,10 @@ public:
 
     buffer& topbuf() { return buf_at(buf_ptr); }
     const buffer& topbuf() const { return buf_at(buf_ptr); }
+
+    // C-x prefixes and the like, but not M-x, which would be something like a prompt.
+    // We don't enumerate them in types or anything -- they're handled dynamically.
+    std::vector<keypress> keyprefix;
 
     std::optional<prompt> status_prompt;
     bool is_normal() const { return !status_prompt.has_value(); }
