@@ -196,7 +196,7 @@ public:
 struct [[nodiscard]] undo_killring_handled { };
 
 struct prompt {
-    enum class type { file_open, buffer_switch, buffer_close, exit_without_save, proc };
+    enum class type { buffer_switch, buffer_close, exit_without_save, proc, };
     type typ;
     buffer buf;
 

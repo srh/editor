@@ -256,13 +256,40 @@ void rotate_to_buffer(state *state, buffer_number buf_number) {
     state->buf_ptr = buf_number;
 }
 
+prompt file_open_prompt(buffer_id promptBufId) {
+    // TODO: UI logic
+    return {prompt::type::proc, buffer(promptBufId), "file to open: ",
+        [](state *state, buffer&& promptBuf, bool *) {
+            // killring important, undo not because we're destructing the status_prompt buf.
+            undo_killring_handled ret = note_backout_action(state, &promptBuf);
+            std::string text = promptBuf.copy_to_string();
+            // TODO: Implement displaying errors to the user.
+
+            if (text != "") {
+                // TODO: Handle error!
+                buffer buf = open_file_into_detached_buffer(state, text);
+
+                logic_checkg(state->buf_ptr.value < state->buflist.size());
+                state->buflist.insert(state->buflist.begin() + state->buf_ptr.value,
+                                      std::make_unique<buffer>(std::move(buf)));
+                apply_number_to_buf(state, state->buf_ptr);
+
+                // state->buf_ptr now points at our freshly opened buf -- its value is unchanged.
+            } else {
+                state->note_error_message("No filename given");
+            }
+
+            return ret;
+        }};
+}
+
 undo_killring_handled open_file_action(state *state, buffer *active_buf) {
     undo_killring_handled ret = note_navigation_action(state, active_buf);
     if (state->status_prompt.has_value()) {
         return ret;
     }
 
-    state->status_prompt = {prompt::type::file_open, buffer(state->gen_buf_id()), prompt::message_unused, prompt::procedure_unused()};
+    state->status_prompt = file_open_prompt(state->gen_buf_id());
     return ret;
 }
 
@@ -439,29 +466,6 @@ undo_killring_handled enter_handle_status_prompt(state *state, bool *exit_loop) 
         close_status_prompt(state);  // sets state->status_prompt to nullopt.
 
         return (status_prompt.procedure)(state, std::move(status_prompt.buf), exit_loop);
-    } break;
-    case prompt::type::file_open: {
-        // killring important, undo not because we're destructing the status_prompt buf.
-        undo_killring_handled ret = note_backout_action(state, &state->status_prompt->buf);
-        std::string text = state->status_prompt->buf.copy_to_string();
-        // TODO: Implement displaying errors to the user.
-
-        if (text != "") {
-            // TODO: Handle error!
-            buffer buf = open_file_into_detached_buffer(state, text);
-
-            logic_checkg(state->buf_ptr.value < state->buflist.size());
-            state->buflist.insert(state->buflist.begin() + state->buf_ptr.value,
-                                  std::make_unique<buffer>(std::move(buf)));
-            apply_number_to_buf(state, state->buf_ptr);
-
-            // state->buf_ptr now points at our freshly opened buf -- its value is unchanged.
-        } else {
-            state->note_error_message("No filename given");
-        }
-
-        close_status_prompt(state);
-        return ret;
     } break;
     case prompt::type::buffer_switch: {
         // killring important, undo not because we're destructing the status_prompt buf.
