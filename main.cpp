@@ -460,6 +460,10 @@ undo_killring_handled ctrl_underscore_keypress(state *state, ui_window_ctx *ui, 
     return handled_undo_killring(state, active_buf);
 }
 
+undo_killring_handled process_keypress_in_buf(const keypress& kp, state *state,
+                                              ui_window_ctx *win, buffer *active_buf,
+                                              bool *exit_loop);
+
 undo_killring_handled read_and_process_tty_input(int term, state *state, bool *exit_loop) {
     // TODO: When term is non-blocking, we'll need to wait for readiness...?
     keypress kp = read_tty_keypress(term);
@@ -477,6 +481,13 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
     } else {
         state->add_message("Successfully parsed escape sequence: \\e" + kp.chars_read);
     }
+
+    return process_keypress_in_buf(kp, state, win, active_buf, exit_loop);
+}
+
+undo_killring_handled process_keypress_in_buf(const keypress& kp, state *state,
+                                              ui_window_ctx *win, buffer *active_buf,
+                                              bool *exit_loop) {
 
     if (kp.value >= 0 && kp.modmask == 0) {
         // TODO: What if kp.value >= 256?
