@@ -26,6 +26,7 @@ inline undo_killring_handled handled_undo_killring_no_buf(state *state) {
 }
 
 undo_killring_handled note_backout_action(state *state, buffer *buf);
+undo_killring_handled note_bufless_backout_action(state *state);
 undo_killring_handled note_navigation_action(state *state, buffer *buf);
 undo_killring_handled note_action(state *state, buffer *buf, insert_result&& i_res);
 undo_killring_handled note_coalescent_action(state *state, buffer *buf, insert_result&& i_res);

@@ -452,6 +452,29 @@ undo_killring_handled process_keypress_in_buf(const keypress& kp, state *state,
                                               ui_window_ctx *win, buffer *active_buf,
                                               bool *exit_loop);
 
+bool process_keypress_in_status_prompt(const keypress& kp, state *state, bool *exit_loop) {
+    logic_checkg(state->status_prompt.has_value());
+    if (kp.equals(keypress::special_key::Enter)) {
+        // TODO: Do we want enter_handle_status_prompt to return an undo_killring_handled value?
+        undo_killring_handled discard = enter_handle_status_prompt(state, exit_loop);
+        (void)discard;
+        return true;
+    }
+    if (kp.equals('g', keypress::CTRL)) {
+        undo_killring_handled discard = note_bufless_backout_action(state);
+        (void)discard;
+
+        // At some point we should probably add a switch statement to handle all cases, or
+        // a, uh, cancel handler on the `prompt` type, but for now this is correct for
+        // buffer-based proc prompts.  (At some point we'll want message reporting like
+        // "C-x C-g is undefined".)
+        // TODO: Message reporting that we closed the prompt.
+        close_status_prompt(state);
+        return true;
+    }
+    return false;
+}
+
 undo_killring_handled read_and_process_tty_input(int term, state *state, bool *exit_loop) {
     // TODO: When term is non-blocking, we'll need to wait for readiness...?
     keypress kp = read_tty_keypress(term);
@@ -482,10 +505,10 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
     buffer *active_buf = &state->status_prompt->buf;
     ui_window_ctx *win = &active_buf->win_ctx;
 
-    // Status prompt has at least a few special key presses.
-    // TODO: Factor this out to a separate function.  Then add C-g handling.
-    if (kp == keypress::special(keypress::special_key::Enter)) {
-        return enter_handle_status_prompt(state, exit_loop);
+    if (process_keypress_in_status_prompt(kp, state, exit_loop)) {
+        // Undo/killring supposedly handled (and return value swallowed) by
+        // process_keypress_in_status_prompt.
+        return undo_killring_handled{};
     }
 
     return process_keypress_in_buf(kp, state, win, active_buf, exit_loop);
@@ -502,7 +525,7 @@ undo_killring_handled process_keypress_in_buf(const keypress& kp, state *state,
     }
     using special_key = keypress::special_key;
     if (kp.modmask != 0) {
-        if (kp == keypress::special(special_key::Delete, keypress::SHIFT)) {
+        if (kp.equals(special_key::Delete, keypress::SHIFT)) {
             return shift_delete_keypress(state, active_buf);
         }
 

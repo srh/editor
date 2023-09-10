@@ -110,6 +110,14 @@ undo_killring_handled note_backout_action(state *state, buffer *buf) {
     return undo_killring_handled{};
 }
 
+// When we don't have a buf (as with certain types of prompts, soon), or we're going to
+// destruct the buf anyway.
+undo_killring_handled note_bufless_backout_action(state *state) {
+    no_yank(&state->clipboard);
+    state->clear_error_message();
+    return undo_killring_handled{};
+}
+
 // Possibly a useless categorization -- maybe useful for refactoring later.
 undo_killring_handled note_navigation_action(state *state, buffer *buf) {
     return note_backout_action(state, buf);
@@ -188,14 +196,6 @@ undo_killring_handled cancel_action(state *state, buffer *buf) {
     // We break the yank and undo sequence in `buf` -- of course, when creating the status
     // prompt, we already broke the yank and undo sequence in the _original_ buf.
     undo_killring_handled ret = note_backout_action(state, buf);
-
-    if (state->status_prompt.has_value()) {
-        // At some point we should probably add a switch statement to handle all cases --
-        // but for now this is correct for file_save, file_open, buffer_switch,
-        // buffer_close, and exit_without_save.  (At some point we'll want message reporting like "C-x C-g is
-        // undefined".)
-        close_status_prompt(state);
-    }
 
     return ret;
 }

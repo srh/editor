@@ -9,20 +9,6 @@ struct keypress {
     using key_type = int32_t;  /* Negative values used for special keys, positive might be Unicode */
     using modmask_type = uint8_t;
 
-    key_type value = 0;
-    modmask_type modmask = 0;
-    bool isMisparsed = false;
-    std::string chars_read = "";  // Supplied for escape sequences irrespective of whether
-                                  // isMisparsed is true or not
-
-    bool operator==(const keypress&) const = default;
-
-    static constexpr modmask_type
-        META = 1,
-        SHIFT = 2,
-        CTRL = 4,
-        SUPER = 8;
-
     enum class special_key : int32_t {
         F1 = 1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
         Backspace, Tab, CapsLock, Enter,
@@ -30,6 +16,30 @@ struct keypress {
         Left, Right, Up, Down,
         PauseBreak, PrintScreen, ScrollLock,
     };
+
+    key_type value = 0;
+    modmask_type modmask = 0;
+    bool isMisparsed = false;
+    std::string chars_read = "";  // Supplied for escape sequences irrespective of whether
+                                  // isMisparsed is true or not
+
+    // We really ought to separate the {value, modmask} part of the keypress to a separate
+    // type from isMisparsed and chars_read, which is a completely ancillary communication
+    // from the keypress parsing function.
+    bool equals(key_type _value, modmask_type _mm = 0) const {
+        return value == _value && modmask == _mm;
+    }
+
+    bool equals(special_key sk, modmask_type _mm = 0) const {
+        return value == -static_cast<int32_t>(sk) && modmask == _mm;
+    }
+
+    static constexpr modmask_type
+        META = 1,
+        SHIFT = 2,
+        CTRL = 4,
+        SUPER = 8;
+
     static special_key invalid_special() { return static_cast<special_key>(0); }
 
     static keypress ascii(char ch, modmask_type mm = 0) { return { .value = uint8_t(ch), .modmask = mm }; }
