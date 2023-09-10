@@ -196,16 +196,13 @@ public:
 struct [[nodiscard]] undo_killring_handled { };
 
 struct prompt {
-    // TODO: Replace exit_without_save prompts with proc prompts (which should be trivial)
-    enum class type { exit_without_save, proc, };
+    enum class type { proc, };
     type typ;
     buffer buf;
 
-    constexpr static const char *const message_unused = "";
-    std::string messageText;  // only for exit_without_save and proc (also, is used slightly differently)
+    std::string messageText;
 
     std::function<undo_killring_handled(state *st, buffer&& promptBuf, bool *exit_loop)> procedure;  // only for proc
-    static decltype(procedure) procedure_unused() { return decltype(procedure)(); }
 };
 
 struct popup {

@@ -168,9 +168,6 @@ void render_status_area(terminal_frame *frame, const state& state) {
     if (state.status_prompt.has_value()) {
         std::string message;
         switch (state.status_prompt->typ) {
-        case prompt::type::exit_without_save:
-            message = "exit without saving? (" + state.status_prompt->messageText + ") (yes/no): ";
-            break;
         case prompt::type::proc:
             // TODO: Such a gratuitous copy.
             message = state.status_prompt->messageText;

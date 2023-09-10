@@ -150,11 +150,9 @@ prompt buffer_close_prompt(buffer&& initialBuf) {
                     state->buflist.push_back(std::make_unique<buffer>(scratch_buffer(state->gen_buf_id())));
                     // state->buf_ptr is already 0, thus correct.
                 }
-                close_status_prompt(state);
                 return ret;
             } else if (text == "no") {
                 // No, don't close without saving.
-                close_status_prompt(state);
                 return ret;
             } else {
                 state->note_error_message("Please type yes or no");
@@ -414,6 +412,32 @@ std::vector<std::string> modified_buffers(state *state) {
     return ret;
 }
 
+// TODO: Make a special fn for yes/no prompts (used also by buffer_close_prompt)?
+prompt exit_without_save_prompt(std::vector<std::string>&& bufnames, buffer&& initialBuf) {
+    // TODO: UI logic
+    std::string messageText = "exit without saving? (" + string_join(", ", bufnames) + ") (yes/no): ";
+    return {prompt::type::proc, std::move(initialBuf), std::move(messageText),
+        // TODO: Make a macro for std::move into capture list.
+        [bufnames = std::move(bufnames)](state *state, buffer&& promptBuf, bool *exit_loop) mutable {
+            // killring important, undo not because we're destructing the status_prompt buf.
+            undo_killring_handled ret = note_backout_action(state, &promptBuf);
+            std::string text = promptBuf.copy_to_string();
+            // TODO: Implement displaying errors to the user.
+            if (text == "yes") {
+                // Yes, exit without saving.
+                *exit_loop = true;
+                return ret;
+            } else if (text == "no") {
+                // No, don't exit without saving.
+                return ret;
+            } else {
+                state->note_error_message("Please type yes or no");
+                state->status_prompt = exit_without_save_prompt(std::move(bufnames), std::move(promptBuf));
+                return ret;
+            }
+        }};
+}
+
 undo_killring_handled exit_cleanly(state *state, buffer *active_buf, bool *exit_loop) {
     undo_killring_handled ret = note_backout_action(state, active_buf);
 
@@ -423,7 +447,7 @@ undo_killring_handled exit_cleanly(state *state, buffer *active_buf, bool *exit_
 
     std::vector<std::string> bufnames = modified_buffers(state);
     if (!bufnames.empty()) {
-        state->status_prompt = {prompt::type::exit_without_save, buffer(state->gen_buf_id()), string_join(", ", bufnames), prompt::procedure_unused()};
+        state->status_prompt = exit_without_save_prompt(std::move(bufnames), buffer(state->gen_buf_id()));
     } else {
         *exit_loop = true;
     }
@@ -524,24 +548,6 @@ undo_killring_handled enter_handle_status_prompt(state *state, bool *exit_loop) 
         close_status_prompt(state);  // sets state->status_prompt to nullopt.
 
         return (status_prompt.procedure)(state, std::move(status_prompt.buf), exit_loop);
-    } break;
-    case prompt::type::exit_without_save: {
-        // killring important, undo not because we're destructing the status_prompt buf.
-        undo_killring_handled ret = note_backout_action(state, &state->status_prompt->buf);
-        std::string text = state->status_prompt->buf.copy_to_string();
-        // TODO: Implement displaying errors to the user.
-        if (text == "yes") {
-            // Yes, exit without saving.
-            *exit_loop = true;
-            return ret;
-        } else if (text == "no") {
-            // No, don't exit without saving.
-            close_status_prompt(state);
-            return ret;
-        } else {
-            state->note_error_message("Please type yes or no");
-            return ret;
-        }
     } break;
     default:
         logic_fail("status prompt unreachable default case");
