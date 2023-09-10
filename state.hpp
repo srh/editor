@@ -196,8 +196,8 @@ public:
 struct [[nodiscard]] undo_killring_handled { };
 
 struct prompt {
-    // TODO: Replace buffer_close, exit_without_save prompts with proc prompts (which should be trivial)
-    enum class type { buffer_close, exit_without_save, proc, };
+    // TODO: Replace exit_without_save prompts with proc prompts (which should be trivial)
+    enum class type { exit_without_save, proc, };
     type typ;
     buffer buf;
 

@@ -128,6 +128,42 @@ void note_navigate_away_from_buf(buffer *buf) {
     (void)buf;
 }
 
+// TODO: Make a special fn for yes/no prompts?
+prompt buffer_close_prompt(buffer&& initialBuf) {
+    return {prompt::type::proc, std::move(initialBuf), "close without saving? (yes/no): ",
+        [](state *state, buffer&& promptBuf, bool *) {
+            // killring important, undo not because we're destructing the status_prompt buf.
+            undo_killring_handled ret = note_backout_action(state, &promptBuf);
+            std::string text = promptBuf.copy_to_string();
+            // TODO: Implement displaying errors to the user.
+            if (text == "yes") {
+                // Yes, close without saving.
+                logic_checkg(state->buf_ptr.value < state->buflist.size());
+                state->buflist.erase(state->buflist.begin() + state->buf_ptr.value);
+                if (state->buf_ptr.value == state->buflist.size()) {
+                    state->buf_ptr.value = 0;
+                }
+
+                // buflist must never be empty
+                if (state->buflist.empty()) {
+                    // TODO: Gross!  So gross.
+                    state->buflist.push_back(std::make_unique<buffer>(scratch_buffer(state->gen_buf_id())));
+                    // state->buf_ptr is already 0, thus correct.
+                }
+                close_status_prompt(state);
+                return ret;
+            } else if (text == "no") {
+                // No, don't close without saving.
+                close_status_prompt(state);
+                return ret;
+            } else {
+                state->note_error_message("Please type yes or no");
+                state->status_prompt = buffer_close_prompt(std::move(promptBuf));
+                return ret;
+            }
+        }};
+}
+
 undo_killring_handled buffer_close_action(state *state, buffer *active_buf) {
     undo_killring_handled ret = note_backout_action(state, active_buf);
     if (state->status_prompt.has_value()) {
@@ -136,7 +172,7 @@ undo_killring_handled buffer_close_action(state *state, buffer *active_buf) {
     }
 
     // TODO: Only complain if the buffer has been modified.  (Add a modified flag.)
-    state->status_prompt = {prompt::type::buffer_close, buffer(state->gen_buf_id()), prompt::message_unused, prompt::procedure_unused()};
+    state->status_prompt = buffer_close_prompt(buffer(state->gen_buf_id()));
     return ret;
 }
 
@@ -488,36 +524,6 @@ undo_killring_handled enter_handle_status_prompt(state *state, bool *exit_loop) 
         close_status_prompt(state);  // sets state->status_prompt to nullopt.
 
         return (status_prompt.procedure)(state, std::move(status_prompt.buf), exit_loop);
-    } break;
-    case prompt::type::buffer_close: {
-        // killring important, undo not because we're destructing the status_prompt buf.
-        undo_killring_handled ret = note_backout_action(state, &state->status_prompt->buf);
-        std::string text = state->status_prompt->buf.copy_to_string();
-        // TODO: Implement displaying errors to the user.
-        if (text == "yes") {
-            // Yes, close without saving.
-            logic_checkg(state->buf_ptr.value < state->buflist.size());
-            state->buflist.erase(state->buflist.begin() + state->buf_ptr.value);
-            if (state->buf_ptr.value == state->buflist.size()) {
-                state->buf_ptr.value = 0;
-            }
-
-            // buflist must never be empty
-            if (state->buflist.empty()) {
-                // TODO: Gross!  So gross.
-                state->buflist.push_back(std::make_unique<buffer>(scratch_buffer(state->gen_buf_id())));
-                // state->buf_ptr is already 0, thus correct.
-            }
-            close_status_prompt(state);
-            return ret;
-        } else if (text == "no") {
-            // No, don't close without saving.
-            close_status_prompt(state);
-            return ret;
-        } else {
-            state->note_error_message("Please type yes or no");
-            return ret;
-        }
     } break;
     case prompt::type::exit_without_save: {
         // killring important, undo not because we're destructing the status_prompt buf.
