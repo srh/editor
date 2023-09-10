@@ -221,12 +221,8 @@ redraw_state(int term, const terminal_size& window, const state& state) {
                           state.popup_display->buf, &coords);
     } else {
         const ui_window_ctx *topbuf_ctx = state.win_ctx(state.buf_ptr);
-        if (!too_small_to_render(topbuf_ctx->window)) {
-            // TODO: Support resizing.
-            runtime_check(window.cols == topbuf_ctx->window.cols, "window cols changed");
-            runtime_check(window.rows == topbuf_ctx->window.rows + STATUS_AREA_HEIGHT, "window rows changed");
-
-            window_size winsize = topbuf_ctx->window;
+        const window_size winsize = main_buf_window_from_terminal_window(window);
+        if (!too_small_to_render(winsize)) {
             frame.rendered_window_sizes.emplace_back(state.topbuf().id, winsize);
 
             std::vector<render_coord> coords = { {state.topbuf().cursor(), std::nullopt} };

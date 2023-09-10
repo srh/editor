@@ -62,14 +62,21 @@ struct ui_window_ctx {
     std::optional<size_t> virtual_column;
 
     // This is and will continue to be the size of the text window -- does not include any
-    // status bar rows, even if there is one per buffer.
-    window_size window;
+    // status bar rows, even if there is one per buffer.  Can be nullopt, which means the
+    // buf doesn't have a last-rendered window.  Scrolling code and virtual_column code
+    // just have to handle this case.
+    std::optional<window_size> rendered_window;
+
+    size_t window_cols_or_maxval() const {
+        // TODO: This is trashy -- return a std::optional<size_t> and deal with it.
+        return rendered_window.has_value() ? rendered_window->cols : SIZE_MAX;
+    }
 
     mark_id first_visible_offset;
 
     void set_last_rendered_window(const window_size& win) {
-        if (window != win) {
-            window = win;
+        if (!rendered_window.has_value() || *rendered_window != win) {
+            rendered_window = win;
             virtual_column = std::nullopt;
         }
     }

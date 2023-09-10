@@ -1,5 +1,6 @@
 #include "movement.hpp"
 
+#include "arith.hpp"
 #include "term_ui.hpp"
 
 namespace qwi {
@@ -57,9 +58,9 @@ void move_backward_word(ui_window_ctx *ui, buffer *buf) {
 
 // Maybe move_up and move_down should be in term_ui.cpp.
 void move_up(ui_window_ctx *ui, buffer *buf) {
-    const size_t window_cols = ui->window.cols;
+    const size_t window_cols = ui->window_cols_or_maxval();
     // We're not interested in virtual_column as a "line column" -- just interested in the
-    // visual distance to beginning of line.
+    // visual distance to beginning of line.  We'll have to change this logic once we have word wrapping.
     ensure_virtual_column_initialized(ui, buf);
     const size_t target_column = *ui->virtual_column % window_cols;
 
@@ -97,7 +98,10 @@ void move_up(ui_window_ctx *ui, buffer *buf) {
             col = 0;
             current_row_cursor_proposal = i + 1;
         } else {
-            col += rend.count;
+            // Technically (and practically!) an overflow is possible here with say,
+            // 3GB file that is all control or tab characters.
+            // TODO: Handle this weird overflow case cleanly.
+            col = size_add(col, rend.count);
             if (col >= window_cols) {
                 // Line wrapping case.
                 col -= window_cols;
@@ -128,7 +132,7 @@ void move_up(ui_window_ctx *ui, buffer *buf) {
 }
 
 void move_down(ui_window_ctx *ui, buffer *buf) {
-    const size_t window_cols = ui->window.cols;
+    const size_t window_cols = ui->window_cols_or_maxval();
     ensure_virtual_column_initialized(ui, buf);
     const size_t target_column = *ui->virtual_column % window_cols;
 

@@ -202,7 +202,14 @@ bool too_small_to_render(const window_size& window) {
 
 // TODO: Make params const.
 bool cursor_is_offscreen(ui_window_ctx *ui, buffer *buf, size_t cursor) {
-    if (too_small_to_render(ui->window)) {
+    if (!ui->rendered_window.has_value()) {
+        // We treat as infinite window, and specifically any buf without a window should
+        // have no scrolling.
+        return false;
+    }
+    const window_size& rendered_window = *ui->rendered_window;
+
+    if (too_small_to_render(rendered_window)) {
         // Return false?
         return false;
     }
@@ -216,11 +223,11 @@ bool cursor_is_offscreen(ui_window_ctx *ui, buffer *buf, size_t cursor) {
         return true;
     }
 
-    terminal_size window = terminal_size{ui->window.rows, ui->window.cols};
+    terminal_size window = terminal_size{rendered_window.rows, rendered_window.cols};
     terminal_frame frame = init_frame(window);
     std::vector<render_coord> coords = { {cursor, std::nullopt} };
     terminal_coord window_topleft = { 0, 0 };
-    render_into_frame(&frame, window_topleft, ui->window, *ui, *buf, &coords);
+    render_into_frame(&frame, window_topleft, rendered_window, *ui, *buf, &coords);
     return !coords[0].rendered_pos.has_value();
 }
 
@@ -229,7 +236,7 @@ bool cursor_is_offscreen(ui_window_ctx *ui, buffer *buf, size_t cursor) {
 // rowno without equality).
 void scroll_to_row(ui_window_ctx *ui, buffer *buf, const uint32_t rowno, const size_t buf_pos) {
     // We're going to back up and render one line at a time.
-    const size_t window_cols = ui->window.cols;
+    const size_t window_cols = ui->window_cols_or_maxval();
 
     size_t rows_stepbacked = 0;
     size_t pos = buf_pos;
@@ -292,7 +299,8 @@ void scroll_to_row(ui_window_ctx *ui, buffer *buf, const uint32_t rowno, const s
 // too close to the top of the buffer, it'll be above the middle).  buf_pos is probably
 // the cursor position.
 void scroll_to_mid(ui_window_ctx *ui, buffer *buf, size_t buf_pos) {
-    scroll_to_row(ui, buf, ui->window.rows / 2, buf_pos);
+    logic_check(ui->rendered_window.has_value(), "scroll_to_mid on window_ctx without rendered window");
+    scroll_to_row(ui, buf, ui->rendered_window->rows / 2, buf_pos);
 }
 
 void recenter_cursor_if_offscreen(ui_window_ctx *ui, buffer *buf) {
