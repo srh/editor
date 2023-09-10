@@ -196,14 +196,14 @@ public:
 struct [[nodiscard]] undo_killring_handled { };
 
 struct prompt {
-    enum class type { file_open, file_save, buffer_switch, buffer_close, exit_without_save, proc };
+    enum class type { file_open, buffer_switch, buffer_close, exit_without_save, proc };
     type typ;
     buffer buf;
 
     constexpr static const char *const message_unused = "";
     std::string messageText;  // only for exit_without_save
 
-    std::function<undo_killring_handled(state *st, const buffer& prompt_buf, bool *exit_loop)> procedure;  // only for proc
+    std::function<undo_killring_handled(state *st, buffer&& promptBuf, bool *exit_loop)> procedure;  // only for proc
     static decltype(procedure) procedure_unused() { return decltype(procedure)(); }
 };
 

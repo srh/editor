@@ -280,6 +280,30 @@ void save_buf_to_married_file_and_mark_unmodified(buffer *buf) {
     buf->non_modified_undo_node = buf->undo_info.current_node;
 }
 
+std::string buf_name_from_file_path(const fs::path& path) {
+    return path.filename().string();
+}
+
+prompt file_save_prompt(buffer_id promptBufId) {
+    return {prompt::type::proc, buffer(promptBufId), "file to save: ",
+        [](state *state, buffer&& promptBuf, bool *) {
+            // killring important, undo not because we're destructing the status_prompt buf.
+            undo_killring_handled ret = note_backout_action(state, &promptBuf);
+            // TODO: Of course, handle errors, such as if directory doesn't exist, permissions.
+            std::string text = promptBuf.copy_to_string();
+            if (text != "") {
+                state->topbuf().married_file = text;
+                save_buf_to_married_file_and_mark_unmodified(&state->topbuf());
+                state->topbuf().name_str = buf_name_from_file_path(fs::path(text));
+                state->topbuf().name_number = 0;
+                apply_number_to_buf(state, state->buf_ptr);
+            } else {
+                state->note_error_message("No filename given");
+            }
+            return ret;
+        }};
+}
+
 undo_killring_handled save_file_action(state *state, buffer *active_buf) {
     // Specifically, I don't want to break the undo chain here.
     undo_killring_handled ret = note_noundo_killring_action(state, active_buf);
@@ -295,7 +319,8 @@ undo_killring_handled save_file_action(state *state, buffer *active_buf) {
         save_buf_to_married_file_and_mark_unmodified(&state->topbuf());
     } else {
         // TODO: How/where should we set the prompt's buf's window?
-        state->status_prompt = {prompt::type::file_save, buffer(state->gen_buf_id()), prompt::message_unused, prompt::procedure_unused()};
+        // TODO: UI logic
+        state->status_prompt = file_save_prompt(state->gen_buf_id());
     }
     return ret;
 }
@@ -311,7 +336,7 @@ undo_killring_handled save_as_file_action(state *state, buffer *active_buf) {
         return ret;
     }
 
-    state->status_prompt = {prompt::type::file_save, buffer(state->gen_buf_id()), prompt::message_unused, prompt::procedure_unused()};
+    state->status_prompt = file_save_prompt(state->gen_buf_id());
     return ret;
 }
 
@@ -356,10 +381,6 @@ undo_killring_handled buffer_switch_action(state *state, buffer *active_buf) {
     buffer_string data = buffer_name(state, state->buf_ptr);
     state->status_prompt = {prompt::type::buffer_switch, buffer::from_data(state->gen_buf_id(), std::move(data)), prompt::message_unused, prompt::procedure_unused()};
     return ret;
-}
-
-std::string buf_name_from_file_path(const fs::path& path) {
-    return path.filename().string();
 }
 
 // Caller needs to call set_window on the buf, generally, or other ui-specific stuff.
@@ -417,24 +438,7 @@ undo_killring_handled enter_handle_status_prompt(state *state, bool *exit_loop) 
         prompt status_prompt = std::move(*state->status_prompt);
         close_status_prompt(state);  // sets state->status_prompt to nullopt.
 
-        return (status_prompt.procedure)(state, status_prompt.buf, exit_loop);
-    } break;
-    case prompt::type::file_save: {
-        // killring important, undo not because we're destructing the status_prompt buf.
-        undo_killring_handled ret = note_backout_action(state, &state->status_prompt->buf);
-        // TODO: Of course, handle errors, such as if directory doesn't exist, permissions.
-        std::string text = state->status_prompt->buf.copy_to_string();
-        if (text != "") {
-            state->topbuf().married_file = text;
-            save_buf_to_married_file_and_mark_unmodified(&state->topbuf());
-            state->topbuf().name_str = buf_name_from_file_path(fs::path(text));
-            state->topbuf().name_number = 0;
-            apply_number_to_buf(state, state->buf_ptr);
-        } else {
-            state->note_error_message("No filename given");
-        }
-        close_status_prompt(state);
-        return ret;
+        return (status_prompt.procedure)(state, std::move(status_prompt.buf), exit_loop);
     } break;
     case prompt::type::file_open: {
         // killring important, undo not because we're destructing the status_prompt buf.

@@ -169,7 +169,6 @@ void render_status_area(terminal_frame *frame, const state& state) {
         std::string message;
         switch (state.status_prompt->typ) {
         case prompt::type::file_open: message = "file to open: "; break;
-        case prompt::type::file_save: message = "file to save: "; break;
         case prompt::type::buffer_switch: message = "switch to buffer: "; break;
         case prompt::type::buffer_close: message = "close without saving? (yes/no): "; break;
         case prompt::type::exit_without_save:
