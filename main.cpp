@@ -485,6 +485,7 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
     if (kp.isMisparsed) {
         state->note_error_message("Unparsed escape sequence: \\e" + kp.chars_read);
 
+        state->keyprefix.clear();
         // Do nothing for undo or killring.
         return handled_undo_killring_no_buf(state);
     }
@@ -512,6 +513,7 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
     ui_window_ctx *win = &active_buf->win_ctx;
 
     if (process_keyprefix_in_status_prompt(state, exit_loop)) {
+        state->keyprefix.clear();
         // Undo/killring supposedly handled (and return value swallowed) by
         // process_keyprefix_in_status_prompt.
         return undo_killring_handled{};
@@ -520,13 +522,32 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
     return process_keyprefix_in_buf(state, win, active_buf, exit_loop);
 }
 
-// Processes a keypress when we're focused in a buffer.
+undo_killring_handled process_keyprefix_in_buf(
+    state *state, ui_window_ctx *win, buffer *active_buf, bool *exit_loop, bool *clear_keyprefix);
+
 undo_killring_handled process_keyprefix_in_buf(
     state *state, ui_window_ctx *win, buffer *active_buf, bool *exit_loop) {
+    // TODO: Hacky and gross... but what to do?
+    bool clear_keyprefix = true;
+    auto ret = process_keyprefix_in_buf(state, win, active_buf, exit_loop, &clear_keyprefix);
+    if (clear_keyprefix) {
+        state->keyprefix.clear();
+    }
+    return ret;
+}
+
+// The purpose of this function is mainly to construct an undo_killring_handled{} value.
+undo_killring_handled continue_keyprefix(bool *clear_keyprefix) {
+    *clear_keyprefix = false;
+    return undo_killring_handled{};
+}
+
+// Processes a keypress when we're focused in a buffer.
+undo_killring_handled process_keyprefix_in_buf(
+    state *state, ui_window_ctx *win, buffer *active_buf, bool *exit_loop, bool *clear_keyprefix) {
+    logic_checkg(state->keyprefix.size() > 0);
 
     keypress kp = state->keyprefix.at(0);
-    // TODO: We'll need to handle compound key prefixes.
-    state->keyprefix.clear();
 
     if (kp.value >= 0 && kp.modmask == 0) {
         // TODO: What if kp.value >= 256?
@@ -547,7 +568,7 @@ undo_killring_handled process_keyprefix_in_buf(
             case 'y': return meta_y_keypress(state, win, active_buf);
             case 'd': return meta_d_keypress(state, win, active_buf);
             case 's': return meta_s_keypress(state, active_buf);
-            case -static_cast<keypress::key_type>(special_key::Backspace):
+            case keypress::special_to_key_type(special_key::Backspace):
                 return meta_backspace_keypress(state, win, active_buf);
             default:
                 break;
@@ -569,11 +590,17 @@ undo_killring_handled process_keyprefix_in_buf(
             case 's': return ctrl_s_keypress(state, active_buf);
             case 'w': return ctrl_w_keypress(state, win, active_buf);
             case 'y': return ctrl_y_keypress(state, win, active_buf);
+            case 'x': {
+                if (state->keyprefix.size() == 1) {
+                    return continue_keyprefix(clear_keyprefix);
+                }
+                // TODO: Actually add some C-x-prefixed keypresses.
+            } break;
             case '\\':
                 *exit_loop = true;
                 return undo_killring_handled{};
             case '_': return ctrl_underscore_keypress(state, win, active_buf);
-            case -static_cast<keypress::key_type>(special_key::Backspace):
+            case keypress::special_to_key_type(special_key::Backspace):
                 return ctrl_backspace_keypress(state, win, active_buf);
             default:
                 break;
@@ -610,7 +637,17 @@ undo_killring_handled process_keyprefix_in_buf(
         }
     }
 
-    state->note_error_message("Unprocessed keypress: " + std::to_string(kp.value) + ", modmask = " + std::to_string(kp.modmask));
+    if (state->keyprefix.size() == 1) {
+        state->note_error_message("Unprocessed keypress: " + render_keypress(kp));
+    } else {
+        logic_checkg(state->keyprefix.size() > 1);  // Non-empty.
+        std::string build = "Unprocessed key sequence:";
+        for (const auto& k : state->keyprefix) {
+            build += ' ';
+            build += render_keypress(k);
+        }
+        state->note_error_message(std::move(build));
+    }
 
     // Do nothing for undo or killring.
     return handled_undo_killring(state, active_buf);

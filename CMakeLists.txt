@@ -8,7 +8,8 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
 add_executable(qwi
-  buffer.cpp chars.cpp editing.cpp io.cpp main.cpp movement.cpp
+  buffer.cpp chars.cpp editing.cpp io.cpp keyboard.cpp
+  main.cpp movement.cpp
   region_stats.cpp
   state.cpp terminal.cpp
   term_ui.cpp undo.cpp util.cpp)

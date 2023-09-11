@@ -1,6 +1,10 @@
 #ifndef QWERTILLION_KEYBOARD_HPP_
 #define QWERTILLION_KEYBOARD_HPP_
 
+#include <stdint.h>
+
+#include <string>
+
 struct keypress {
     // modmask only has 'SHIFT' for special keys -- ordinary characters like 'A' are
     // represented as {'A', 0}, Ctrl+A is {'a', CTRL}, Ctrl+Shift+A is {'A', CTRL} if we
@@ -17,12 +21,17 @@ struct keypress {
         PauseBreak, PrintScreen, ScrollLock,
     };
 
+    static constexpr key_type special_to_key_type(special_key sk) {
+        return -static_cast<key_type>(sk);
+    }
+
     key_type value = 0;
     modmask_type modmask = 0;
     bool isMisparsed = false;
     std::string chars_read = "";  // Supplied for escape sequences irrespective of whether
                                   // isMisparsed is true or not
 
+    // TODO: Actually separate out the {value, modmask} part.
     // We really ought to separate the {value, modmask} part of the keypress to a separate
     // type from isMisparsed and chars_read, which is a completely ancillary communication
     // from the keypress parsing function.
@@ -31,7 +40,7 @@ struct keypress {
     }
 
     bool equals(special_key sk, modmask_type _mm = 0) const {
-        return value == -static_cast<int32_t>(sk) && modmask == _mm;
+        return value == special_to_key_type(sk) && modmask == _mm;
     }
 
     static constexpr modmask_type
@@ -44,16 +53,14 @@ struct keypress {
 
     static keypress ascii(char ch, modmask_type mm = 0) { return { .value = uint8_t(ch), .modmask = mm }; }
     static keypress special(special_key k, modmask_type mm = 0) {
-        return { .value = -static_cast<int32_t>(k), .modmask = mm };
+        return { .value = special_to_key_type(k), .modmask = mm };
     }
     static keypress incomplete_parse(const std::string& chars) {
         return { .isMisparsed = true, .chars_read = chars };
     }
 };
 
-inline bool operator==(int32_t value, keypress::special_key s) {
-    return value == static_cast<int32_t>(s);
-}
+std::string render_keypress(const keypress& kp);
 
 #endif  // QWERTILLION_KEYBOARD_HPP_
 
