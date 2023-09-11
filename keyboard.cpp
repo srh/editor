@@ -4,39 +4,47 @@
 
 #include "error.hpp"
 
-void append_special_key_render(std::string *onto, keypress::special_key sk) {
+// TODO(?): UI logic
+const char *special_key_name(keypress::special_key sk) {
     using special_key = keypress::special_key;
+    // These are UI values.
     switch (sk) {
-    case special_key::F1: *onto += "F1"; break;
-    case special_key::F2: *onto += "F2"; break;
-    case special_key::F3: *onto += "F3"; break;
-    case special_key::F4: *onto += "F4"; break;
-    case special_key::F5: *onto += "F5"; break;
-    case special_key::F6: *onto += "F6"; break;
-    case special_key::F7: *onto += "F7"; break;
-    case special_key::F8: *onto += "F8"; break;
-    case special_key::F9: *onto += "F9"; break;
-    case special_key::F10: *onto += "F10"; break;
-    case special_key::F11: *onto += "F11"; break;
-    case special_key::F12: *onto += "F12"; break;
-    case special_key::Backspace: *onto += "Backspace"; break;
-    case special_key::Tab: *onto += "Tab"; break;
-    case special_key::CapsLock: *onto += "CapsLock"; break;
-    case special_key::Enter: *onto += "Enter"; break;
-    case special_key::Insert: *onto += "Insert"; break;
-    case special_key::Delete: *onto += "Delete"; break;
-    case special_key::Home: *onto += "Home"; break;
-    case special_key::End: *onto += "End"; break;
-    case special_key::PageUp: *onto += "PageUp"; break;
-    case special_key::PageDown: *onto += "PageDown"; break;
-    case special_key::Left: *onto += "Left"; break;
-    case special_key::Right: *onto += "Right"; break;
-    case special_key::Up: *onto += "Up"; break;
-    case special_key::Down: *onto += "Down"; break;
-    case special_key::PauseBreak: *onto += "PauseBreak"; break;
-    case special_key::PrintScreen: *onto += "PrintScreen"; break;
-    case special_key::ScrollLock: *onto += "ScrollLock"; break;
+    case special_key::F1: return "F1";
+    case special_key::F2: return "F2";
+    case special_key::F3: return "F3";
+    case special_key::F4: return "F4";
+    case special_key::F5: return "F5";
+    case special_key::F6: return "F6";
+    case special_key::F7: return "F7";
+    case special_key::F8: return "F8";
+    case special_key::F9: return "F9";
+    case special_key::F10: return "F10";
+    case special_key::F11: return "F11";
+    case special_key::F12: return "F12";
+    case special_key::Backspace: return "Backspace";
+    case special_key::Tab: return "Tab";
+    case special_key::CapsLock: return "CapsLock";
+    case special_key::Enter: return "Enter";
+    case special_key::Insert: return "Insert";
+    case special_key::Delete: return "Delete";
+    case special_key::Home: return "Home";
+    case special_key::End: return "End";
+    case special_key::PageUp: return "PageUp";
+    case special_key::PageDown: return "PageDown";
+    case special_key::Left: return "Left";
+    case special_key::Right: return "Right";
+    case special_key::Up: return "Up";
+    case special_key::Down: return "Down";
+    case special_key::PauseBreak: return "PauseBreak";
+    case special_key::PrintScreen: return "PrintScreen";
+    case special_key::ScrollLock: return "ScrollLock";
+    default:
+        logic_fail("Invalid special_key: %" PRIi32, static_cast<int32_t>(sk));
     }
+}
+
+void append_special_key_render(std::string *onto, keypress::special_key sk) {
+    *onto += special_key_name(sk);
 }
 
 std::string render_keypress(const keypress& kp) {
