@@ -103,11 +103,11 @@ state initial_state(const command_line_args& args) {
 
     state state;
     if (n_files == 0) {
-        state.buf_ptr.value = 0;
         state.buflist.push_back(std::make_unique<buffer>(
                                     scratch_buffer(state.gen_buf_id())));
+        apply_number_to_buf(&state, buffer_number{0});
+        state.the_window.point_at(buffer_number{0}, state.buflist.front().get());
     } else {
-        state.buf_ptr.value = 0;
         state.buflist.reserve(n_files);
         state.buflist.clear();  // a no-op
         for (size_t i = 0; i < n_files; ++i) {
@@ -121,6 +121,7 @@ state initial_state(const command_line_args& args) {
             // buffer names when there are married files?  Disallow the concept of a
             // "buffer name" when there's a married file?
         }
+        state.the_window.point_at(buffer_number{0}, state.buflist.front().get());
     }
     return state;
 }
@@ -181,16 +182,16 @@ void render_status_area(terminal_frame *frame, const state& state) {
 
         window_size winsize = {.rows = 1, .cols = frame->window.cols - prompt_topleft.col};
         frame->rendered_window_sizes.emplace_back(state.status_prompt->buf.id, winsize);
-        render_into_frame(frame, prompt_topleft, winsize, state.status_prompt->buf.win_ctx, state.status_prompt->buf, &coords);
+        render_into_frame(frame, prompt_topleft, winsize, state.status_prompt->win_ctx, state.status_prompt->buf, &coords);
 
         // TODO: This is super-hacky -- we overwrite the main buffer's cursor.
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
     } else {
-        buffer_string str = buffer_name(&state, state.buf_ptr);
+        buffer_string str = buffer_name(&state, state.the_window.buf_ptr);
         // TODO: Probably, I want the line number info not to be bold.
         str += to_buffer_string(state.topbuf().modified_flag() ? " ** (" : "    (");
         size_t line, col;
-        state.buf_at(state.buf_ptr).line_info(&line, &col);
+        state.buf_at(state.the_window.buf_ptr).line_info(&line, &col);
         str += to_buffer_string(std::to_string(line));  // TODO: Gross
         str += buffer_char{','};
         str += to_buffer_string(std::to_string(col));  // TODO: Gross
@@ -210,10 +211,11 @@ redraw_state(int term, const terminal_size& window, const state& state) {
 
         terminal_coord window_topleft = {0, 0};
         std::vector<render_coord> coords;
-        render_into_frame(&frame, window_topleft, winsize, state.popup_display->buf.win_ctx /* TODO */,
+        render_into_frame(&frame, window_topleft, winsize, state.popup_display->win_ctx,
                           state.popup_display->buf, &coords);
     } else {
-        const ui_window_ctx *topbuf_ctx = state.win_ctx(state.buf_ptr);
+        const ui_window_ctx *topbuf_ctx = state.win_ctx_or_null(state.the_window.buf_ptr);
+        logic_checkg(topbuf_ctx != nullptr);
         const window_size winsize = main_buf_window_from_terminal_window(window);
         if (!too_small_to_render(winsize)) {
             frame.rendered_window_sizes.emplace_back(state.topbuf().id, winsize);
@@ -499,7 +501,7 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
 
     if (!state->status_prompt.has_value()) {
         buffer *active_buf = &state->topbuf();
-        ui_window_ctx *win = &active_buf->win_ctx;
+        ui_window_ctx *win = state->win_ctx_without_create(state->the_window.buf_ptr);
         return process_keyprefix_in_buf(state, win, active_buf, exit_loop);
     }
 
@@ -510,7 +512,7 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
     // memory safety is protected by dynamic logic.
 
     buffer *active_buf = &state->status_prompt->buf;
-    ui_window_ctx *win = &active_buf->win_ctx;
+    ui_window_ctx *win = &state->status_prompt->win_ctx;
 
     if (process_keyprefix_in_status_prompt(state, exit_loop)) {
         state->keyprefix.clear();

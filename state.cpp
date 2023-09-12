@@ -186,10 +186,11 @@ buffer_number find_or_create_buf(state *state, const std::string& name, bool mak
     buf.name_str = name;
 
     // We insert the buf just before the current buf -- thus we increment buf_ptr.
-    logic_checkg(state->buf_ptr.value < state->buflist.size());
-    ret = state->buf_ptr;
-    state->buflist.insert(state->buflist.begin() + state->buf_ptr.value, std::make_unique<buffer>(std::move(buf)));
-    state->buf_ptr.value += 1;
+    ret = state->the_window.buf_ptr;
+    logic_check(ret.value < state->buflist.size(), "the_window.buf_ptr is out of range");
+    state->buflist.insert(state->buflist.begin() + ret.value, std::make_unique<buffer>(std::move(buf)));
+    state->the_window.buf_ptr.value += 1;
+    state->the_window.point_at(state->the_window.buf_ptr, &state->buf_at(state->the_window.buf_ptr));
     apply_number_to_buf(state, ret);
     return ret;
 }
@@ -228,24 +229,25 @@ void buffer::replace_mark(mark_id id, size_t new_offset) {
     marks[id.index] = new_offset;
 }
 
+// TODO: XXX: This is bogus -- we need to note rendered window sizes per-window.
 void state::note_rendered_window_sizes(
     const std::vector<std::pair<buffer_id, window_size>>& window_sizes) {
-    std::unordered_map<buffer_id, window_size> m(window_sizes.begin(), window_sizes.end());
 
-    for (const std::unique_ptr<buffer>& buf : buflist) {
-        auto it = m.find(buf->id);
-        if (it != m.end()) {
-            buf->win_ctx.set_last_rendered_window(it->second);
+    ui_window *win = &the_window;
+    for (const auto& pair : window_sizes) {
+        auto it = win->window_ctxs.find(pair.first);
+        if (it != win->window_ctxs.end()) {
+            it->second->set_last_rendered_window(pair.second);
         }
     }
 
     if (status_prompt.has_value()) {
-        auto it = m.find(status_prompt->buf.id);
-        if (it != m.end()) {
-            status_prompt->buf.win_ctx.set_last_rendered_window(it->second);
+        for (const auto& pair : window_sizes) {
+            if (status_prompt->buf.id == pair.first) {
+                status_prompt->win_ctx.set_last_rendered_window(pair.second);
+            }
         }
     }
-
 }
 
 void state::add_message(const std::string& msg) {

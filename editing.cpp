@@ -146,17 +146,19 @@ prompt buffer_close_prompt(buffer&& initialBuf) {
             // TODO: Implement displaying errors to the user.
             if (text == "yes") {
                 // Yes, close without saving.
-                logic_checkg(state->buf_ptr.value < state->buflist.size());
-                state->buflist.erase(state->buflist.begin() + state->buf_ptr.value);
-                if (state->buf_ptr.value == state->buflist.size()) {
-                    state->buf_ptr.value = 0;
+                logic_checkg(state->the_window.buf_ptr.value < state->buflist.size());
+                state->buflist.erase(state->buflist.begin() + state->the_window.buf_ptr.value);
+                if (state->the_window.buf_ptr.value == state->buflist.size()) {
+                    state->the_window.buf_ptr.value = 0;
                 }
 
                 // buflist must never be empty
                 if (state->buflist.empty()) {
                     // TODO: Gross!  So gross.
                     state->buflist.push_back(std::make_unique<buffer>(scratch_buffer(state->gen_buf_id())));
-                    // state->buf_ptr is already 0, thus correct.
+                    apply_number_to_buf(state, buffer_number{0});
+                    // the_window.buf_ptr is known to be 0, fwiw.
+                    state->the_window.point_at(state->the_window.buf_ptr, &state->buf_at(state->the_window.buf_ptr));
                 }
                 return ret;
             } else if (text == "no") {
@@ -285,9 +287,9 @@ undo_killring_handled copy_region(state *state, buffer *buf) {
 void rotate_to_buffer(state *state, buffer_number buf_number) {
     logic_check(buf_number.value < state->buflist.size(), "rotate_to_buffer with out-of-range buffer number %zu", buf_number.value);
 
-    note_navigate_away_from_buf(buffer_ptr(state, state->buf_ptr));
+    note_navigate_away_from_buf(buffer_ptr(state, state->the_window.buf_ptr));
 
-    state->buf_ptr = buf_number;
+    state->the_window.buf_ptr = buf_number;
 }
 
 prompt file_open_prompt(buffer_id promptBufId) {
@@ -303,10 +305,11 @@ prompt file_open_prompt(buffer_id promptBufId) {
                 // TODO: Handle error!
                 buffer buf = open_file_into_detached_buffer(state, text);
 
-                logic_checkg(state->buf_ptr.value < state->buflist.size());
-                state->buflist.insert(state->buflist.begin() + state->buf_ptr.value,
+                logic_checkg(state->the_window.buf_ptr.value < state->buflist.size());
+                state->buflist.insert(state->buflist.begin() + state->the_window.buf_ptr.value,
                                       std::make_unique<buffer>(std::move(buf)));
-                apply_number_to_buf(state, state->buf_ptr);
+                apply_number_to_buf(state, state->the_window.buf_ptr);
+                state->the_window.point_at(state->the_window.buf_ptr, &state->buf_at(state->the_window.buf_ptr));
 
                 // state->buf_ptr now points at our freshly opened buf -- its value is unchanged.
             } else {
@@ -357,9 +360,9 @@ prompt file_save_prompt(buffer_id promptBufId) {
                 save_buf_to_married_file_and_mark_unmodified(&state->topbuf());
                 state->topbuf().name_str = buf_name_from_file_path(fs::path(text));
                 state->topbuf().name_number = 0;
-                apply_number_to_buf(state, state->buf_ptr);
+                apply_number_to_buf(state, state->the_window.buf_ptr);
             } else {
-                state->note_error_message("No filename given");
+                state->note_error_message("No filename given");  // TODO: UI logic
             }
             return ret;
         }};
@@ -487,7 +490,7 @@ undo_killring_handled buffer_switch_action(state *state, buffer *active_buf) {
         return ret;
     }
 
-    buffer_string data = buffer_name(state, state->buf_ptr);
+    buffer_string data = buffer_name(state, state->the_window.buf_ptr);
     state->status_prompt = buffer_switch_prompt(state->gen_buf_id(), std::move(data));
     return ret;
 }
@@ -563,13 +566,13 @@ undo_killring_handled rotate_buf_right(state *state, buffer *active_buf) {
 
     note_navigate_away_from_buf(active_buf);
 
-    logic_checkg(state->buf_ptr.value < state->buflist.size());
-    size_t val = state->buf_ptr.value;
+    logic_checkg(state->the_window.buf_ptr.value < state->buflist.size());
+    size_t val = state->the_window.buf_ptr.value;
     val += 1;
     if (val == state->buflist.size()) {
         val = 0;
     }
-    state->buf_ptr.value = val;
+    state->the_window.buf_ptr.value = val;
 
     return ret;
 }
@@ -582,13 +585,13 @@ undo_killring_handled rotate_buf_left(state *state, buffer *active_buf) {
 
     note_navigate_away_from_buf(active_buf);
 
-    logic_checkg(state->buf_ptr.value < state->buflist.size());
-    size_t val = state->buf_ptr.value;
+    logic_checkg(state->the_window.buf_ptr.value < state->buflist.size());
+    size_t val = state->the_window.buf_ptr.value;
     if (val == 0) {
         val = state->buflist.size();
     }
     val -= 1;
-    state->buf_ptr.value = val;
+    state->the_window.buf_ptr.value = val;
 
     return ret;
 }

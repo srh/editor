@@ -76,6 +76,7 @@ struct ui_window_ctx {
 
     mark_id first_visible_offset;
 
+    // TODO: Rename set_last_rendered_window to set_last_rendered_size.
     void set_last_rendered_window(const window_size& win) {
         if (!rendered_window.has_value() || *rendered_window != win) {
             rendered_window = win;
@@ -88,14 +89,12 @@ void ensure_virtual_column_initialized(ui_window_ctx *ui, const buffer *buf);
 
 struct buffer {
     buffer() = delete;
-    explicit buffer(buffer_id _id) : id(_id), undo_info(), non_modified_undo_node(undo_info.current_node),
-                                     win_ctx(add_mark(0)) { }
+    explicit buffer(buffer_id _id) : id(_id), undo_info(), non_modified_undo_node(undo_info.current_node) { }
     explicit buffer(buffer_id _id, buffer_string&& str)
         : id(_id),
           bef_(std::move(str)),
           bef_stats_(compute_stats(bef_ /* careful about initialization order */)),
-          undo_info(), non_modified_undo_node(undo_info.current_node),
-          win_ctx(add_mark(0)) { }
+          undo_info(), non_modified_undo_node(undo_info.current_node) { }
 
     buffer_id id;
 
@@ -180,9 +179,6 @@ public:
 
     bool modified_flag() const { return non_modified_undo_node != undo_info.current_node; }
 
-    /* UI-specific stuff -- this could get factored out of buffer at some point */
-    ui_window_ctx win_ctx;
-
     // Returns distance_to_beginning_of_line(*this, this->cursor()).
     size_t cursor_distance_to_beginning_of_line() const;
 
@@ -204,10 +200,13 @@ struct prompt {
     std::string messageText;
 
     std::function<undo_killring_handled(state *st, buffer&& promptBuf, bool *exit_loop)> procedure;  // only for proc
+
+    ui_window_ctx win_ctx{buf.add_mark(0)};
 };
 
 struct popup {
     buffer buf;
+    ui_window_ctx win_ctx{buf.add_mark(0)};
 };
 
 struct clip_board {
@@ -233,6 +232,37 @@ struct ui_mode {
     bool ansi_terminal = true;
 };
 
+struct window_id {
+    uint64_t value;
+};
+
+struct ui_window {
+    // TODO: Make use of window_id or remove it.
+    window_id id = { 0 };
+
+    // This is going to be a per-window value at some point.
+    // 0 <= buf_ptr < buflist.size().
+    buffer_number buf_ptr = {SIZE_MAX};
+
+    // We use std::unique_ptr despite iterators being preserved for the same reason as
+    // state::buflist, but also being antifragile against the hash type's iterator
+    // invalidation rules.
+    std::unordered_map<buffer_id, std::unique_ptr<ui_window_ctx>> window_ctxs;
+
+    // TODO: It's clear we should pass state *, not buffer *, because we redundantly call buf_at every time.
+    ui_window_ctx *point_at(buffer_number bufnum, buffer *buf) {  // TODO: deinline
+        // Caller's responsible for in-range bufnum and id
+        buf_ptr = bufnum;
+        auto it = window_ctxs.find(buf->id);
+        if (it != window_ctxs.end()) {
+            return it->second.get();
+        } else {
+            auto p = window_ctxs.emplace(buf->id, std::make_unique<ui_window_ctx>(buf->add_mark(0)));
+            return p.first->second.get();
+        }
+    }
+};
+
 struct state {
     state() = default;
 
@@ -245,6 +275,9 @@ struct state {
     // Carries a pointer dereference because a lot of code passes buffer*, and we have
     // note_error_message which may resize the buflist (by adding *Messages*) at any time.
     std::vector<std::unique_ptr<buffer>> buflist;
+
+    // Right now we only have one window.
+    ui_window the_window;
 
 private:
     uint64_t next_buf_id_value = 0;
@@ -269,15 +302,42 @@ public:
     // Note that the status prompt buf has a separate win_ctx not looked up by this
     // function.  In general, win_ctx should take a window_number and a buffer_number.
     // But right now there's only one window.
-    ui_window_ctx *win_ctx(buffer_number n) { return &buf_at(n).win_ctx; }
-    const ui_window_ctx *win_ctx(buffer_number n) const { return &buf_at(n).win_ctx; }
+    ui_window_ctx *win_ctx(buffer_number n) {
+        ui_window *win = &the_window;
+        buffer *buf = &buf_at(n);
+        buffer_id buf_id = buf->id;
+        auto it = win->window_ctxs.find(buf_id);
+        if (it != win->window_ctxs.end()) {
+            return it->second.get();
+        } else {
+            auto ctx = std::make_unique<ui_window_ctx>(buf->add_mark(0));
+            ui_window_ctx *ret = ctx.get();
+            win->window_ctxs.emplace(buf_id, std::move(ctx));
+            return ret;
+        }
+    }
 
-    // This is going to be a per-window value at some point.
-    // 0 <= buf_ptr < buflist.size(), always (except at construction when buflist is empty).
-    buffer_number buf_ptr = {SIZE_MAX};
+    ui_window_ctx *win_ctx_without_create(buffer_number n) {
+        const ui_window_ctx *ret = win_ctx_or_null(n);
+        logic_check(ret != nullptr, "win_ctx_without_create failing");
+        return const_cast<ui_window_ctx *>(ret);
+    }
 
-    buffer& topbuf() { return buf_at(buf_ptr); }
-    const buffer& topbuf() const { return buf_at(buf_ptr); }
+    const ui_window_ctx *win_ctx_or_null(buffer_number n) const {
+        const ui_window *win = &the_window;
+        const buffer *buf = &buf_at(n);
+        buffer_id buf_id = buf->id;
+        auto it = win->window_ctxs.find(buf_id);
+        if (it != win->window_ctxs.end()) {
+            return it->second.get();
+        } else {
+            return nullptr;
+        }
+    }
+
+    // TODO: Make callers use the_window.topbuf.
+    buffer& topbuf() { return buf_at(the_window.buf_ptr); }
+    const buffer& topbuf() const { return buf_at(the_window.buf_ptr); }
 
     // C-x prefixes and the like, but not M-x, which would be something like a prompt.
     // We don't enumerate them in types or anything -- they're handled dynamically.
