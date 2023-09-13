@@ -238,8 +238,12 @@ struct window_id {
 };
 
 struct ui_window {
+    explicit ui_window(window_id x) : id(x) {}
+    ui_window(ui_window&&) = default;
+    ui_window& operator=(ui_window&&) = default;
+
     // TODO: Make use of window_id or remove it.
-    window_id id = { 0 };
+    window_id id;
 
     // TODO: Is there any reason for active_tab not to be zero when window_ctxs.empty()?
     // 0 <= active_tab < window_ctxs.size() and 1 <= window_ctxs.size().
@@ -268,6 +272,46 @@ struct ui_window {
     [[nodiscard]] bool detach_if_attached(buffer_id buf_id);
 };
 
+// The UI-presented "window number" is 1 greater than this value.
+// Generally, these have to be maintained if the window layout changes.
+struct window_number {
+    size_t value;
+};
+
+template <class T>
+struct split_layout {
+    // Sum of panes.first must be greater than zero.  Each pane's size is that fraction
+    // over the sum.
+    std::vector<std::pair<uint32_t, T>> panes;
+};
+
+struct window_layout {
+    window_layout()
+        : active_window{0},
+          splits{.panes = { { 1, { .panes = { { 1, window_number{0} } } } } }} {
+
+        // TODO: Why can't we construct this?
+        windows.push_back(ui_window(gen_next_window_id()));
+    }
+
+private:
+    uint64_t next_window_id_value = 0;
+
+public:
+    window_id gen_next_window_id() {
+        return {next_window_id_value++};
+    }
+
+    // The windows have a numbering order (for Alt+1, Alt+2 shortcuts, etc.).  They are
+    // stored in this order here.  So window #N is at offset N-1.
+    std::vector<ui_window> windows;  // The windows (all with unique window ids).
+
+    window_number active_window;
+
+    // A non-empty vector of non-empty vectors.  They index into windows.
+    split_layout<split_layout<window_number>> splits;
+};
+
 struct state {
     state() = default;
 
@@ -276,10 +320,17 @@ struct state {
     std::unordered_map<buffer_id, std::unique_ptr<buffer>> buf_set;
 
     // Right now we only have one window.
-    ui_window the_window_;
+    window_layout layout;
 
-    ui_window *active_window() { return &the_window_; }
-    std::pair<ui_window *, ui_window *> win_range() { return {&the_window_, 1 + &the_window_}; }
+    const ui_window *active_window() const {
+        return &layout.windows.at(layout.active_window.value);
+    }
+    ui_window *active_window() {
+        return &layout.windows.at(layout.active_window.value);
+    }
+    std::pair<ui_window *, ui_window *> win_range() {
+        return {layout.windows.data(), layout.windows.data() + layout.windows.size()};
+    }
 
 private:
     uint64_t next_buf_id_value = 0;
@@ -307,9 +358,9 @@ public:
         }
     }
 
-    // TODO: Get rid of this.
+    // TODO: Get rid of this?  Or rename these back without the underscore.
     buffer_id topbuf_id_() const {
-        return the_window_.window_ctxs.at(the_window_.active_tab.value).first;
+        return active_window()->active_buf().first;
     }
 
     buffer& topbuf_() { return *lookup(topbuf_id_()); }

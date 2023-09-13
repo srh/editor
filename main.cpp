@@ -102,11 +102,12 @@ state initial_state(const command_line_args& args) {
     const size_t n_files = args.files.size();
 
     state state;
+    // state still needs its sole active window to point at a buf.
     if (n_files == 0) {
         buffer_id id = state.gen_buf_id();
         state.buf_set.emplace(id, std::make_unique<buffer>(scratch_buffer(id)));
         apply_number_to_buf(&state, id);
-        state.the_window_.point_at(id, &state);
+        state.active_window()->point_at(id, &state);
     } else {
         state.buf_set.reserve(n_files);
         for (size_t i = 0; i < n_files; ++i) {
@@ -116,7 +117,7 @@ state initial_state(const command_line_args& args) {
             apply_number_to_buf(&state, id);
 
             if (i == 0) {
-                state.the_window_.point_at(id, &state);
+                state.active_window()->point_at(id, &state);
             }
         }
     }
@@ -213,7 +214,7 @@ redraw_state(int term, const terminal_size& window, const state& state) {
     } else {
         const window_size winsize = main_buf_window_from_terminal_window(window);
         if (!too_small_to_render(winsize)) {
-            const auto &active_tab = state.the_window_.active_buf();
+            const auto &active_tab = state.active_window()->active_buf();
             const ui_window_ctx *topbuf_ctx = active_tab.second.get();
             buffer_id topbuf_id = active_tab.first;
 
