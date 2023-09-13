@@ -295,44 +295,6 @@ public:
 
     buffer_id gen_buf_id() { return buffer_id{next_buf_id_value++}; }
 
-    // Note that the status prompt buf has a separate win_ctx not looked up by this
-    // function.  In general, win_ctx should take a window_number and a buffer_number.
-    // But right now there's only one window.
-#if 0  // TODO: XXX: Remove
-    ui_window_ctx *win_ctx(buffer_number n) {  // TODO: XXX: Remove
-        ui_window *win = &the_window;
-        buffer *buf = &buf_at(n);
-        buffer_id buf_id = buf->id;
-        auto it = win->window_ctxs.find(buf_id);
-        if (it != win->window_ctxs.end()) {
-            return it->second.get();
-        } else {
-            auto ctx = std::make_unique<ui_window_ctx>(buf->add_mark(0));
-            ui_window_ctx *ret = ctx.get();
-            win->window_ctxs.emplace(buf_id, std::move(ctx));
-            return ret;
-        }
-    }
-
-    ui_window_ctx *win_ctx_without_create(buffer_number n) {  // TODO: XXX: Remove
-        const ui_window_ctx *ret = win_ctx_or_null(n);
-        logic_check(ret != nullptr, "win_ctx_without_create failing");
-        return const_cast<ui_window_ctx *>(ret);
-    }
-
-    const ui_window_ctx *win_ctx_or_null(buffer_number n) const {  // TODO: XXX: Remove
-        const ui_window *win = &the_window;
-        const buffer *buf = &buf_at(n);
-        buffer_id buf_id = buf->id;
-        auto it = win->window_ctxs.find(buf_id);
-        if (it != win->window_ctxs.end()) {
-            return it->second.get();
-        } else {
-            return nullptr;
-        }
-    }
-#endif
-
     std::optional<buffer_id> pick_buf_for_empty_window() const {
         auto it = buf_set.begin();
         if (it != buf_set.end()) {
