@@ -64,13 +64,42 @@ buffer buffer::from_data(buffer_id id, buffer_string&& data) {
 ui_window_ctx *ui_window::point_at(buffer_id id, state *st) {
     for (size_t i = 0, e = window_ctxs.size(); i < e; ++i) {
         if (window_ctxs[i].first == id) {
+            active_tab = tab_number{i};
             return window_ctxs[i].second.get();
         }
     }
+    // We maintain previous file_open_prompt behavior and insert the new buffer in the
+    // list right before the open "tab", so the previous buffer is "next".
     buffer *buf = st->lookup(id);
-    window_ctxs.emplace_back(id, std::make_unique<ui_window_ctx>(buf->add_mark(0)));
-    return window_ctxs.back().second.get();
+    if (active_tab.value == SIZE_MAX) {
+        active_tab.value = 0;
+    }
+    window_ctxs.emplace(window_ctxs.begin() + active_tab.value,
+                       buf->id, std::make_unique<ui_window_ctx>(buf->add_mark(0)));
+    return window_ctxs[active_tab.value].second.get();
 }
+
+bool ui_window::detach_if_attached(buffer_id buf_id) {
+    for (size_t i = 0, e = window_ctxs.size(); i < e; ++i) {
+        if (window_ctxs[i].first == buf_id) {
+            // TODO: XXX: We need to make the ui_window_ctx destructor remove its first_visible_offset mark.
+            window_ctxs.erase(window_ctxs.begin() + i);
+
+            if (window_ctxs.size() == 0) {
+                active_tab = {SIZE_MAX};
+                return true;
+            }
+            if (active_tab.value > i) {
+                active_tab.value -= 1;
+            } else if (active_tab.value == window_ctxs.size()) {
+                active_tab.value = 0;
+            }
+            return false;
+        }
+    }
+    return false;
+}
+
 
 std::string buffer_name_str(const state *state, buffer_id id) {
     // TODO: Eventually, make this not be O(n), or even, make this not allocate.
@@ -200,7 +229,7 @@ buffer_id find_or_create_buf(state *state, const std::string& name, bool make_re
 
     // We just insert the buf, and call apply_number_to_buf.  It's _not_ added as part of
     // any window.
-    state->buf_set.emplace(ret, std::make_unique<buffer>(std::move(buf)));
+    state->buf_set.emplace(ret, std::move(buf));
     apply_number_to_buf(state, ret);
     return ret;
 }
@@ -251,18 +280,16 @@ void ui_window::note_rendered_window_size(
 void state::add_message(const std::string& msg) {
     if (!msg.empty()) {
         buffer_id buf_id = find_or_create_buf(this, "*Messages*", true /* read-only */);
-        buffer *buf = buf_set.find(buf_id).first->second.get();
-        // TODO: This edit should _not_ be tied to any window!!!  In a way that makes sense there are multiple windows.  Or it should be tied to _all_ live windows in some way...?
-        ui_window_ctx *ui = win_ctx(num);
+        buffer *buf = buf_set.find(buf_id)->second.get();
 
         size_t og_cursor = buf->cursor();
         force_insert_chars_end_before_cursor(
-            ui, buf,
+            buf,
             as_buffer_chars(msg.data()), msg.size());
 
         char ch = '\n';
         force_insert_chars_end_before_cursor(
-            ui, buf,
+            buf,
             as_buffer_chars(&ch), 1);
 
         // We ALMOST don't touch the buffer's undo history or yank history -- since we

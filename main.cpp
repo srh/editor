@@ -103,25 +103,22 @@ state initial_state(const command_line_args& args) {
 
     state state;
     if (n_files == 0) {
-        state.buflist.push_back(std::make_unique<buffer>(
-                                    scratch_buffer(state.gen_buf_id())));
-        apply_number_to_buf(&state, buffer_number{0});
-        state.the_window.point_at(buffer_number{0}, state.buflist.front().get());
+        buffer_id id = state.gen_buf_id();
+        state.buf_set.emplace(id, std::make_unique<buffer>(scratch_buffer(id)));
+        apply_number_to_buf(&state, id);
+        state.the_window.point_at(id, &state);
     } else {
-        state.buflist.reserve(n_files);
-        state.buflist.clear();  // a no-op
+        state.buf_set.reserve(n_files);
         for (size_t i = 0; i < n_files; ++i) {
-            // TODO: Maybe combine these ops and define the fn in editing.cpp
-            state.buflist.push_back(
-                std::make_unique<buffer>(open_file_into_detached_buffer(&state, args.files.at(i))));
-            apply_number_to_buf(&state, buffer_number{i});
+            auto buf = std::make_unique<buffer>(open_file_into_detached_buffer(&state, args.files.at(i)));
+            buffer_id id = buf->id;
+            state.buf_set.emplace(id, std::move(buf));
+            apply_number_to_buf(&state, id);
 
-            // TODO: How do we handle duplicate file names?  Just allow identical buffer
-            // names, but make selecting them in the UI different?  Only allow identical
-            // buffer names when there are married files?  Disallow the concept of a
-            // "buffer name" when there's a married file?
+            if (i == 0) {
+                state.the_window.point_at(id, &state);
+            }
         }
-        state.the_window.point_at(buffer_number{0}, state.buflist.front().get());
     }
     return state;
 }
@@ -181,17 +178,17 @@ void render_status_area(terminal_frame *frame, const state& state) {
         terminal_coord prompt_topleft = {.row = last_row, .col = uint32_t(message.size())};
 
         window_size winsize = {.rows = 1, .cols = frame->window.cols - prompt_topleft.col};
-        frame->rendered_window_sizes.emplace_back(state.status_prompt->buf.id, winsize);
+        frame->rendered_window_sizes.emplace_back(&state.status_prompt->win_ctx, winsize);
         render_into_frame(frame, prompt_topleft, winsize, state.status_prompt->win_ctx, state.status_prompt->buf, &coords);
 
         // TODO: This is super-hacky -- we overwrite the main buffer's cursor.
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
     } else {
-        buffer_string str = buffer_name(&state, state.the_window.buf_ptr);
+        buffer_string str = buffer_name(&state, state.topbuf_id());
         // TODO: Probably, I want the line number info not to be bold.
         str += to_buffer_string(state.topbuf().modified_flag() ? " ** (" : "    (");
         size_t line, col;
-        state.buf_at(state.the_window.buf_ptr).line_info(&line, &col);
+        state.topbuf().line_info(&line, &col);
         str += to_buffer_string(std::to_string(line));  // TODO: Gross
         str += buffer_char{','};
         str += to_buffer_string(std::to_string(col));  // TODO: Gross
@@ -201,28 +198,31 @@ void render_status_area(terminal_frame *frame, const state& state) {
     }
 }
 
-std::vector<std::pair<buffer_id, window_size>>
+std::vector<std::pair<const ui_window_ctx *, window_size>>
 redraw_state(int term, const terminal_size& window, const state& state) {
     terminal_frame frame = init_frame(window);
 
     if (state.popup_display.has_value()) {
         window_size winsize = {window.rows, window.cols};
-        frame.rendered_window_sizes.emplace_back(state.popup_display->buf.id, winsize);
+        frame.rendered_window_sizes.emplace_back(&state.popup_display->win_ctx, winsize);
 
         terminal_coord window_topleft = {0, 0};
         std::vector<render_coord> coords;
         render_into_frame(&frame, window_topleft, winsize, state.popup_display->win_ctx,
                           state.popup_display->buf, &coords);
     } else {
-        const ui_window_ctx *topbuf_ctx = state.win_ctx_or_null(state.the_window.buf_ptr);
-        logic_checkg(topbuf_ctx != nullptr);
         const window_size winsize = main_buf_window_from_terminal_window(window);
         if (!too_small_to_render(winsize)) {
-            frame.rendered_window_sizes.emplace_back(state.topbuf().id, winsize);
+            const auto &active_tab = state.the_window.active_buf();
+            const ui_window_ctx *topbuf_ctx = active_tab.second.get();
+            buffer_id topbuf_id = active_tab.first;
 
-            std::vector<render_coord> coords = { {state.topbuf().cursor(), std::nullopt} };
+            frame.rendered_window_sizes.emplace_back(topbuf_ctx, winsize);
+            const buffer *topbuf = state.lookup(topbuf_id);
+
+            std::vector<render_coord> coords = { {topbuf->cursor(), std::nullopt} };
             terminal_coord window_topleft = {0, 0};
-            render_into_frame(&frame, window_topleft, winsize, *topbuf_ctx, state.topbuf(), &coords);
+            render_into_frame(&frame, window_topleft, winsize, *topbuf_ctx, *topbuf, &coords);
 
             // TODO: This is super-hacky -- this gets overwritten if the status area has a
             // prompt.  With multiple buffers, we need some concept of an active buffer, with
@@ -500,8 +500,9 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
     state->keyprefix.push_back(kp);
 
     if (!state->status_prompt.has_value()) {
-        buffer *active_buf = &state->topbuf();
-        ui_window_ctx *win = state->win_ctx_without_create(state->the_window.buf_ptr);
+        const auto& active_tab = state->the_window.active_buf();
+        buffer *active_buf = state->lookup(active_tab.first);
+        ui_window_ctx *win = active_tab.second.get();
         return process_keyprefix_in_buf(state, win, active_buf, exit_loop);
     }
 
@@ -659,11 +660,17 @@ void main_loop(int term, const command_line_args& args) {
     state state = initial_state(args);
 
     terminal_size window = get_terminal_size(term);
-    {
-        std::vector<std::pair<buffer_id, window_size>> window_sizes
+
+    auto redraw = [&] {
+        std::vector<std::pair<const ui_window_ctx *, window_size>> window_sizes
             = redraw_state(term, window, state);
-        state.note_rendered_window_sizes(window_sizes);
-    }
+        for (auto& elem : window_sizes) {
+            // const-ness is inherited from state being passed as a const param -- we now
+            // un-const and set_last_rendered_window.
+            const_cast<ui_window_ctx *>(elem.first)->set_last_rendered_window(elem.second);
+        }
+    };
+    redraw();
 
     bool exit = false;
     for (; !exit; ) {
@@ -680,11 +687,8 @@ void main_loop(int term, const command_line_args& args) {
             // resize_window(&state, new_window);
             window = new_window;
         }
-        {
-            std::vector<std::pair<buffer_id, window_size>> window_sizes
-                = redraw_state(term, window, state);
-            state.note_rendered_window_sizes(window_sizes);
-        }
+
+        redraw();
     }
 }
 

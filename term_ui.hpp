@@ -55,7 +55,7 @@ struct terminal_frame {
 
     // Doesn't really belong here -- we dump window size by buffer_id here, so we can
     // update the buffer ui contexts with the last rendered window size after rendering.
-    std::vector<std::pair<buffer_id, window_size>> rendered_window_sizes;
+    std::vector<std::pair<const ui_window_ctx *, window_size>> rendered_window_sizes;
 };
 
 struct window_coord { uint32_t row = 0, col = 0; };

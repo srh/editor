@@ -75,8 +75,7 @@ insert_result insert_chars_right(ui_window_ctx *ui, buffer *buf, const buffer_ch
     };
 }
 
-// TODO: This non-generic function basically sucks.
-void force_insert_chars_end_before_cursor(ui_window_ctx *ui, buffer *buf,
+void force_insert_chars_end_before_cursor(buffer *buf,
                                           const buffer_char *chs, size_t count) {
     const size_t og_cursor = buf->cursor();
     const size_t og_size = buf->size();
@@ -90,7 +89,14 @@ void force_insert_chars_end_before_cursor(ui_window_ctx *ui, buffer *buf,
     } else {
         buf->bef_stats_ = append_stats(buf->bef_stats_, stats);
         buf->bef_.append(chs, count);
-        ui->virtual_column = std::nullopt;
+
+        // TODO: We want this for every window where the *Messages* buf is active.
+        // Windows' virtual column values could come with an incrementing edit number (not
+        // quite an undo node number).
+#if 0
+         ui->virtual_column = std::nullopt;
+#endif
+
         // I guess we don't touch first_visible_offset -- later we'll want
         // scroll-to-cursor behavior with *Messages*.
 

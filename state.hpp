@@ -142,7 +142,7 @@ private:
 
     // Half friends -- a function I don't want to exist.
     friend void force_insert_chars_end_before_cursor(
-        ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count);
+        buffer *buf, const buffer_char *chs, size_t count);
 
     // False friends, that access bef and aft, but we'd like them to use the buf more abstractly.
     friend void move_right_by(ui_window_ctx *ui, buffer *buf, size_t count);
@@ -241,6 +241,7 @@ struct ui_window {
     // TODO: Make use of window_id or remove it.
     window_id id = { 0 };
 
+    // TODO: Is there any reason for active_tab not to be zero when window_ctxs.empty()?
     // 0 <= active_tab < window_ctxs.size() and 1 <= window_ctxs.size().
     tab_number active_tab = {SIZE_MAX};
 
@@ -256,6 +257,15 @@ struct ui_window {
     const std::pair<buffer_id, std::unique_ptr<ui_window_ctx>>& active_buf() {
         return window_ctxs.at(active_tab.value);
     }
+
+    // TODO: Violates what we want from const correctness (as ui_window_ctx is indirect).
+    const std::pair<buffer_id, std::unique_ptr<ui_window_ctx>>& active_buf() const {
+        return window_ctxs.at(active_tab.value);
+    }
+
+    // Returns true if the window no longer has any buffers!  It immediately needs at
+    // least one buffer.
+    [[nodiscard]] bool detach_if_attached(buffer_id buf_id);
 };
 
 struct state {
@@ -323,9 +333,23 @@ public:
     }
 #endif
 
+    std::optional<buffer_id> pick_buf_for_empty_window() const {
+        auto it = buf_set.begin();
+        if (it != buf_set.end()) {
+            return it->first;
+        } else {
+            return std::nullopt;
+        }
+    }
+
+    // TODO: Get rid of this.
+    buffer_id topbuf_id() const {
+        return the_window.window_ctxs.at(the_window.active_tab.value).first;
+    }
+
     // TODO: Make callers use the_window.topbuf.
-    buffer& topbuf() { return *lookup(the_window.window_ctxs.at(the_window.active_tab.value).first); }
-    const buffer& topbuf() const { return *lookup(the_window.window_ctxs.at(the_window.active_tab.value).first); }
+    buffer& topbuf() { return *lookup(topbuf_id()); }
+    const buffer& topbuf() const { return *lookup(topbuf_id()); }
 
     // C-x prefixes and the like, but not M-x, which would be something like a prompt.
     // We don't enumerate them in types or anything -- they're handled dynamically.

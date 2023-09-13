@@ -146,20 +146,40 @@ prompt buffer_close_prompt(buffer&& initialBuf) {
             // TODO: Implement displaying errors to the user.
             if (text == "yes") {
                 // Yes, close without saving.
-                logic_checkg(state->the_window.buf_ptr.value < state->buflist.size());
-                state->buflist.erase(state->buflist.begin() + state->the_window.buf_ptr.value);
-                if (state->the_window.buf_ptr.value == state->buflist.size()) {
-                    state->the_window.buf_ptr.value = 0;
+
+                // 1. Detach from all windows.
+                // 2. Close.
+
+                buffer_id closed_id = state->topbuf_id();
+
+                // We'll ened to do this for every window.
+                bool win_needs_new_target = state->the_window.detach_if_attached(closed_id);
+                state->buf_set.erase(closed_id);
+
+                // buf_set might be empty.  Not allowed.
+
+                if (win_needs_new_target) {
+                    if (std::optional<buffer_id> buf_id = state->pick_buf_for_empty_window()) {
+                        // buf_set is not empty, it has `*buf_id`.
+                        state->the_window.point_at(*buf_id, state);
+                    } else {
+                        // buf_set is empty.
+
+                        // There are no buffers (at all).  Create a scratch buffer.
+                        (void)state->the_window;  // (Break this code when we get multi-window.)
+
+                        buffer_id scratch_id = state->gen_buf_id();
+                        state->buf_set.emplace(scratch_id,
+                                               std::make_unique<buffer>(scratch_buffer(scratch_id)));
+                        // buf_set is not empty.
+                        apply_number_to_buf(state, scratch_id);
+                        state->the_window.point_at(scratch_id, state);
+                    }
+                } else {
+                    // buf_set is not empty in this case because the window is pointing at a buffer.
+                    logic_checkg(state->buf_set.empty());
                 }
 
-                // buflist must never be empty
-                if (state->buflist.empty()) {
-                    // TODO: Gross!  So gross.
-                    state->buflist.push_back(std::make_unique<buffer>(scratch_buffer(state->gen_buf_id())));
-                    apply_number_to_buf(state, buffer_number{0});
-                    // the_window.buf_ptr is known to be 0, fwiw.
-                    state->the_window.point_at(state->the_window.buf_ptr, &state->buf_at(state->the_window.buf_ptr));
-                }
                 return ret;
             } else if (text == "no") {
                 // No, don't close without saving.
@@ -185,9 +205,10 @@ undo_killring_handled buffer_close_action(state *state, buffer *active_buf) {
 }
 
 bool find_buffer_by_name(const state *state, const std::string& text, buffer_id *out) {
-    for (size_t i = 0, e = state->buflist.size(); i < e; ++i) {
-        if (buffer_name_str(state, buffer_number{i}) == text) {
-            *out = buffer_number{i};
+    // O(n^2) algo
+    for (auto& p : state->buf_set) {
+        if (buffer_name_str(state, p.first) == text) {
+            *out = p.first;
             return true;
         }
     }
@@ -284,12 +305,13 @@ undo_killring_handled copy_region(state *state, buffer *buf) {
     return handled_undo_killring(state, buf);
 }
 
-void rotate_to_buffer(state *state, buffer_number buf_number) {
-    logic_check(buf_number.value < state->buflist.size(), "rotate_to_buffer with out-of-range buffer number %zu", buf_number.value);
+void rotate_to_buffer(state *state, buffer_id buf_id) {
+    note_navigate_away_from_buf(state->lookup(buf_id));
 
-    note_navigate_away_from_buf(buffer_ptr(state, state->the_window.buf_ptr));
-
-    state->the_window.buf_ptr = buf_number;
+    // TODO: With multi-window, we will need to actually consider where to put the buffer
+    // into the window's ordered buf list.  (Right now it's moot because every buffer's
+    // actually in the list.  Probably the caller needs an understanding.
+    state->the_window.point_at(buf_id, state);
 }
 
 prompt file_open_prompt(buffer_id promptBufId) {
@@ -305,13 +327,11 @@ prompt file_open_prompt(buffer_id promptBufId) {
                 // TODO: Handle error!
                 buffer buf = open_file_into_detached_buffer(state, text);
 
-                logic_checkg(state->the_window.buf_ptr.value < state->buflist.size());
-                state->buflist.insert(state->buflist.begin() + state->the_window.buf_ptr.value,
-                                      std::make_unique<buffer>(std::move(buf)));
-                apply_number_to_buf(state, state->the_window.buf_ptr);
-                state->the_window.point_at(state->the_window.buf_ptr, &state->buf_at(state->the_window.buf_ptr));
+                buffer_id buf_id = buf.id;
+                state->buf_set.emplace(buf_id, std::make_unique<buffer>(std::move(buf)));
+                apply_number_to_buf(state, buf_id);
+                state->the_window.point_at(buf_id, state);
 
-                // state->buf_ptr now points at our freshly opened buf -- its value is unchanged.
             } else {
                 state->note_error_message("No filename given");
             }
@@ -360,7 +380,7 @@ prompt file_save_prompt(buffer_id promptBufId) {
                 save_buf_to_married_file_and_mark_unmodified(&state->topbuf());
                 state->topbuf().name_str = buf_name_from_file_path(fs::path(text));
                 state->topbuf().name_number = 0;
-                apply_number_to_buf(state, state->the_window.buf_ptr);
+                apply_number_to_buf(state, state->topbuf().id);
             } else {
                 state->note_error_message("No filename given");  // TODO: UI logic
             }
@@ -404,12 +424,12 @@ undo_killring_handled save_as_file_action(state *state, buffer *active_buf) {
     return ret;
 }
 
-std::vector<std::string> modified_buffers(state *state) {
+std::vector<std::string> modified_buffers(const state *state) {
     std::vector<std::string> ret;
-    for (size_t i = 0, e = state->buflist.size(); i < e; ++i) {
-        if (state->buflist[i]->modified_flag()) {
-            // TODO: O(n^2), gross.
-            ret.push_back(buffer_name_str(state, buffer_number{i}));
+    for (const auto& elem : state->buf_set) {
+        if (elem.second->modified_flag()) {
+            // O(n^2)
+            ret.push_back(buffer_name_str(state, elem.first));
         }
     }
     return ret;
@@ -465,9 +485,10 @@ prompt buffer_switch_prompt(buffer_id promptBufId, buffer_string&& data) {
             undo_killring_handled ret = note_backout_action(state, &promptBuf);
             std::string text = promptBuf.copy_to_string();
             if (text != "") {
-                buffer_number buf_number;
-                if (find_buffer_by_name(state, text, &buf_number)) {
-                    rotate_to_buffer(state, buf_number);
+                (void)state->the_window;  // Need to fix once we have multi-window.
+                buffer_id buf_id;
+                if (find_buffer_by_name(state, text, &buf_id)) {
+                    rotate_to_buffer(state, buf_id);
                 } else {
                     state->note_error_message("Buffer not found");
                 }
@@ -490,7 +511,7 @@ undo_killring_handled buffer_switch_action(state *state, buffer *active_buf) {
         return ret;
     }
 
-    buffer_string data = buffer_name(state, state->the_window.buf_ptr);
+    buffer_string data = buffer_name(state, state->topbuf_id());
     state->status_prompt = buffer_switch_prompt(state->gen_buf_id(), std::move(data));
     return ret;
 }
@@ -509,18 +530,16 @@ buffer open_file_into_detached_buffer(state *state, const std::string& dirty_pat
     return ret;
 }
 
-void apply_number_to_buf(state *state, buffer_number buf_index_num) {
-    size_t buf_index = buf_index_num.value;
-    buffer& the_buf = state->buf_at(buf_index_num);
-    const std::string& name = the_buf.name_str;
+void apply_number_to_buf(state *state, buffer_id buf_id) {
+    buffer *the_buf = state->lookup(buf_id);
+    const std::string& name = the_buf->name_str;
     std::unordered_set<uint64_t> numbers;
-    for (size_t i = 0, e = state->buflist.size(); i < e; ++i) {
-        buffer& existing = *state->buflist[i];
-        if (i != buf_index && existing.name_str == name) {
-            auto res = numbers.insert(existing.name_number);
+    for (auto& elem : state->buf_set) {
+        if (elem.first != buf_id && elem.second->name_str == name) {
+            auto res = numbers.insert(elem.second->name_number);
             logic_check(res.second,
                         "insert_with_name_number_into_buflist seeing bufs with duplicate numbers, name = %s",
-                        the_buf.name_str.c_str());
+                        the_buf->name_str.c_str());
         }
     }
 
@@ -532,7 +551,7 @@ void apply_number_to_buf(state *state, buffer_number buf_index_num) {
     while (numbers.count(n) == 1) {
         ++n;
     }
-    the_buf.name_number = n;
+    the_buf->name_number = n;
 }
 
 buffer scratch_buffer(buffer_id id) {
@@ -566,13 +585,14 @@ undo_killring_handled rotate_buf_right(state *state, buffer *active_buf) {
 
     note_navigate_away_from_buf(active_buf);
 
-    logic_checkg(state->the_window.buf_ptr.value < state->buflist.size());
-    size_t val = state->the_window.buf_ptr.value;
+    ui_window *win = &state->the_window;
+    logic_checkg(win->active_tab.value < win->window_ctxs.size());
+    size_t val = win->active_tab.value;
     val += 1;
-    if (val == state->buflist.size()) {
+    if (val == win->window_ctxs.size()) {
         val = 0;
     }
-    state->the_window.buf_ptr.value = val;
+    win->active_tab.value = val;
 
     return ret;
 }
@@ -585,13 +605,14 @@ undo_killring_handled rotate_buf_left(state *state, buffer *active_buf) {
 
     note_navigate_away_from_buf(active_buf);
 
-    logic_checkg(state->the_window.buf_ptr.value < state->buflist.size());
-    size_t val = state->the_window.buf_ptr.value;
+    ui_window *win = &state->the_window;
+    logic_checkg(win->active_tab.value < win->window_ctxs.size());
+    size_t val = win->active_tab.value;
     if (val == 0) {
-        val = state->buflist.size();
+        val = win->window_ctxs.size();
     }
     val -= 1;
-    state->the_window.buf_ptr.value = val;
+    win->active_tab.value = val;
 
     return ret;
 }
