@@ -106,7 +106,7 @@ state initial_state(const command_line_args& args) {
         buffer_id id = state.gen_buf_id();
         state.buf_set.emplace(id, std::make_unique<buffer>(scratch_buffer(id)));
         apply_number_to_buf(&state, id);
-        state.the_window.point_at(id, &state);
+        state.the_window_.point_at(id, &state);
     } else {
         state.buf_set.reserve(n_files);
         for (size_t i = 0; i < n_files; ++i) {
@@ -116,7 +116,7 @@ state initial_state(const command_line_args& args) {
             apply_number_to_buf(&state, id);
 
             if (i == 0) {
-                state.the_window.point_at(id, &state);
+                state.the_window_.point_at(id, &state);
             }
         }
     }
@@ -184,11 +184,11 @@ void render_status_area(terminal_frame *frame, const state& state) {
         // TODO: This is super-hacky -- we overwrite the main buffer's cursor.
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
     } else {
-        buffer_string str = buffer_name(&state, state.topbuf_id());
+        buffer_string str = buffer_name(&state, state.topbuf_id_());
         // TODO: Probably, I want the line number info not to be bold.
-        str += to_buffer_string(state.topbuf().modified_flag() ? " ** (" : "    (");
+        str += to_buffer_string(state.topbuf_().modified_flag() ? " ** (" : "    (");
         size_t line, col;
-        state.topbuf().line_info(&line, &col);
+        state.topbuf_().line_info(&line, &col);
         str += to_buffer_string(std::to_string(line));  // TODO: Gross
         str += buffer_char{','};
         str += to_buffer_string(std::to_string(col));  // TODO: Gross
@@ -213,7 +213,7 @@ redraw_state(int term, const terminal_size& window, const state& state) {
     } else {
         const window_size winsize = main_buf_window_from_terminal_window(window);
         if (!too_small_to_render(winsize)) {
-            const auto &active_tab = state.the_window.active_buf();
+            const auto &active_tab = state.the_window_.active_buf();
             const ui_window_ctx *topbuf_ctx = active_tab.second.get();
             buffer_id topbuf_id = active_tab.first;
 
@@ -500,10 +500,10 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
     state->keyprefix.push_back(kp);
 
     if (!state->status_prompt.has_value()) {
-        const auto& active_tab = state->the_window.active_buf();
+        const auto& active_tab = state->active_window()->active_buf();
         buffer *active_buf = state->lookup(active_tab.first);
-        ui_window_ctx *win = active_tab.second.get();
-        return process_keyprefix_in_buf(state, win, active_buf, exit_loop);
+        ui_window_ctx *ui = active_tab.second.get();
+        return process_keyprefix_in_buf(state, ui, active_buf, exit_loop);
     }
 
     // Status prompt may intercept some keypresses, then pass on to its buf.
@@ -526,13 +526,13 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
 }
 
 undo_killring_handled process_keyprefix_in_buf(
-    state *state, ui_window_ctx *win, buffer *active_buf, bool *exit_loop, bool *clear_keyprefix);
+    state *state, ui_window_ctx *ui, buffer *active_buf, bool *exit_loop, bool *clear_keyprefix);
 
 undo_killring_handled process_keyprefix_in_buf(
-    state *state, ui_window_ctx *win, buffer *active_buf, bool *exit_loop) {
+    state *state, ui_window_ctx *ui, buffer *active_buf, bool *exit_loop) {
     // TODO: Hacky and gross... but what to do?
     bool clear_keyprefix = true;
-    auto ret = process_keyprefix_in_buf(state, win, active_buf, exit_loop, &clear_keyprefix);
+    auto ret = process_keyprefix_in_buf(state, ui, active_buf, exit_loop, &clear_keyprefix);
     if (clear_keyprefix) {
         state->keyprefix.clear();
     }
@@ -546,6 +546,7 @@ undo_killring_handled continue_keyprefix(bool *clear_keyprefix) {
 }
 
 // Processes a keypress when we're focused in a buffer.
+// TODO: `win` is the variable name we use for ui_window, not ui_window_ctx.
 undo_killring_handled process_keyprefix_in_buf(
     state *state, ui_window_ctx *win, buffer *active_buf, bool *exit_loop, bool *clear_keyprefix) {
     logic_checkg(state->keyprefix.size() > 0);

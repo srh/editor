@@ -276,7 +276,10 @@ struct state {
     std::unordered_map<buffer_id, std::unique_ptr<buffer>> buf_set;
 
     // Right now we only have one window.
-    ui_window the_window;
+    ui_window the_window_;
+
+    ui_window *active_window() { return &the_window_; }
+    std::pair<ui_window *, ui_window *> win_range() { return {&the_window_, 1 + &the_window_}; }
 
 private:
     uint64_t next_buf_id_value = 0;
@@ -305,13 +308,12 @@ public:
     }
 
     // TODO: Get rid of this.
-    buffer_id topbuf_id() const {
-        return the_window.window_ctxs.at(the_window.active_tab.value).first;
+    buffer_id topbuf_id_() const {
+        return the_window_.window_ctxs.at(the_window_.active_tab.value).first;
     }
 
-    // TODO: Make callers use the_window.topbuf.
-    buffer& topbuf() { return *lookup(topbuf_id()); }
-    const buffer& topbuf() const { return *lookup(topbuf_id()); }
+    buffer& topbuf_() { return *lookup(topbuf_id_()); }
+    const buffer& topbuf_() const { return *lookup(topbuf_id_()); }
 
     // C-x prefixes and the like, but not M-x, which would be something like a prompt.
     // We don't enumerate them in types or anything -- they're handled dynamically.

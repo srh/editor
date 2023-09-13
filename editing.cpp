@@ -132,8 +132,8 @@ undo_killring_handled note_nop_action(state *state) {
 
 // Currently a nop, we might need a generic action or code adjustments in the future.
 // (Current callers also invoke note_navigation_action.)
-void note_navigate_away_from_buf(buffer *buf) {
-    (void)buf;
+void note_navigate_away_from_buf(ui_window *win, buffer *buf) {
+    (void)win, (void)buf;
 }
 
 // TODO: Make a special fn for yes/no prompts?
@@ -150,34 +150,41 @@ prompt buffer_close_prompt(buffer&& initialBuf) {
                 // 1. Detach from all windows.
                 // 2. Close.
 
-                buffer_id closed_id = state->topbuf_id();
+                buffer_id closed_id = state->active_window()->active_buf().first;
 
-                // We'll ened to do this for every window.
-                bool win_needs_new_target = state->the_window.detach_if_attached(closed_id);
+                // We'll need to do this for every window.
+                auto range = state->win_range();
+                std::vector<bool> needs_new_target;  // Absolutely gross parallel vector.
+                bool any_need_new_target = false;
+                for (ui_window *w = range.first; w < range.second; ++w) {
+                    bool win_needs_new_target = w->detach_if_attached(closed_id);
+                    needs_new_target.push_back(win_needs_new_target);
+                    any_need_new_target |= win_needs_new_target;
+                }
+
                 state->buf_set.erase(closed_id);
 
-                // buf_set might be empty.  Not allowed.
+                // buf_set or the window's tab set might be empty.  Not allowed.
+                for (size_t i = 0, e = needs_new_target.size(); i < e; ++i) {
+                    if (needs_new_target[i]) {
+                        if (std::optional<buffer_id> buf_id = state->pick_buf_for_empty_window()) {
+                            // buf_set is not empty, it has `*buf_id`.
+                            range.first[i].point_at(*buf_id, state);
+                        } else {
+                            // buf_set is empty.
 
-                if (win_needs_new_target) {
-                    if (std::optional<buffer_id> buf_id = state->pick_buf_for_empty_window()) {
-                        // buf_set is not empty, it has `*buf_id`.
-                        state->the_window.point_at(*buf_id, state);
+                            // There are no buffers (at all).  Create a scratch buffer.
+                            buffer_id scratch_id = state->gen_buf_id();
+                            state->buf_set.emplace(scratch_id,
+                                                   std::make_unique<buffer>(scratch_buffer(scratch_id)));
+                            // buf_set is not empty.
+                            apply_number_to_buf(state, scratch_id);
+                            range.first[i].point_at(scratch_id, state);
+                        }
                     } else {
-                        // buf_set is empty.
-
-                        // There are no buffers (at all).  Create a scratch buffer.
-                        (void)state->the_window;  // (Break this code when we get multi-window.)
-
-                        buffer_id scratch_id = state->gen_buf_id();
-                        state->buf_set.emplace(scratch_id,
-                                               std::make_unique<buffer>(scratch_buffer(scratch_id)));
-                        // buf_set is not empty.
-                        apply_number_to_buf(state, scratch_id);
-                        state->the_window.point_at(scratch_id, state);
+                        // buf_set is not empty in this case because the window is pointing at a buffer.
+                        logic_checkg(!state->buf_set.empty());
                     }
-                } else {
-                    // buf_set is not empty in this case because the window is pointing at a buffer.
-                    logic_checkg(state->buf_set.empty());
                 }
 
                 return ret;
@@ -305,13 +312,13 @@ undo_killring_handled copy_region(state *state, buffer *buf) {
     return handled_undo_killring(state, buf);
 }
 
-void rotate_to_buffer(state *state, buffer_id buf_id) {
-    note_navigate_away_from_buf(state->lookup(buf_id));
+void rotate_to_buffer(state *state, ui_window *win, buffer_id buf_id) {
+    note_navigate_away_from_buf(win, state->lookup(buf_id));
 
     // TODO: With multi-window, we will need to actually consider where to put the buffer
     // into the window's ordered buf list.  (Right now it's moot because every buffer's
     // actually in the list.  Probably the caller needs an understanding.
-    state->the_window.point_at(buf_id, state);
+    win->point_at(buf_id, state);
 }
 
 prompt file_open_prompt(buffer_id promptBufId) {
@@ -330,7 +337,7 @@ prompt file_open_prompt(buffer_id promptBufId) {
                 buffer_id buf_id = buf.id;
                 state->buf_set.emplace(buf_id, std::make_unique<buffer>(std::move(buf)));
                 apply_number_to_buf(state, buf_id);
-                state->the_window.point_at(buf_id, state);
+                state->active_window()->point_at(buf_id, state);
 
             } else {
                 state->note_error_message("No filename given");
@@ -376,11 +383,13 @@ prompt file_save_prompt(buffer_id promptBufId) {
             // TODO: Of course, handle errors, such as if directory doesn't exist, permissions.
             std::string text = promptBuf.copy_to_string();
             if (text != "") {
-                state->topbuf().married_file = text;
-                save_buf_to_married_file_and_mark_unmodified(&state->topbuf());
-                state->topbuf().name_str = buf_name_from_file_path(fs::path(text));
-                state->topbuf().name_number = 0;
-                apply_number_to_buf(state, state->topbuf().id);
+                buffer_id buf_id = state->active_window()->active_buf().first;
+                buffer *buf = state->lookup(buf_id);
+                buf->married_file = text;
+                save_buf_to_married_file_and_mark_unmodified(buf);
+                buf->name_str = buf_name_from_file_path(fs::path(text));
+                buf->name_number = 0;
+                apply_number_to_buf(state, buf_id);
             } else {
                 state->note_error_message("No filename given");  // TODO: UI logic
             }
@@ -399,11 +408,9 @@ undo_killring_handled save_file_action(state *state, buffer *active_buf) {
         return ret;
     }
 
-    if (state->topbuf().married_file.has_value()) {
-        save_buf_to_married_file_and_mark_unmodified(&state->topbuf());
+    if (state->topbuf_().married_file.has_value()) {
+        save_buf_to_married_file_and_mark_unmodified(&state->topbuf_());
     } else {
-        // TODO: How/where should we set the prompt's buf's window?
-        // TODO: UI logic
         state->status_prompt = file_save_prompt(state->gen_buf_id());
     }
     return ret;
@@ -485,10 +492,10 @@ prompt buffer_switch_prompt(buffer_id promptBufId, buffer_string&& data) {
             undo_killring_handled ret = note_backout_action(state, &promptBuf);
             std::string text = promptBuf.copy_to_string();
             if (text != "") {
-                (void)state->the_window;  // Need to fix once we have multi-window.
+                ui_window *win = state->active_window();
                 buffer_id buf_id;
                 if (find_buffer_by_name(state, text, &buf_id)) {
-                    rotate_to_buffer(state, buf_id);
+                    rotate_to_buffer(state, win, buf_id);
                 } else {
                     state->note_error_message("Buffer not found");
                 }
@@ -511,7 +518,7 @@ undo_killring_handled buffer_switch_action(state *state, buffer *active_buf) {
         return ret;
     }
 
-    buffer_string data = buffer_name(state, state->topbuf_id());
+    buffer_string data = buffer_name(state, state->topbuf_id_());
     state->status_prompt = buffer_switch_prompt(state->gen_buf_id(), std::move(data));
     return ret;
 }
@@ -583,9 +590,9 @@ undo_killring_handled rotate_buf_right(state *state, buffer *active_buf) {
         return ret;
     }
 
-    note_navigate_away_from_buf(active_buf);
+    ui_window *win = state->active_window();
+    note_navigate_away_from_buf(win, active_buf);
 
-    ui_window *win = &state->the_window;
     logic_checkg(win->active_tab.value < win->window_ctxs.size());
     size_t val = win->active_tab.value;
     val += 1;
@@ -603,9 +610,9 @@ undo_killring_handled rotate_buf_left(state *state, buffer *active_buf) {
         return ret;
     }
 
-    note_navigate_away_from_buf(active_buf);
+    ui_window *win = state->active_window();
+    note_navigate_away_from_buf(win, active_buf);
 
-    ui_window *win = &state->the_window;
     logic_checkg(win->active_tab.value < win->window_ctxs.size());
     size_t val = win->active_tab.value;
     if (val == 0) {
