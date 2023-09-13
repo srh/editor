@@ -28,8 +28,9 @@ struct window_size {
     bool operator==(const window_size&) const = default;
 };
 
-struct buffer_number {
-    // 0..n-1.  So state->bufs[value - 1] is the buffer, and state->buf is the zero buffer.
+// An index into a ui_window::window_ctxs vector.  (Since tabs can be added or removed,
+// these are easily invalidated!)
+struct tab_number {
     size_t value;
 };
 
@@ -240,41 +241,29 @@ struct ui_window {
     // TODO: Make use of window_id or remove it.
     window_id id = { 0 };
 
-    // This is going to be a per-window value at some point.
-    // 0 <= buf_ptr < buflist.size().
-    buffer_number buf_ptr = {SIZE_MAX};
+    // 0 <= active_tab < window_ctxs.size() and 1 <= window_ctxs.size().
+    tab_number active_tab = {SIZE_MAX};
 
-    // We use std::unique_ptr despite iterators being preserved for the same reason as
-    // state::buflist, but also being antifragile against the hash type's iterator
-    // invalidation rules.
-    std::unordered_map<buffer_id, std::unique_ptr<ui_window_ctx>> window_ctxs;
+    // We use std::unique_ptr for the same reason as state::buflist.
+    std::vector<std::pair<buffer_id, std::unique_ptr<ui_window_ctx>>> window_ctxs;
 
-    // TODO: It's clear we should pass state *, not buffer *, because we redundantly call buf_at every time.
-    ui_window_ctx *point_at(buffer_number bufnum, buffer *buf) {  // TODO: deinline
-        // Caller's responsible for in-range bufnum and id
-        buf_ptr = bufnum;
-        auto it = window_ctxs.find(buf->id);
-        if (it != window_ctxs.end()) {
-            return it->second.get();
-        } else {
-            auto p = window_ctxs.emplace(buf->id, std::make_unique<ui_window_ctx>(buf->add_mark(0)));
-            return p.first->second.get();
-        }
+    // Makes the buffer the active tab.
+    ui_window_ctx *point_at(buffer_id id, state *st);
+
+    void note_rendered_window_size(
+        buffer_id buf_id, const window_size& window_size);
+
+    const std::pair<buffer_id, std::unique_ptr<ui_window_ctx>>& active_buf() {
+        return window_ctxs.at(active_tab.value);
     }
 };
 
 struct state {
     state() = default;
 
-    // Sorted in order from least-recently-used -- `buf` is the active buffer and should
-    // get pushed onto the end of bufs after some other buf takes its place.
-    //
-    // Is never empty (after initial_state() returns).
-    // NOTE: "Is never empty" may be a UI-specific constraint!  It seems reasonable for GUIs to support having no tabs open.
-    //
-    // Carries a pointer dereference because a lot of code passes buffer*, and we have
-    // note_error_message which may resize the buflist (by adding *Messages*) at any time.
-    std::vector<std::unique_ptr<buffer>> buflist;
+    // Just a set of buffers.  Buffer order is defined by tab order in ui_window.
+    // TODO: Should buf_set include the prompt buffer (and the popup buffer?)
+    std::unordered_map<buffer_id, std::unique_ptr<buffer>> buf_set;
 
     // Right now we only have one window.
     ui_window the_window;
@@ -283,26 +272,24 @@ private:
     uint64_t next_buf_id_value = 0;
 
 public:
+    buffer *lookup(buffer_id id) {
+        auto it = buf_set.find(id);
+        logic_check(it != buf_set.end(), "buffer not found: id=%" PRIu64, id.value);
+        return it->second.get();
+    }
+    const buffer *lookup(buffer_id id) const {
+        auto it = buf_set.find(id);
+        logic_check(it != buf_set.end(), "buffer not found: id=%" PRIu64, id.value);
+        return it->second.get();
+    }
+
     buffer_id gen_buf_id() { return buffer_id{next_buf_id_value++}; }
-
-    // buf_at vs. buffer_ptr vs. the buf_ptr field below -- stupid name-dodging.
-    // TODO: Dedup this with buffer_ptr.
-    buffer& buf_at(buffer_number buf_number) {
-        logic_checkg(buf_number.value < buflist.size());
-        return *buflist[buf_number.value];
-    }
-    const buffer& buf_at(buffer_number buf_number) const {
-        logic_checkg(buf_number.value < buflist.size());
-        return *buflist[buf_number.value];
-    }
-
-    void note_rendered_window_sizes(
-        const std::vector<std::pair<buffer_id, window_size>>& window_sizes);
 
     // Note that the status prompt buf has a separate win_ctx not looked up by this
     // function.  In general, win_ctx should take a window_number and a buffer_number.
     // But right now there's only one window.
-    ui_window_ctx *win_ctx(buffer_number n) {
+#if 0  // TODO: XXX: Remove
+    ui_window_ctx *win_ctx(buffer_number n) {  // TODO: XXX: Remove
         ui_window *win = &the_window;
         buffer *buf = &buf_at(n);
         buffer_id buf_id = buf->id;
@@ -317,13 +304,13 @@ public:
         }
     }
 
-    ui_window_ctx *win_ctx_without_create(buffer_number n) {
+    ui_window_ctx *win_ctx_without_create(buffer_number n) {  // TODO: XXX: Remove
         const ui_window_ctx *ret = win_ctx_or_null(n);
         logic_check(ret != nullptr, "win_ctx_without_create failing");
         return const_cast<ui_window_ctx *>(ret);
     }
 
-    const ui_window_ctx *win_ctx_or_null(buffer_number n) const {
+    const ui_window_ctx *win_ctx_or_null(buffer_number n) const {  // TODO: XXX: Remove
         const ui_window *win = &the_window;
         const buffer *buf = &buf_at(n);
         buffer_id buf_id = buf->id;
@@ -334,10 +321,11 @@ public:
             return nullptr;
         }
     }
+#endif
 
     // TODO: Make callers use the_window.topbuf.
-    buffer& topbuf() { return buf_at(the_window.buf_ptr); }
-    const buffer& topbuf() const { return buf_at(the_window.buf_ptr); }
+    buffer& topbuf() { return *lookup(the_window.window_ctxs.at(the_window.active_tab.value).first); }
+    const buffer& topbuf() const { return *lookup(the_window.window_ctxs.at(the_window.active_tab.value).first); }
 
     // C-x prefixes and the like, but not M-x, which would be something like a prompt.
     // We don't enumerate them in types or anything -- they're handled dynamically.
@@ -359,20 +347,9 @@ public:
     ui_mode ui_config;
 };
 
-// An unstable pointer.
-inline buffer *buffer_ptr(state *state, buffer_number buf_number) {
-    logic_checkg(buf_number.value < state->buflist.size());
-    return state->buflist[buf_number.value].get();
-}
-
-inline const buffer *buffer_ptr(const state *state, buffer_number buf_number) {
-    logic_checkg(buf_number.value < state->buflist.size());
-    return state->buflist[buf_number.value].get();
-}
-
 // TODO: Rename to be buffer_name_linear_time
-std::string buffer_name_str(const state *state, buffer_number buf_number);
-buffer_string buffer_name(const state *state, buffer_number buf_number);
+std::string buffer_name_str(const state *state, buffer_id buf_id);
+buffer_string buffer_name(const state *state, buffer_id buf_id);
 
 
 constexpr uint32_t STATUS_AREA_HEIGHT = 1;

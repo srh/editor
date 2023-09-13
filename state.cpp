@@ -61,13 +61,24 @@ buffer buffer::from_data(buffer_id id, buffer_string&& data) {
     return ret;
 }
 
-std::string buffer_name_str(const state *state, buffer_number buf_number) {
+ui_window_ctx *ui_window::point_at(buffer_id id, state *st) {
+    for (size_t i = 0, e = window_ctxs.size(); i < e; ++i) {
+        if (window_ctxs[i].first == id) {
+            return window_ctxs[i].second.get();
+        }
+    }
+    buffer *buf = st->lookup(id);
+    window_ctxs.emplace_back(id, std::make_unique<ui_window_ctx>(buf->add_mark(0)));
+    return window_ctxs.back().second.get();
+}
+
+std::string buffer_name_str(const state *state, buffer_id id) {
     // TODO: Eventually, make this not be O(n), or even, make this not allocate.
-    const buffer *buf = buffer_ptr(state, buf_number);
+    const buffer *buf = state->lookup(id);
 
     bool seen = false;
-    for (size_t i = 0, e = state->buflist.size(); i < e; ++i) {
-        if (i != buf_number.value && state->buflist[i]->name_str == buf->name_str) {
+    for (auto& pair : state->buf_set) {
+        if (pair.first != id && pair.second->name_str == buf->name_str) {
             seen = true;
             break;
         }
@@ -80,7 +91,7 @@ std::string buffer_name_str(const state *state, buffer_number buf_number) {
     }
 }
 
-buffer_string buffer_name(const state *state, buffer_number buf_number) {
+buffer_string buffer_name(const state *state, buffer_id buf_number) {
     return to_buffer_string(buffer_name_str(state, buf_number));
 }
 
@@ -175,22 +186,21 @@ void no_yank(clip_board *clb) {
     clb->justYanked = std::nullopt;
 }
 
-buffer_number find_or_create_buf(state *state, const std::string& name, bool make_read_only) {
-    buffer_number ret;
+// Note that the buf as created is not a member of _any_ window.
+buffer_id find_or_create_buf(state *state, const std::string& name, bool make_read_only) {
+    buffer_id ret;
     if (find_buffer_by_name(state, name, &ret)) {
         return ret;
     }
 
-    buffer buf(state->gen_buf_id());
-    buf.read_only = make_read_only;
-    buf.name_str = name;
+    ret = state->gen_buf_id();
+    auto buf = std::make_unique<buffer>(ret);
+    buf->read_only = make_read_only;
+    buf->name_str = name;
 
-    // We insert the buf just before the current buf -- thus we increment buf_ptr.
-    ret = state->the_window.buf_ptr;
-    logic_check(ret.value < state->buflist.size(), "the_window.buf_ptr is out of range");
-    state->buflist.insert(state->buflist.begin() + ret.value, std::make_unique<buffer>(std::move(buf)));
-    state->the_window.buf_ptr.value += 1;
-    state->the_window.point_at(state->the_window.buf_ptr, &state->buf_at(state->the_window.buf_ptr));
+    // We just insert the buf, and call apply_number_to_buf.  It's _not_ added as part of
+    // any window.
+    state->buf_set.emplace(ret, std::make_unique<buffer>(std::move(buf)));
     apply_number_to_buf(state, ret);
     return ret;
 }
@@ -229,31 +239,19 @@ void buffer::replace_mark(mark_id id, size_t new_offset) {
     marks[id.index] = new_offset;
 }
 
-// TODO: XXX: This is bogus -- we need to note rendered window sizes per-window.
-void state::note_rendered_window_sizes(
-    const std::vector<std::pair<buffer_id, window_size>>& window_sizes) {
+void ui_window::note_rendered_window_size(
+    buffer_id buf_id, const window_size& window_size) {
 
-    ui_window *win = &the_window;
-    for (const auto& pair : window_sizes) {
-        auto it = win->window_ctxs.find(pair.first);
-        if (it != win->window_ctxs.end()) {
-            it->second->set_last_rendered_window(pair.second);
-        }
-    }
-
-    if (status_prompt.has_value()) {
-        for (const auto& pair : window_sizes) {
-            if (status_prompt->buf.id == pair.first) {
-                status_prompt->win_ctx.set_last_rendered_window(pair.second);
-            }
-        }
-    }
+    const auto *p = &active_buf();
+    logic_check(p->first == buf_id, "note_rendered_window_size buffer_id mismatches the active_tab");
+    ui_window_ctx *win = p->second.get();
+    win->set_last_rendered_window(window_size);
 }
 
 void state::add_message(const std::string& msg) {
     if (!msg.empty()) {
-        buffer_number num = find_or_create_buf(this, "*Messages*", true /* read-only */);
-        buffer *buf = buffer_ptr(this, num);
+        buffer_id buf_id = find_or_create_buf(this, "*Messages*", true /* read-only */);
+        buffer *buf = buf_set.find(buf_id).first->second.get();
         // TODO: This edit should _not_ be tied to any window!!!  In a way that makes sense there are multiple windows.  Or it should be tied to _all_ live windows in some way...?
         ui_window_ctx *ui = win_ctx(num);
 

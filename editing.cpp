@@ -184,7 +184,7 @@ undo_killring_handled buffer_close_action(state *state, buffer *active_buf) {
     return ret;
 }
 
-bool find_buffer_by_name(const state *state, const std::string& text, buffer_number *out) {
+bool find_buffer_by_name(const state *state, const std::string& text, buffer_id *out) {
     for (size_t i = 0, e = state->buflist.size(); i < e; ++i) {
         if (buffer_name_str(state, buffer_number{i}) == text) {
             *out = buffer_number{i};

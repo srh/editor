@@ -37,13 +37,13 @@ undo_killring_handled save_as_file_action(state *state, buffer *active_buf);
 undo_killring_handled exit_cleanly(state *state, buffer *active_buf, bool *exit_loop);  // L312
 undo_killring_handled buffer_switch_action(state *state, buffer *active_buf);
 buffer open_file_into_detached_buffer(state *state, const std::string& dirty_path);
-void apply_number_to_buf(state *state, buffer_number buf_index_num);
+void apply_number_to_buf(state *state, buffer_id buf_id);
 buffer scratch_buffer(buffer_id id);
 undo_killring_handled enter_handle_status_prompt(state *state, bool *exit_loop);
 undo_killring_handled note_coalescent_action(state *state, buffer *buf, delete_result&& d_res);
 
 undo_killring_handled buffer_close_action(state *state, buffer *active_buf);
-bool find_buffer_by_name(const state *state, const std::string& text, buffer_number *out);
+bool find_buffer_by_name(const state *state, const std::string& text, buffer_id *out);
 undo_killring_handled cancel_action(state *state, buffer *buf);
 
 undo_killring_handled delete_backward_word(state *state, ui_window_ctx *ui, buffer *buf);
@@ -52,7 +52,7 @@ undo_killring_handled kill_line(state *state, ui_window_ctx *ui, buffer *buf);
 undo_killring_handled kill_region(state *state, ui_window_ctx *ui, buffer *buf);
 undo_killring_handled copy_region(state *state, buffer *buf);
 
-void rotate_to_buffer(state *state, buffer_number buf_number);
+void rotate_to_buffer(state *state, buffer_id buf_id);
 undo_killring_handled rotate_buf_right(state *state, buffer *active_buf);
 undo_killring_handled rotate_buf_left(state *state, buffer *active_buf);
 undo_killring_handled yank_from_clipboard(state *state, ui_window_ctx *ui, buffer *buf);
