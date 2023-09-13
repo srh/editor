@@ -546,16 +546,15 @@ undo_killring_handled continue_keyprefix(bool *clear_keyprefix) {
 }
 
 // Processes a keypress when we're focused in a buffer.
-// TODO: `win` is the variable name we use for ui_window, not ui_window_ctx.
 undo_killring_handled process_keyprefix_in_buf(
-    state *state, ui_window_ctx *win, buffer *active_buf, bool *exit_loop, bool *clear_keyprefix) {
+    state *state, ui_window_ctx *ui, buffer *active_buf, bool *exit_loop, bool *clear_keyprefix) {
     logic_checkg(state->keyprefix.size() > 0);
 
     keypress kp = state->keyprefix.at(0);
 
     if (kp.value >= 0 && kp.modmask == 0) {
         // TODO: What if kp.value >= 256?
-        return character_keypress(state, win, active_buf, uint8_t(kp.value));
+        return character_keypress(state, ui, active_buf, uint8_t(kp.value));
     }
     using special_key = keypress::special_key;
     if (kp.modmask != 0) {
@@ -565,35 +564,35 @@ undo_killring_handled process_keyprefix_in_buf(
 
         if (kp.modmask == keypress::META) {
             switch (kp.value) {
-            case 'f': return meta_f_keypress(state, win, active_buf);
-            case 'b': return meta_b_keypress(state, win, active_buf);
-            case 'h': return meta_h_keypress(state, win, active_buf);
+            case 'f': return meta_f_keypress(state, ui, active_buf);
+            case 'b': return meta_b_keypress(state, ui, active_buf);
+            case 'h': return meta_h_keypress(state, ui, active_buf);
             case 'q': return meta_q_keypress(state, active_buf);
-            case 'y': return meta_y_keypress(state, win, active_buf);
-            case 'd': return meta_d_keypress(state, win, active_buf);
+            case 'y': return meta_y_keypress(state, ui, active_buf);
+            case 'd': return meta_d_keypress(state, ui, active_buf);
             case 's': return meta_s_keypress(state, active_buf);
             case keypress::special_to_key_type(special_key::Backspace):
-                return meta_backspace_keypress(state, win, active_buf);
+                return meta_backspace_keypress(state, ui, active_buf);
             default:
                 break;
             }
         } else if (kp.modmask == keypress::CTRL) {
             switch (kp.value) {
             case ' ': return ctrl_space_keypress(state, active_buf);
-            case 'a': return ctrl_a_keypress(state, win, active_buf);
-            case 'b': return ctrl_b_keypress(state, win, active_buf);
+            case 'a': return ctrl_a_keypress(state, ui, active_buf);
+            case 'b': return ctrl_b_keypress(state, ui, active_buf);
             case 'c': return ctrl_c_keypress(state, active_buf, exit_loop);
-            case 'd': return ctrl_d_keypress(state, win, active_buf);
-            case 'e': return ctrl_e_keypress(state, win, active_buf);
-            case 'f': return ctrl_f_keypress(state, win, active_buf);
+            case 'd': return ctrl_d_keypress(state, ui, active_buf);
+            case 'e': return ctrl_e_keypress(state, ui, active_buf);
+            case 'f': return ctrl_f_keypress(state, ui, active_buf);
             case 'g': return ctrl_g_keypress(state, active_buf);
-            case 'k': return ctrl_k_keypress(state, win, active_buf);
-            case 'n': return ctrl_n_keypress(state, win, active_buf);
+            case 'k': return ctrl_k_keypress(state, ui, active_buf);
+            case 'n': return ctrl_n_keypress(state, ui, active_buf);
             case 'o': return ctrl_o_keypress(state, active_buf);
-            case 'p': return ctrl_p_keypress(state, win, active_buf);
+            case 'p': return ctrl_p_keypress(state, ui, active_buf);
             case 's': return ctrl_s_keypress(state, active_buf);
-            case 'w': return ctrl_w_keypress(state, win, active_buf);
-            case 'y': return ctrl_y_keypress(state, win, active_buf);
+            case 'w': return ctrl_w_keypress(state, ui, active_buf);
+            case 'y': return ctrl_y_keypress(state, ui, active_buf);
             case 'x': {
                 if (state->keyprefix.size() == 1) {
                     return continue_keyprefix(clear_keyprefix);
@@ -603,9 +602,9 @@ undo_killring_handled process_keyprefix_in_buf(
             case '\\':
                 *exit_loop = true;
                 return undo_killring_handled{};
-            case '_': return ctrl_underscore_keypress(state, win, active_buf);
+            case '_': return ctrl_underscore_keypress(state, ui, active_buf);
             case keypress::special_to_key_type(special_key::Backspace):
-                return ctrl_backspace_keypress(state, win, active_buf);
+                return ctrl_backspace_keypress(state, ui, active_buf);
             default:
                 break;
             }
@@ -613,9 +612,9 @@ undo_killring_handled process_keyprefix_in_buf(
 
     } else if (kp.modmask == 0) {
         switch (static_cast<keypress::special_key>(-kp.value)) {
-        case special_key::Tab: return tab_keypress(state, win, active_buf);
-        case special_key::Enter: return character_keypress(state, win, active_buf, uint8_t('\n'));
-        case special_key::Delete: return delete_keypress(state, win, active_buf);
+        case special_key::Tab: return tab_keypress(state, ui, active_buf);
+        case special_key::Enter: return character_keypress(state, ui, active_buf, uint8_t('\n'));
+        case special_key::Delete: return delete_keypress(state, ui, active_buf);
         case special_key::Insert: return insert_keypress(state, active_buf);
         case special_key::F1: return f1_keypress(state, active_buf);
         case special_key::F2: return f2_keypress(state, active_buf);
@@ -629,13 +628,13 @@ undo_killring_handled process_keyprefix_in_buf(
         case special_key::F10: return f10_keypress(state, active_buf);
         case special_key::F11: return f11_keypress(state, active_buf);
         case special_key::F12: return f12_keypress(state, active_buf);
-        case special_key::Backspace: return backspace_keypress(state, win, active_buf);
-        case special_key::Right: return right_arrow_keypress(state, win, active_buf);
-        case special_key::Left: return left_arrow_keypress(state, win, active_buf);
-        case special_key::Up: return up_arrow_keypress(state, win, active_buf);
-        case special_key::Down: return down_arrow_keypress(state, win, active_buf);
-        case special_key::Home: return home_keypress(state, win, active_buf);
-        case special_key::End: return end_keypress(state, win, active_buf);
+        case special_key::Backspace: return backspace_keypress(state, ui, active_buf);
+        case special_key::Right: return right_arrow_keypress(state, ui, active_buf);
+        case special_key::Left: return left_arrow_keypress(state, ui, active_buf);
+        case special_key::Up: return up_arrow_keypress(state, ui, active_buf);
+        case special_key::Down: return down_arrow_keypress(state, ui, active_buf);
+        case special_key::Home: return home_keypress(state, ui, active_buf);
+        case special_key::End: return end_keypress(state, ui, active_buf);
         default:
             break;
         }
