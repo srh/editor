@@ -168,13 +168,15 @@ void render_normal_status_area(terminal_frame *frame, const state& state, termin
     render_string(frame, status_area_topleft, status_area_width, str, terminal_style::bold());
 }
 
-void render_status_area_or_prompt(terminal_frame *frame, const state& state,
+// Returns true if we should render the cursor for the active window.
+bool render_status_area_or_prompt(terminal_frame *frame, const state& state,
                                   terminal_coord status_area_topleft, uint32_t status_area_width) {
+    bool ret = !state.status_prompt.has_value();
     if (!state.live_error_message.empty()) {
         render_string(frame, {.row = status_area_topleft.row, .col = 0},
                       status_area_width,
                       to_buffer_string(state.live_error_message), terminal_style::zero());
-        return;
+        return ret;
     }
 
     if (state.status_prompt.has_value()) {
@@ -205,6 +207,7 @@ void render_status_area_or_prompt(terminal_frame *frame, const state& state,
     } else {
         render_normal_status_area(frame, state, status_area_topleft, status_area_width);
     }
+    return ret;
 }
 
 template <class T>
@@ -316,23 +319,22 @@ redraw_state(int term, const terminal_size& window, const state& state) {
                     terminal_coord status_area_topleft =
                         {.row = rendering_row + winsize.rows, .col = rendering_column};
 
+                    bool render_buf_cursor = true;
                     if (state.layout.active_window.value == winnum.value) {
-                        // TODO: This is super-hacky -- this gets overwritten if the status area has a
-                        // prompt.
-                        frame.cursor = cursor_coord;
-                        render_status_area_or_prompt(
+                        render_buf_cursor = render_status_area_or_prompt(
                             &frame, state,
                             status_area_topleft,
                             winsize.cols);
                     } else {
-                        if (cursor_coord.has_value()) {
-                            frame.style_data[cursor_coord->row * frame.window.cols + cursor_coord->col].mask
-                                |= terminal_style::white_on_red().mask;
-                        }
                         render_normal_status_area(
                             &frame, state,
                             status_area_topleft,
                             winsize.cols);
+                    }
+
+                    if (render_buf_cursor && cursor_coord.has_value()) {
+                        frame.style_data[cursor_coord->row * frame.window.cols + cursor_coord->col].mask
+                            |= terminal_style::white_on_red().mask;
                     }
                 }
 

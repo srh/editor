@@ -61,6 +61,12 @@ buffer buffer::from_data(buffer_id id, buffer_string&& data) {
     return ret;
 }
 
+// TODO: With C++ exceptions lurking, this actually does need to be in some destructor.
+void detach_ui_window_ctx(buffer *buf, ui_window_ctx *ui) {
+    buf->remove_mark(ui->first_visible_offset);
+    ui->first_visible_offset = { SIZE_MAX };
+}
+
 ui_window_ctx *ui_window::point_at(buffer_id id, state *st) {
     for (size_t i = 0, e = window_ctxs.size(); i < e; ++i) {
         if (window_ctxs[i].first == id) {
@@ -79,10 +85,15 @@ ui_window_ctx *ui_window::point_at(buffer_id id, state *st) {
     return window_ctxs[active_tab.value].second.get();
 }
 
-bool ui_window::detach_if_attached(buffer_id buf_id) {
-    for (size_t i = 0, e = window_ctxs.size(); i < e; ++i) {
+
+
+bool ui_window::detach_if_attached(buffer *buf) {
+    buffer_id buf_id = buf->id;
+    // We enumerate right to left, so that detach_all_bufs_from_ui_window is O(n).
+    // TODO: We could instead factor out the loop body into a helper function
+    for (size_t i = window_ctxs.size(); i-- > 0; ) {
         if (window_ctxs[i].first == buf_id) {
-            // TODO: XXX: We need to make the ui_window_ctx destructor remove its first_visible_offset mark.
+            detach_ui_window_ctx(buf, window_ctxs[i].second.get());
             window_ctxs.erase(window_ctxs.begin() + i);
 
             if (window_ctxs.size() == 0) {
@@ -100,6 +111,13 @@ bool ui_window::detach_if_attached(buffer_id buf_id) {
     return false;
 }
 
+void detach_all_bufs_from_ui_window(state *state, ui_window *win) {
+    while (!win->window_ctxs.empty()) {
+        buffer *buf = state->lookup(win->window_ctxs.back().first);
+        bool discard = win->detach_if_attached(buf);
+        (void)discard;  // We already check win->window_ctxs.empty().
+    }
+}
 
 std::string buffer_name_str(const state *state, buffer_id id) {
     // TODO: Eventually, make this not be O(n), or even, make this not allocate.
@@ -314,5 +332,14 @@ void state::note_error_message(std::string&& msg) {
     live_error_message = std::move(msg);
 }
 
+state::~state() {
+    if (popup_display.has_value()) {
+        detach_ui_window_ctx(&popup_display->buf, &popup_display->win_ctx);
+    }
+    close_status_prompt(this);  // TODO: Make a prompt destructor do this?
+    for (ui_window& win : layout.windows) {
+        detach_all_bufs_from_ui_window(this, &win);
+    }
+}
 
 }  // namespace qwi

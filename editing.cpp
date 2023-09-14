@@ -157,7 +157,7 @@ prompt buffer_close_prompt(buffer&& initialBuf) {
                 std::vector<bool> needs_new_target;  // Absolutely gross parallel vector.
                 bool any_need_new_target = false;
                 for (ui_window *w = range.first; w < range.second; ++w) {
-                    bool win_needs_new_target = w->detach_if_attached(closed_id);
+                    bool win_needs_new_target = w->detach_if_attached(state->lookup(closed_id));
                     needs_new_target.push_back(win_needs_new_target);
                     any_need_new_target |= win_needs_new_target;
                 }
@@ -573,8 +573,9 @@ undo_killring_handled enter_handle_status_prompt(state *state, bool *exit_loop) 
     case prompt::type::proc: {
         // TODO: Maybe every branch of this function should start with these lines, and
         // have to re-initiate the prompt later.
+        do_close_status_prompt(&*state->status_prompt);
         prompt status_prompt = std::move(*state->status_prompt);
-        close_status_prompt(state);  // sets state->status_prompt to nullopt.
+        state->status_prompt = std::nullopt;
 
         return (status_prompt.procedure)(state, std::move(status_prompt.buf), exit_loop);
     } break;

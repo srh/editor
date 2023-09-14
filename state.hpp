@@ -55,8 +55,19 @@ struct mark_id {
     size_t index = SIZE_MAX;
 };
 
+// We remove detach checks because we haven't defined move constructors that leave the
+// object in a "valid" state by the reasoning of the detach checks.
+#define RUN_DETACH_CHECKS 0
+
 struct ui_window_ctx {
     explicit ui_window_ctx(mark_id fvo) : first_visible_offset(fvo) { }
+
+#if RUN_DETACH_CHECKS
+    ~ui_window_ctx() {
+        logic_check(first_visible_offset.index == SIZE_MAX,
+                    "ui_window_ctx was not detached from buffer");
+    }
+#endif
 
     // Column that is maintained as we press up and down arrow keys past shorter lines.
     // For now, this assumes a monospace font (maybe with 2x-width glyphs) on all GUIs.
@@ -85,6 +96,8 @@ struct ui_window_ctx {
         }
     }
 };
+
+void detach_ui_window_ctx(buffer *buf, ui_window_ctx *ui);
 
 void ensure_virtual_column_initialized(ui_window_ctx *ui, const buffer *buf);
 
@@ -242,11 +255,18 @@ struct ui_window {
     ui_window(ui_window&&) = default;
     ui_window& operator=(ui_window&&) = default;
 
+    NO_COPY(ui_window);
+
+#if RUN_DETACH_CHECKS
+    ~ui_window() {
+        logic_check(window_ctxs.empty(), "window_ctxs were not detached");
+    }
+#endif
     // TODO: Make use of window_id or remove it.
     window_id id;
 
-    // TODO: Is there any reason for active_tab not to be zero when window_ctxs.empty()?
-    // 0 <= active_tab < window_ctxs.size() and 1 <= window_ctxs.size().
+    // 0 <= active_tab < window_ctxs.size() and 1 <= window_ctxs.size(), except after
+    // initialization or when we prepare for destruction.
     tab_number active_tab = {SIZE_MAX};
 
     // We use std::unique_ptr for the same reason as state::buflist.
@@ -269,8 +289,10 @@ struct ui_window {
 
     // Returns true if the window no longer has any buffers!  It immediately needs at
     // least one buffer.
-    [[nodiscard]] bool detach_if_attached(buffer_id buf_id);
+    [[nodiscard]] bool detach_if_attached(buffer *buf);
 };
+
+void detach_all_bufs_from_ui_window(state *state, ui_window *win);
 
 // The UI-presented "window number" is 1 greater than this value.
 // Generally, these have to be maintained if the window layout changes.
@@ -304,6 +326,9 @@ struct window_layout {
         // TODO: Why can't we construct this?
         windows.push_back(ui_window(gen_next_window_id()));
     }
+    NO_COPY(window_layout);
+    window_layout(window_layout&&) = default;
+    window_layout& operator=(window_layout&&) = default;
 
 private:
     uint64_t next_window_id_value = 0;
@@ -325,6 +350,11 @@ public:
 
 struct state {
     state() = default;
+    ~state();
+
+    NO_COPY(state);
+    state(state&&) = default;
+    state& operator=(state&&) = default;
 
     // Just a set of buffers.  Buffer order is defined by tab order in ui_window.
     // TODO: Should buf_set include the prompt buffer (and the popup buffer?)
@@ -406,8 +436,15 @@ constexpr uint32_t STATUS_AREA_HEIGHT = 1;
 void resize_window(state *st, const terminal_size& new_window);
 window_size main_buf_window_from_terminal_window(const terminal_size& term_window);
 
+inline void do_close_status_prompt(prompt *prmpt) {
+    detach_ui_window_ctx(&prmpt->buf, &prmpt->win_ctx);
+}
+
 inline void close_status_prompt(state *st) {
-    st->status_prompt = std::nullopt;
+    if (st->status_prompt.has_value()) {
+        do_close_status_prompt(&*st->status_prompt);
+        st->status_prompt = std::nullopt;
+    }
 }
 
 size_t distance_to_eol(const buffer& buf, size_t pos);

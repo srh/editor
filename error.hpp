@@ -3,6 +3,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define NO_COPY(typ) typ(const typ&) = delete; void operator=(const typ&) = delete
 
@@ -34,20 +35,20 @@ struct runtime_check_failure { };
 
 #define logic_fail(fmt, ...) do { \
         fprintf(stderr, "Logic error! " fmt "\n", ##__VA_ARGS__); \
-        throw runtime_check_failure{}; \
+        abort(); \
     } while (false)
 
 #define logic_check(pred, fmt, ...) do { \
         if (!(pred)) { \
             fprintf(stderr, "Logic error! (%s) " fmt "\n", #pred, ##__VA_ARGS__); \
-            throw runtime_check_failure{}; \
+            abort(); \
         } \
     } while (false)
 
 #define logic_checkg(pred) do { \
         if (!(pred)) { \
             fprintf(stderr, "Logic error! (%s): \n", #pred); \
-            throw runtime_check_failure{}; \
+            abort(); \
         } \
     } while (false)
 
