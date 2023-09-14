@@ -235,8 +235,10 @@ std::vector<uint32_t> true_split_sizes(uint32_t rendering_span, uint32_t divider
     return ret;
 }
 
+constexpr terminal_char column_divider_char = { '|' };
+constexpr uint32_t column_divider_size = 1;
+
 void render_column_divider(terminal_frame *frame, uint32_t rendering_column) {
-    const terminal_char column_divider_char = { '|' };  // TODO: XXX: column_divider_size defined as 1 elsewhere.
     logic_checkg(rendering_column < frame->window.cols);
     for (uint32_t i = 0; i < frame->data.size(); i += frame->window.cols) {
         frame->data[i] = column_divider_char;
@@ -257,15 +259,18 @@ redraw_state(int term, const terminal_size& window, const state& state) {
         render_into_frame(&frame, window_topleft, winsize, state.popup_display->win_ctx,
                           state.popup_display->buf, &coords);
     } else {
-        const uint32_t column_divider_size = 1;
         std::vector<uint32_t> columnar_splits
             = true_split_sizes(window.cols, column_divider_size, state.layout.splits);
 
         uint32_t rendering_column = 0;
         for (size_t column_pane = 0; column_pane < columnar_splits.size(); ++column_pane) {
+            if (rendering_column == window.cols) {
+                logic_check(columnar_splits[column_pane] == 0,
+                            "rendering_column overflowed with non-zero columnar_splits value");
+                continue;
+            }
             if (column_pane != 0) {
                 render_column_divider(&frame, rendering_column);
-                // TODO: XXX: What if the number of column panes is larger than the number of terminal columns + 1?
                 ++rendering_column;
             }
 
