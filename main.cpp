@@ -199,14 +199,9 @@ void render_status_area_or_prompt(terminal_frame *frame, const state& state,
         frame->rendered_window_sizes.emplace_back(&state.status_prompt->win_ctx, winsize);
         render_into_frame(frame, prompt_topleft, winsize, state.status_prompt->win_ctx, state.status_prompt->buf, &coords);
 
-        // TODO: This is super-hacky -- we overwrite the main buffer's cursor.
-        auto old_cursor = frame->cursor;
+        logic_check(!frame->cursor.has_value(),
+                    "attempted rendering status prompt cursor atop another rendered cursor");
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
-        if (old_cursor.has_value()) {
-            // TODO: XXX: Insanely hacky.  Just a quick verification of terminal styling.
-            frame->style_data[old_cursor->row * frame->window.cols + old_cursor->col].mask
-                |= terminal_style::white_on_red().mask;
-        }
     } else {
         render_normal_status_area(frame, state, status_area_topleft, status_area_width);
     }
