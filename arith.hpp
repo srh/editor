@@ -6,6 +6,8 @@
 
 #include "error.hpp"
 
+// TODO: Why are these assertions logic_fail and not runtime_fail?
+
 inline bool try_u32_mul(uint32_t x, uint32_t y, uint32_t *out) {
     uint64_t x64 = x;
     uint64_t y64 = y;
@@ -24,6 +26,16 @@ inline uint32_t u32_mul(uint32_t x, uint32_t y) {
     }
     return ret;
 }
+
+inline uint32_t u32_mul_div(uint32_t x, uint32_t y, uint32_t z) {
+    uint64_t tmp = x * y;
+    uint64_t result = tmp / z;
+    if (result > UINT32_MAX) {
+        logic_fail("u32_mul_div overflow %" PRIu32 " * %" PRIu32 " / %" PRIu32, x, y, z);
+    }
+    return static_cast<uint32_t>(result);
+}
+
 inline bool try_u32_add(uint32_t x, uint32_t y, uint32_t *out) {
     if (y > UINT32_MAX - x) {
         return false;

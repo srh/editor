@@ -283,6 +283,17 @@ struct split_layout {
     // Sum of panes.first must be greater than zero.  Each pane's size is that fraction
     // over the sum.
     std::vector<std::pair<uint32_t, T>> panes;
+    uint32_t add_up_denominator() const {
+        uint32_t ret = 0;
+        for (auto& elem : panes) {
+            ret += elem.first;
+        }
+        return ret;
+    }
+    size_t dividers() const {
+        logic_checkg(panes.size() > 0);
+        return panes.size() - 1;
+    }
 };
 
 struct window_layout {

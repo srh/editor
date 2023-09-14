@@ -137,17 +137,18 @@ std::optional<terminal_coord> add(const terminal_coord& window_topleft, const st
     }
 }
 
-void render_string(terminal_frame *frame, const terminal_coord& coord, const buffer_string& str, terminal_style style_mask = terminal_style{}) {
-    uint32_t col = coord.col;  // <= frame->window.cols
-    runtime_check(col <= frame->window.cols, "render_string: coord out of range");
+void render_string(terminal_frame *frame, const terminal_coord& coord, uint32_t rendering_width, const buffer_string& str, terminal_style style_mask = terminal_style{}) {
+    uint32_t col = coord.col;
+    const uint32_t end_col = u32_add(col, rendering_width);
+    logic_check(end_col <= frame->window.cols, "render_string: coord out of range");
     size_t line_col = 0;
-    for (size_t i = 0; i < str.size() && col < frame->window.cols; ++i) {
+    for (size_t i = 0; i < str.size() && col < end_col; ++i) {
         char_rendering rend = compute_char_rendering(str[i], &line_col);
         if (rend.count == SIZE_MAX) {
             // Newline...(?)
             return;
         }
-        size_t to_copy = std::min<size_t>(rend.count, frame->window.cols - col);
+        size_t to_copy = std::min<size_t>(rend.count, end_col - col);
         size_t offset = coord.row * frame->window.cols + col;
         std::copy(rend.buf, rend.buf + to_copy, &frame->data[offset]);
         std::fill(&frame->style_data[offset], &frame->style_data[offset + to_copy], style_mask);
@@ -155,11 +156,12 @@ void render_string(terminal_frame *frame, const terminal_coord& coord, const buf
     }
 }
 
-void render_status_area(terminal_frame *frame, const state& state) {
-    uint32_t last_row = u32_sub(frame->window.rows, 1);
+void render_status_area(terminal_frame *frame, const state& state, terminal_coord status_area_topleft, uint32_t status_area_width) {
+    uint32_t last_row = status_area_topleft.row;
 
     if (!state.live_error_message.empty()) {
         render_string(frame, {.row = last_row, .col = 0},
+                      status_area_width,
                       to_buffer_string(state.live_error_message), terminal_style::zero());
         return;
     }
@@ -173,12 +175,15 @@ void render_status_area(terminal_frame *frame, const state& state) {
             break;
         }
 
-        render_string(frame, {.row = last_row, .col = 0}, to_buffer_string(message), terminal_style::bold());
+        render_string(frame, status_area_topleft, status_area_width, to_buffer_string(message), terminal_style::bold());
 
         std::vector<render_coord> coords = { {state.status_prompt->buf.cursor(), std::nullopt} };
-        terminal_coord prompt_topleft = {.row = last_row, .col = uint32_t(message.size())};
+        terminal_coord prompt_topleft
+            = {.row = last_row,
+            .col = u32_add(status_area_topleft.col, std::min<uint32_t>(status_area_width, uint32_t(message.size())))};
 
-        window_size winsize = {.rows = 1, .cols = frame->window.cols - prompt_topleft.col};
+        window_size winsize = {.rows = 1, .cols = status_area_topleft.col + status_area_width - prompt_topleft.col};
+        // TODO: Should render_into_frame be appending to rendered_window_sizes instead of ALL its callers?
         frame->rendered_window_sizes.emplace_back(&state.status_prompt->win_ctx, winsize);
         render_into_frame(frame, prompt_topleft, winsize, state.status_prompt->win_ctx, state.status_prompt->buf, &coords);
 
@@ -195,7 +200,47 @@ void render_status_area(terminal_frame *frame, const state& state) {
         str += to_buffer_string(std::to_string(col));  // TODO: Gross
         str += buffer_char{')'};
 
-        render_string(frame, {.row = last_row, .col = 0}, str, terminal_style::bold());
+        render_string(frame, status_area_topleft, status_area_width, str, terminal_style::bold());
+    }
+}
+
+template <class T>
+std::vector<uint32_t> true_split_sizes(uint32_t rendering_span, uint32_t divider_size,
+                                       const split_layout<T>& splits) {
+    uint32_t splits_denominator = splits.add_up_denominator();
+    logic_checkg(splits_denominator != 0);
+    uint32_t rendering_cells = rendering_span - std::min<uint32_t>(rendering_span, u32_mul(divider_size, splits.dividers()));
+
+    const size_t n = splits.panes.size();
+    std::vector<uint32_t> ret;
+    ret.resize(n);
+    uint32_t sum = 0;
+    for (size_t i = 0; i < n; ++i) {
+        // We want, approximately, rendering_cells * (pane.first / splits_denominator),
+        // with the values rounded to add up to rendering_cells.
+        uint32_t rendered_pane_size = u32_mul_div(rendering_cells, splits.panes[i].first, splits_denominator);
+        ret[i] = rendered_pane_size;
+        sum += rendered_pane_size;
+    }
+
+    // TODO: Instead of biasing upward the earlier panes, we should be more like a line rendering algo.
+    size_t i = 0;
+    while (sum < rendering_cells) {
+        ++ret[i];
+        ++sum;
+        ++i;
+        if (i == n) { i = 0; }
+    }
+
+    return ret;
+}
+
+void render_column_divider(terminal_frame *frame, uint32_t rendering_column) {
+    const terminal_char column_divider_char = { '|' };  // TODO: XXX: column_divider_size defined as 1 elsewhere.
+    logic_checkg(rendering_column < frame->window.cols);
+    for (uint32_t i = 0; i < frame->data.size(); i += frame->window.cols) {
+        frame->data[i] = column_divider_char;
+        // TODO: Divider style gray?
     }
 }
 
@@ -212,26 +257,63 @@ redraw_state(int term, const terminal_size& window, const state& state) {
         render_into_frame(&frame, window_topleft, winsize, state.popup_display->win_ctx,
                           state.popup_display->buf, &coords);
     } else {
-        const window_size winsize = main_buf_window_from_terminal_window(window);
-        if (!too_small_to_render(winsize)) {
-            const auto &active_tab = state.active_window()->active_buf();
-            const ui_window_ctx *topbuf_ctx = active_tab.second.get();
-            buffer_id topbuf_id = active_tab.first;
+        const uint32_t column_divider_size = 1;
+        std::vector<uint32_t> columnar_splits
+            = true_split_sizes(window.cols, column_divider_size, state.layout.splits);
 
-            frame.rendered_window_sizes.emplace_back(topbuf_ctx, winsize);
-            const buffer *topbuf = state.lookup(topbuf_id);
+        uint32_t rendering_column = 0;
+        for (size_t column_pane = 0; column_pane < columnar_splits.size(); ++column_pane) {
+            if (column_pane != 0) {
+                render_column_divider(&frame, rendering_column);
+                // TODO: XXX: What if the number of column panes is larger than the number of terminal columns + 1?
+                ++rendering_column;
+            }
 
-            std::vector<render_coord> coords = { {topbuf->cursor(), std::nullopt} };
-            terminal_coord window_topleft = {0, 0};
-            render_into_frame(&frame, window_topleft, winsize, *topbuf_ctx, *topbuf, &coords);
+            const split_layout<window_number>& pane_splits = state.layout.splits.panes.at(column_pane).second;
 
-            // TODO: This is super-hacky -- this gets overwritten if the status area has a
-            // prompt.  With multiple buffers, we need some concept of an active buffer, with
-            // an active cursor.
-            // TODO: Also, we don't render our inactive cursor, and we should.
-            frame.cursor = add(window_topleft, coords[0].rendered_pos);
+            const uint32_t row_divider_size = 0;
+            std::vector<uint32_t> row_splits
+                = true_split_sizes(window.rows, row_divider_size, pane_splits);
 
-            render_status_area(&frame, state);
+            uint32_t rendering_row = 0;
+            for (size_t row_pane = 0; row_pane < row_splits.size(); ++row_pane) {
+                if (row_splits[row_pane] == 0) {
+                    // Avoid row_splits[row_pane] - 1, special case for status bar rendering, etc.
+                    continue;
+                }
+                const window_size winsize = {
+                    .rows = row_splits[row_pane] - 1,
+                    .cols = columnar_splits[column_pane],
+                };
+                window_number winnum = pane_splits.panes.at(row_pane).second;
+                logic_check(winnum.value < state.layout.windows.size(),
+                            "row pane window number out of range");
+                const ui_window *win = &state.layout.windows[winnum.value];
+
+                const auto& active_tab = win->active_buf();
+                const ui_window_ctx *buf_ctx = active_tab.second.get();
+                buffer_id buf_id = active_tab.first;
+
+                frame.rendered_window_sizes.emplace_back(buf_ctx, winsize);
+
+                const buffer *buf = state.lookup(buf_id);
+
+                std::vector<render_coord> coords = { {buf->cursor(), std::nullopt} };
+                terminal_coord window_topleft = {.row = rendering_row, .col = rendering_column};
+                render_into_frame(&frame, window_topleft, winsize, *buf_ctx, *buf, &coords);
+
+                // TODO: XXX: Render inactive cursors (with a red value, etc).
+                if (state.layout.active_window.value == winnum.value) {
+                    // TODO: This is super-hacky -- this gets overwritten if the status area has a
+                    // prompt.
+                    frame.cursor = add(window_topleft, coords[0].rendered_pos);
+                }
+
+                render_status_area(&frame, state, {.row = rendering_row + winsize.rows,
+                                                   .col = rendering_column}, winsize.cols);
+                rendering_row += row_splits[row_pane];
+            }
+            rendering_column += columnar_splits[column_pane];
         }
     }
 
