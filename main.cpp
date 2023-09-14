@@ -314,6 +314,7 @@ redraw_state(int term, const terminal_size& window, const state& state) {
                     frame.cursor = add(window_topleft, coords[0].rendered_pos);
                 }
 
+                // TODO: XXX: We render the status prompt for _every_ buffer instead of just the active one...
                 render_status_area(&frame, state, {.row = rendering_row + winsize.rows,
                                                    .col = rendering_column}, winsize.cols);
                 rendering_row += row_splits[row_pane];
