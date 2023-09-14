@@ -154,11 +154,24 @@ void render_string(terminal_frame *frame, const terminal_coord& coord, uint32_t 
     }
 }
 
-void render_status_area(terminal_frame *frame, const state& state, terminal_coord status_area_topleft, uint32_t status_area_width) {
-    uint32_t last_row = status_area_topleft.row;
+void render_normal_status_area(terminal_frame *frame, const state& state, terminal_coord status_area_topleft, uint32_t status_area_width) {
+    buffer_string str = buffer_name(&state, state.topbuf_id_());
+    // TODO: Probably, I want the line number info not to be bold.
+    str += to_buffer_string(state.topbuf_().modified_flag() ? " ** (" : "    (");
+    size_t line, col;
+    state.topbuf_().line_info(&line, &col);
+    str += to_buffer_string(std::to_string(line));  // TODO: Gross
+    str += buffer_char{','};
+    str += to_buffer_string(std::to_string(col));  // TODO: Gross
+    str += buffer_char{')'};
 
+    render_string(frame, status_area_topleft, status_area_width, str, terminal_style::bold());
+}
+
+void render_status_area_or_prompt(terminal_frame *frame, const state& state,
+                                  terminal_coord status_area_topleft, uint32_t status_area_width) {
     if (!state.live_error_message.empty()) {
-        render_string(frame, {.row = last_row, .col = 0},
+        render_string(frame, {.row = status_area_topleft.row, .col = 0},
                       status_area_width,
                       to_buffer_string(state.live_error_message), terminal_style::zero());
         return;
@@ -176,9 +189,10 @@ void render_status_area(terminal_frame *frame, const state& state, terminal_coor
         render_string(frame, status_area_topleft, status_area_width, to_buffer_string(message), terminal_style::bold());
 
         std::vector<render_coord> coords = { {state.status_prompt->buf.cursor(), std::nullopt} };
-        terminal_coord prompt_topleft
-            = {.row = last_row,
-            .col = u32_add(status_area_topleft.col, std::min<uint32_t>(status_area_width, uint32_t(message.size())))};
+        terminal_coord prompt_topleft = {
+            .row = status_area_topleft.row,
+            .col = u32_add(status_area_topleft.col, std::min<uint32_t>(status_area_width, uint32_t(message.size())))
+        };
 
         window_size winsize = {.rows = 1, .cols = status_area_topleft.col + status_area_width - prompt_topleft.col};
         // TODO: Should render_into_frame be appending to rendered_window_sizes instead of ALL its callers?
@@ -194,17 +208,7 @@ void render_status_area(terminal_frame *frame, const state& state, terminal_coor
                 |= terminal_style::white_on_red().mask;
         }
     } else {
-        buffer_string str = buffer_name(&state, state.topbuf_id_());
-        // TODO: Probably, I want the line number info not to be bold.
-        str += to_buffer_string(state.topbuf_().modified_flag() ? " ** (" : "    (");
-        size_t line, col;
-        state.topbuf_().line_info(&line, &col);
-        str += to_buffer_string(std::to_string(line));  // TODO: Gross
-        str += buffer_char{','};
-        str += to_buffer_string(std::to_string(col));  // TODO: Gross
-        str += buffer_char{')'};
-
-        render_string(frame, status_area_topleft, status_area_width, str, terminal_style::bold());
+        render_normal_status_area(frame, state, status_area_topleft, status_area_width);
     }
 }
 
@@ -311,25 +315,32 @@ redraw_state(int term, const terminal_size& window, const state& state) {
                 terminal_coord window_topleft = {.row = rendering_row, .col = rendering_column};
                 render_into_frame(&frame, window_topleft, winsize, *buf_ctx, *buf, &coords);
 
-                // TODO: XXX: This cursor logic mishandles the status_prompt case.
                 {
                     std::optional<terminal_coord> cursor_coord
                         = add(window_topleft, coords[0].rendered_pos);
+                    terminal_coord status_area_topleft =
+                        {.row = rendering_row + winsize.rows, .col = rendering_column};
+
                     if (state.layout.active_window.value == winnum.value) {
                         // TODO: This is super-hacky -- this gets overwritten if the status area has a
                         // prompt.
                         frame.cursor = cursor_coord;
+                        render_status_area_or_prompt(
+                            &frame, state,
+                            status_area_topleft,
+                            winsize.cols);
                     } else {
                         if (cursor_coord.has_value()) {
                             frame.style_data[cursor_coord->row * frame.window.cols + cursor_coord->col].mask
                                 |= terminal_style::white_on_red().mask;
                         }
+                        render_normal_status_area(
+                            &frame, state,
+                            status_area_topleft,
+                            winsize.cols);
                     }
                 }
 
-                // TODO: XXX: We render the status prompt for _every_ buffer instead of just the active one...
-                render_status_area(&frame, state, {.row = rendering_row + winsize.rows,
-                                                   .col = rendering_column}, winsize.cols);
                 rendering_row += row_splits[row_pane];
             }
             rendering_column += columnar_splits[column_pane];
