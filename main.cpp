@@ -34,17 +34,15 @@ void append_mask_difference(std::string *buf, uint8_t old_mask, uint8_t new_mask
     static_assert(std::is_same<decltype(old_mask), decltype(terminal_style::mask)>::value);
 
     // Right now this code is non-general -- it assumes there is _only_ a bold bit.
-    switch (int(new_mask & terminal_style::BOLD_BIT) - int(old_mask & terminal_style::BOLD_BIT)) {
-    case 0: break;
-    case terminal_style::BOLD_BIT: {
-        *buf += TESC(1m);
-
-    } break;
-    case -terminal_style::BOLD_BIT: {
-        *buf += TESC(0m);
-    } break;
+    *buf += TESC();
+    *buf += '0';
+    if (new_mask & terminal_style::BOLD_BIT) {
+        *buf += ";1";
     }
-
+    if (new_mask & terminal_style::WHITE_ON_RED_BIT) {
+        *buf += ";37;41";
+    }
+    *buf += 'm';
 }
 
 // Notably, this function does not write any ansi color or style escape sequences if the
@@ -188,7 +186,13 @@ void render_status_area(terminal_frame *frame, const state& state, terminal_coor
         render_into_frame(frame, prompt_topleft, winsize, state.status_prompt->win_ctx, state.status_prompt->buf, &coords);
 
         // TODO: This is super-hacky -- we overwrite the main buffer's cursor.
+        auto old_cursor = frame->cursor;
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
+        if (old_cursor.has_value()) {
+            // TODO: XXX: Insanely hacky.  Just a quick verification of terminal styling.
+            frame->style_data[old_cursor->row * frame->window.cols + old_cursor->col].mask
+                |= terminal_style::white_on_red().mask;
+        }
     } else {
         buffer_string str = buffer_name(&state, state.topbuf_id_());
         // TODO: Probably, I want the line number info not to be bold.
@@ -307,11 +311,20 @@ redraw_state(int term, const terminal_size& window, const state& state) {
                 terminal_coord window_topleft = {.row = rendering_row, .col = rendering_column};
                 render_into_frame(&frame, window_topleft, winsize, *buf_ctx, *buf, &coords);
 
-                // TODO: XXX: Render inactive cursors (with a red value, etc).
-                if (state.layout.active_window.value == winnum.value) {
-                    // TODO: This is super-hacky -- this gets overwritten if the status area has a
-                    // prompt.
-                    frame.cursor = add(window_topleft, coords[0].rendered_pos);
+                // TODO: XXX: This cursor logic mishandles the status_prompt case.
+                {
+                    std::optional<terminal_coord> cursor_coord
+                        = add(window_topleft, coords[0].rendered_pos);
+                    if (state.layout.active_window.value == winnum.value) {
+                        // TODO: This is super-hacky -- this gets overwritten if the status area has a
+                        // prompt.
+                        frame.cursor = cursor_coord;
+                    } else {
+                        if (cursor_coord.has_value()) {
+                            frame.style_data[cursor_coord->row * frame.window.cols + cursor_coord->col].mask
+                                |= terminal_style::white_on_red().mask;
+                        }
+                    }
                 }
 
                 // TODO: XXX: We render the status prompt for _every_ buffer instead of just the active one...

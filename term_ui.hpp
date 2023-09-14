@@ -30,9 +30,10 @@ inline const char *as_chars(const terminal_char *p) {
 struct terminal_style {
     // Zero means normal.
     static constexpr uint8_t BOLD_BIT = 1 << 0;
-    // static constexpr WHITE_ON_RED_BIT = 1 << 1;
+    static constexpr uint8_t WHITE_ON_RED_BIT = 1 << 1;
     static terminal_style zero() { return terminal_style{0}; }
     static terminal_style bold() { return terminal_style{BOLD_BIT}; }
+    static terminal_style white_on_red() { return terminal_style{WHITE_ON_RED_BIT}; }
 
     uint8_t mask = 0;
 };
