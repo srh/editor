@@ -58,6 +58,11 @@ undo_killring_handled rotate_buf_left(state *state, buffer *active_buf);
 undo_killring_handled yank_from_clipboard(state *state, ui_window_ctx *ui, buffer *buf);
 undo_killring_handled alt_yank_from_clipboard(state *state, ui_window_ctx *ui, buffer *buf);
 
+undo_killring_handled split_vertically(state *state, buffer *active_buf);
+undo_killring_handled split_horizontally(state *state, buffer *active_buf);
+enum class ortho_direction { Left, Right, Up, Down };
+undo_killring_handled grow_window_size(state *state, buffer *active_buf, ortho_direction direction);
+
 undo_killring_handled buffer_switch_action(state *state, buffer *active_buf);
 undo_killring_handled help_menu(state *state);
 

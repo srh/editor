@@ -206,6 +206,11 @@ public:
 // Generated and returned to indicate that the code exhaustively handles undo and killring behavior.
 struct [[nodiscard]] undo_killring_handled { };
 
+// TODO: All keypresses should be implemented.
+inline undo_killring_handled unimplemented_keypress() { return undo_killring_handled{}; }
+
+inline undo_killring_handled nop_keypress() { return undo_killring_handled{}; }
+
 struct prompt {
     enum class type { proc, };
     type typ;

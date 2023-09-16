@@ -669,6 +669,38 @@ undo_killring_handled alt_yank_from_clipboard(state *state, ui_window_ctx *ui, b
     }
 }
 
+undo_killring_handled split_vertically(state *state, buffer *active_buf) {
+    undo_killring_handled ret = note_navigation_action(state, active_buf);
+    if (!state->is_normal()) {
+        return ret;
+    }
+
+
+
+    (void)state;
+    return unimplemented_keypress();
+}
+
+undo_killring_handled split_horizontally(state *state, buffer *active_buf) {
+    undo_killring_handled ret = note_navigation_action(state, active_buf);
+    if (!state->is_normal()) {
+        return ret;
+    }
+
+    (void)state;
+    return unimplemented_keypress();
+}
+
+undo_killring_handled grow_window_size(state *state, buffer *active_buf, ortho_direction direction) {
+    undo_killring_handled ret = note_navigation_action(state, active_buf);
+    if (!state->is_normal()) {
+        return ret;
+    }
+    
+    (void)state, (void)direction;
+    return unimplemented_keypress();
+}
+
 undo_killring_handled help_menu(state *state) {
     buffer buf(state->gen_buf_id(), to_buffer_string(
         "Help:\n"
@@ -683,7 +715,12 @@ undo_killring_handled help_menu(state *state) {
         "M-w copy\n"
         "C-y paste\n"
         "M-y (immediately after C-y) paste next in killring\n"
-        "C-k kill line (and create/append to killring entry)\n"));
+        "C-k kill line (and create/append to killring entry)\n"
+        "\n"
+        " = Window Management =\n"
+        "C-x 2 split window horizontally\n"
+        "C-x 3 split window vertically\n"
+        "C-x <arrow key> grow current window size (in direction)\n"));
     state->popup_display = popup{
         std::move(buf),
     };

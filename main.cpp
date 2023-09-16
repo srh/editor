@@ -379,15 +379,6 @@ undo_killring_handled insert_printable_repr(state *state, ui_window_ctx *ui, buf
     return note_action(state, buf, std::move(res));
 }
 
-// TODO: All keypresses should be implemented.
-undo_killring_handled unimplemented_keypress() {
-    return undo_killring_handled{};
-}
-
-undo_killring_handled nop_keypress() {
-    return undo_killring_handled{};
-}
-
 undo_killring_handled delete_keypress(state *state, ui_window_ctx *ui, buffer *buf) {
     delete_result res = delete_char(ui, buf);
     // TODO: Here, and perhaps in general, handle cases where no characters were actually deleted.
@@ -518,6 +509,7 @@ undo_killring_handled ctrl_n_keypress(state *state, ui_window_ctx *ui, buffer *a
     return down_arrow_keypress(state, ui, active_buf);
 }
 
+// TODO: Make this switch windows, use C-x C-f to open.
 undo_killring_handled ctrl_o_keypress(state *state, buffer *active_buf) {
     return open_file_action(state, active_buf);
 }
@@ -558,6 +550,18 @@ undo_killring_handled ctrl_underscore_keypress(state *state, ui_window_ctx *ui, 
     no_yank(&state->clipboard);
     perform_undo(state, ui, active_buf);
     return handled_undo_killring(state, active_buf);
+}
+
+undo_killring_handled ctrl_x_2_keypress(state *state, buffer *active_buf) {
+    return split_horizontally(state, active_buf);
+}
+
+undo_killring_handled ctrl_x_3_keypress(state *state, buffer *active_buf) {
+    return split_vertically(state, active_buf);
+}
+
+undo_killring_handled ctrl_x_arrow_keypress(state *state, buffer *active_buf, ortho_direction direction) {
+    return grow_window_size(state, active_buf, direction);
 }
 
 undo_killring_handled process_keyprefix_in_buf(
@@ -707,7 +711,28 @@ undo_killring_handled process_keyprefix_in_buf(
                 if (state->keyprefix.size() == 1) {
                     return continue_keyprefix(clear_keyprefix);
                 }
-                // TODO: Actually add some C-x-prefixed keypresses.
+                keypress kp1 = state->keyprefix.at(1);
+                if (kp1.modmask == 0) {
+                    switch (kp1.value) {
+                    case '2':
+                        return ctrl_x_2_keypress(state, active_buf);
+                    case '3':
+                        return ctrl_x_3_keypress(state, active_buf);
+                    case keypress::special_to_key_type(special_key::Left):
+                        return ctrl_x_arrow_keypress(state, active_buf, ortho_direction::Left);
+                    case keypress::special_to_key_type(special_key::Right):
+                        return ctrl_x_arrow_keypress(state, active_buf, ortho_direction::Right);
+                    case keypress::special_to_key_type(special_key::Up):
+                        return ctrl_x_arrow_keypress(state, active_buf, ortho_direction::Up);
+                    case keypress::special_to_key_type(special_key::Down):
+                        return ctrl_x_arrow_keypress(state, active_buf, ortho_direction::Down);
+                    default:
+                        // More C-x-prefixed modmask == 0 keypresses might go here (or below).
+                        break;
+                    }
+                }
+
+                // More C-x-prefixed keypresses would go here.
             } break;
             case '\\':
                 *exit_loop = true;
@@ -721,7 +746,7 @@ undo_killring_handled process_keyprefix_in_buf(
         }
 
     } else if (kp.modmask == 0) {
-        switch (static_cast<keypress::special_key>(-kp.value)) {
+        switch (keypress::key_type_to_special(kp.value)) {
         case special_key::Tab: return tab_keypress(state, ui, active_buf);
         case special_key::Enter: return character_keypress(state, ui, active_buf, uint8_t('\n'));
         case special_key::Delete: return delete_keypress(state, ui, active_buf);

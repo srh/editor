@@ -25,6 +25,11 @@ struct keypress {
         return -static_cast<key_type>(sk);
     }
 
+    static constexpr special_key key_type_to_special(key_type kt) {
+        return static_cast<special_key>(-kt);
+    }
+
+
     key_type value = 0;
     modmask_type modmask = 0;
     bool isMisparsed = false;
