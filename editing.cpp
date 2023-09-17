@@ -695,7 +695,8 @@ void window_column(const window_layout *layout, window_number winnum,
         }
         k = next_k;
     }
-    layout->sanity_check("window_column failure");
+    layout->sanity_check();
+    logic_fail("window_column failure despite layout sanity check");
 }
 
 void renormalize_column(window_layout *layout, size_t col_num, size_t col_begin, size_t col_end) {

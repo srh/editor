@@ -295,6 +295,34 @@ void ui_window::note_rendered_window_size(
     win->set_last_rendered_window(window_size);
 }
 
+void window_layout::sanity_check() const {
+    logic_checkg(!windows.empty());
+    logic_checkg(row_relsizes.size() == windows.size());
+    logic_checkg(!column_datas.empty());
+
+    bool any_zero_row_relsizes = false;
+    for (uint32_t sz : row_relsizes) {
+        any_zero_row_relsizes |= (sz == 0);
+    }
+    logic_checkg(!any_zero_row_relsizes);
+
+    size_t row_count = 0;
+    bool any_zero_row_columns = false;
+    uint32_t any_zero_relsize_columns = false;
+    for (const col_data& elem : column_datas) {
+        row_count += elem.num_rows;
+        any_zero_row_columns |= (elem.num_rows == 0);
+        any_zero_relsize_columns |= (elem.relsize == 0);
+    }
+    logic_checkg(!any_zero_row_columns);
+    logic_checkg(row_count == windows.size());
+    logic_checkg(!any_zero_relsize_columns);
+
+    logic_checkg(active_window.value < windows.size());
+    logic_checkg(last_rendered_terminal_size.rows > 0);
+    logic_checkg(last_rendered_terminal_size.cols > 0);
+}
+
 void state::add_message(const std::string& msg) {
     if (!msg.empty()) {
         buffer_id buf_id = find_or_create_buf(this, "*Messages*", true /* read-only */);

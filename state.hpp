@@ -342,13 +342,7 @@ public:
     };
     std::vector<col_data> column_datas;
 
-    // ALWAYS fails if cause != nullptr.
-    void sanity_check(const char *cause = nullptr) const {
-        // TODO: XXX: Implement.
-        if (cause != nullptr) {
-            logic_fail("sanity check failure: %s", cause);
-        }
-    }
+    void sanity_check() const;
 };
 
 struct state {
