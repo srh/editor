@@ -14,6 +14,7 @@
 #include "editing.hpp"
 #include "error.hpp"
 #include "io.hpp"
+#include "layout.hpp"
 #include "movement.hpp"
 #include "state.hpp"
 #include "term_ui.hpp"
