@@ -681,14 +681,90 @@ undo_killring_handled split_vertically(state *state, buffer *active_buf) {
     return unimplemented_keypress();
 }
 
+void window_column(const window_layout *layout, window_number winnum,
+                   size_t *col_num_out, size_t *col_begin_out, size_t *col_end_out) {
+    size_t k = 0;
+    for (size_t i = 0; i < layout->column_datas.size(); ++i) {
+        const window_layout::col_data& cd = layout->column_datas[i];
+        size_t next_k = k + cd.num_rows;
+        if (winnum.value < next_k) {
+            *col_num_out = i;
+            *col_begin_out = k;
+            *col_end_out = next_k;
+            return;
+        }
+        k = next_k;
+    }
+    layout->sanity_check("window_column failure");
+}
+
+void renormalize_column(window_layout *layout, size_t col_num, size_t col_begin, size_t col_end) {
+    logic_checkg(col_begin <= col_num);
+    logic_checkg(col_num < col_end);
+    logic_checkg(col_end <= layout->row_relsizes.size());
+
+    // TODO: Actually, this whole code is duplicated -- we could make a function returning
+    // true_sizes from window_layout and col_-params.
+    const uint32_t divider_size = 0;  // TODO: Duplicated constant with rendering logic.
+    std::vector<uint32_t> true_sizes = true_split_sizes<uint32_t>(
+        layout->last_rendered_terminal_size.rows,
+        divider_size,
+        layout->row_relsizes.begin() + col_begin,
+        layout->row_relsizes.begin() + col_end,
+        [](const uint32_t& elem) { return elem; });
+
+    std::copy(true_sizes.begin(), true_sizes.end(), layout->row_relsizes.begin() + col_begin);
+}
+
+// Does _everything_ about duplicating a window except it gives it a blank row size, and
+// doesn't adjust column_datas alignment.
+//
+// So, window_layout is temporarily in an invalid state.  (Hence the term "help.")
+void help_duplicate_window(state *state, window_number duplicee, size_t insertion_point) {
+    // (insertion_point isn't quite a window_number because it's an offset in [0,
+    // layout->windows.size()].)
+
+    const auto& ab = state->layout.windows.at(duplicee.value).active_buf();
+    buffer_id buf_id = ab.first;
+    buffer *buf = state->lookup(buf_id);
+    size_t fvo = buf->get_mark_offset(ab.second->first_visible_offset);
+    ui_window window{state->layout.gen_next_window_id()};
+    ui_window_ctx *ctx = window.point_at(buf_id, state);
+    buf->replace_mark(ctx->first_visible_offset, fvo);
+    state->layout.windows.insert(state->layout.windows.begin() + insertion_point,
+                                 std::move(window));
+    state->layout.row_relsizes.insert(state->layout.row_relsizes.begin() + insertion_point,
+                                      0);
+}
+
 undo_killring_handled split_horizontally(state *state, buffer *active_buf) {
     undo_killring_handled ret = note_navigation_action(state, active_buf);
     if (!state->is_normal()) {
         return ret;
     }
 
-    (void)state;
-    return unimplemented_keypress();
+    const window_number active_winnum = state->layout.active_window;
+
+    size_t col_num, col_begin, col_end;
+    window_column(&state->layout, active_winnum, &col_num, &col_begin, &col_end);
+
+    renormalize_column(&state->layout, col_num, col_begin, col_end);
+    uint32_t active_window_height = state->layout.row_relsizes.at(active_winnum.value);
+    uint32_t new_window_height = active_window_height / 2;  // this one gets rounded down.
+    uint32_t new_active_window_height = active_window_height - new_window_height;
+
+    if (new_window_height == 0) {
+        state->note_error_message("Window would be too short");  // TODO: UI logic
+        return ret;
+    }
+    logic_checkg(new_active_window_height != 0);  // Provably true because it's >= new_window_height.
+
+    help_duplicate_window(state, active_winnum, active_winnum.value + 1);
+    ++state->layout.column_datas[col_num].num_rows;
+    state->layout.row_relsizes[active_winnum.value] = new_active_window_height;
+    state->layout.row_relsizes[active_winnum.value + 1] = new_window_height;
+
+    return ret;
 }
 
 undo_killring_handled grow_window_size(state *state, buffer *active_buf, ortho_direction direction) {
