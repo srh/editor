@@ -210,21 +210,30 @@ bool render_status_area_or_prompt(terminal_frame *frame, const state& state,
     return ret;
 }
 
-template <class T>
-std::vector<uint32_t> true_split_sizes(uint32_t rendering_span, uint32_t divider_size,
-                                       const split_layout<T>& splits) {
-    uint32_t splits_denominator = splits.add_up_denominator();
-    logic_checkg(splits_denominator != 0);
-    uint32_t rendering_cells = rendering_span - std::min<uint32_t>(rendering_span, u32_mul(divider_size, splits.dividers()));
+template <class T, class Callable>
+std::vector<uint32_t> true_split_sizes(
+        uint32_t rendering_span, uint32_t divider_size,
+        typename std::vector<T>::const_iterator splits_begin,
+        typename std::vector<T>::const_iterator splits_end,
+        Callable&& splits_accessor) {
+    const size_t n = splits_end - splits_begin;
+    logic_checkg(n != 0);
 
-    const size_t n = splits.panes.size();
+    uint32_t splits_denominator = 0;
+    for (auto it = splits_begin; it != splits_end; ++it) {
+        splits_denominator += splits_accessor(*it);
+    }
+    logic_checkg(splits_denominator != 0);
+
+    uint32_t rendering_cells = rendering_span - std::min<uint32_t>(rendering_span, u32_mul(divider_size, n - 1));
+
     std::vector<uint32_t> ret;
     ret.resize(n);
     uint32_t sum = 0;
     for (size_t i = 0; i < n; ++i) {
         // We want, approximately, rendering_cells * (pane.first / splits_denominator),
         // with the values rounded to add up to rendering_cells.
-        uint32_t rendered_pane_size = u32_mul_div(rendering_cells, splits.panes[i].first, splits_denominator);
+        uint32_t rendered_pane_size = u32_mul_div(rendering_cells, splits_accessor(*(splits_begin + i)), splits_denominator);
         ret[i] = rendered_pane_size;
         sum += rendered_pane_size;
     }
@@ -266,9 +275,14 @@ redraw_state(int term, const terminal_size& window, const state& state) {
                           state.popup_display->buf, &coords);
     } else {
         std::vector<uint32_t> columnar_splits
-            = true_split_sizes(window.cols, column_divider_size, state.layout.splits);
+            = true_split_sizes<window_layout::col_data>(
+                window.cols, column_divider_size,
+                state.layout.column_datas.begin(),
+                state.layout.column_datas.end(),
+                [](const window_layout::col_data& cd) { return cd.relsize; });
 
         uint32_t rendering_column = 0;
+        size_t col_relsizes_begin = 0;
         for (size_t column_pane = 0; column_pane < columnar_splits.size(); ++column_pane) {
             if (rendering_column == window.cols) {
                 logic_check(columnar_splits[column_pane] == 0,
@@ -279,12 +293,16 @@ redraw_state(int term, const terminal_size& window, const state& state) {
                 render_column_divider(&frame, rendering_column);
                 ++rendering_column;
             }
-
-            const split_layout<window_number>& pane_splits = state.layout.splits.panes.at(column_pane).second;
+            const size_t num_rows = state.layout.column_datas.at(column_pane).num_rows;
+            const size_t col_relsizes_end = col_relsizes_begin + num_rows;
 
             const uint32_t row_divider_size = 0;
             std::vector<uint32_t> row_splits
-                = true_split_sizes(window.rows, row_divider_size, pane_splits);
+                = true_split_sizes<uint32_t>(
+                    window.rows, row_divider_size,
+                    state.layout.row_relsizes.begin() + col_relsizes_begin,
+                    state.layout.row_relsizes.begin() + col_relsizes_end,
+                    [](const uint32_t& elem) { return elem; });
 
             uint32_t rendering_row = 0;
             for (size_t row_pane = 0; row_pane < row_splits.size(); ++row_pane) {
@@ -296,7 +314,7 @@ redraw_state(int term, const terminal_size& window, const state& state) {
                     .rows = row_splits[row_pane] - 1,
                     .cols = columnar_splits[column_pane],
                 };
-                window_number winnum = pane_splits.panes.at(row_pane).second;
+                window_number winnum = { col_relsizes_begin + row_pane };
                 logic_check(winnum.value < state.layout.windows.size(),
                             "row pane window number out of range");
                 const ui_window *win = &state.layout.windows[winnum.value];
@@ -341,6 +359,7 @@ redraw_state(int term, const terminal_size& window, const state& state) {
                 rendering_row += row_splits[row_pane];
             }
             rendering_column += columnar_splits[column_pane];
+            col_relsizes_begin = col_relsizes_end;
         }
     }
 

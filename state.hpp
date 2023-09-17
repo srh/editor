@@ -305,28 +305,11 @@ struct window_number {
     size_t value;
 };
 
-template <class T>
-struct split_layout {
-    // Sum of panes.first must be greater than zero.  Each pane's size is that fraction
-    // over the sum.
-    std::vector<std::pair<uint32_t, T>> panes;
-    uint32_t add_up_denominator() const {
-        uint32_t ret = 0;
-        for (auto& elem : panes) {
-            ret += elem.first;
-        }
-        return ret;
-    }
-    size_t dividers() const {
-        logic_checkg(panes.size() > 0);
-        return panes.size() - 1;
-    }
-};
-
 struct window_layout {
     window_layout()
         : active_window{0},
-          splits{.panes = { { 1, { .panes = { { 1, window_number{0} } } } } }} {
+          row_relsizes{1},
+          column_datas{{.relsize = 1, .num_rows = 1}} {
 
         // TODO: Why can't we construct this?
         windows.push_back(ui_window(gen_next_window_id()));
@@ -349,8 +332,13 @@ public:
 
     window_number active_window;
 
-    // A non-empty vector of non-empty vectors.  They index into windows.
-    split_layout<split_layout<window_number>> splits;
+    // "relsize" = "relative size" -- needs to be normalized for actual terminal size.
+    std::vector<uint32_t> row_relsizes;
+    struct col_data {
+        uint32_t relsize;
+        size_t num_rows;
+    };
+    std::vector<col_data> column_datas;
 };
 
 struct state {
