@@ -14,9 +14,8 @@
 #include "keyboard.hpp"
 #include "region_stats.hpp"
 #include "undo.hpp"
-
-// TODO: Don't need this.
-struct terminal_size;
+// TODO: Used only for terminal_size.  Move that type out?
+#include "terminal.hpp"
 
 namespace qwi {
 
@@ -331,6 +330,8 @@ public:
     std::vector<ui_window> windows;  // The windows (all with unique window ids).
 
     window_number active_window;
+
+    terminal_size last_rendered_terminal_size = {.rows = 1, .cols = 1};
 
     // "relsize" = "relative size" -- needs to be normalized for actual terminal size.
     std::vector<uint32_t> row_relsizes;

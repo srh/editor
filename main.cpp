@@ -822,6 +822,7 @@ void main_loop(int term, const command_line_args& args) {
             // const-ness is inherited from state being passed as a const param -- we now
             // un-const and set_last_rendered_window.
             const_cast<ui_window_ctx *>(elem.first)->set_last_rendered_window(elem.second);
+            state.layout.last_rendered_terminal_size = window;
         }
     };
     redraw();
