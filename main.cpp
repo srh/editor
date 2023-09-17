@@ -216,7 +216,7 @@ constexpr uint32_t column_divider_size = 1;
 
 void render_column_divider(terminal_frame *frame, uint32_t rendering_column) {
     logic_checkg(rendering_column < frame->window.cols);
-    for (uint32_t i = 0; i < frame->data.size(); i += frame->window.cols) {
+    for (uint32_t i = rendering_column; i < frame->data.size(); i += frame->window.cols) {
         frame->data[i] = column_divider_char;
         // TODO: Divider style gray?
     }
