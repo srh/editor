@@ -786,11 +786,15 @@ undo_killring_handled split_vertically(state *state, buffer *active_buf) {
     size_t col_num, col_begin, col_end;
     window_column(&state->layout, active_winnum, &col_num, &col_begin, &col_end);
 
-    uint32_t active_column_width = state->layout.column_datas[col_num].relsize;
-    uint32_t new_column_width = active_column_width / 2;
-    uint32_t new_active_column_width = active_column_width - new_column_width;
+    const uint32_t column_divider_size = 1;  // TODO: Duplicated constant with rendering logic.
 
-    if (new_column_width == 0) {
+    uint32_t active_column_width = state->layout.column_datas[col_num].relsize;
+    uint32_t cols_after_divider = active_column_width - column_divider_size;
+    uint32_t new_column_width = cols_after_divider / 2;
+    uint32_t new_active_column_width = cols_after_divider - new_column_width;
+
+    // TODO: Kind of gross, assumes column_divider_size is 1.
+    if (active_column_width == 0 || cols_after_divider == 0 || new_column_width == 0) {
         state->note_error_message("Window would be too narrow");  // TODO: UI logic
         return ret;
     }
