@@ -409,8 +409,8 @@ undo_killring_handled save_file_action(state *state, buffer *active_buf) {
         return ret;
     }
 
-    if (state->topbuf_().married_file.has_value()) {
-        save_buf_to_married_file_and_mark_unmodified(&state->topbuf_());
+    if (active_buf->married_file.has_value()) {
+        save_buf_to_married_file_and_mark_unmodified(active_buf);
     } else {
         state->status_prompt = file_save_prompt(state->gen_buf_id());
     }
@@ -519,7 +519,7 @@ undo_killring_handled buffer_switch_action(state *state, buffer *active_buf) {
         return ret;
     }
 
-    buffer_string data = buffer_name(state, state->topbuf_id_());
+    buffer_string data = buffer_name(state, active_buf->id);
     state->status_prompt = buffer_switch_prompt(state->gen_buf_id(), std::move(data));
     return ret;
 }

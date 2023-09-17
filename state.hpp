@@ -395,14 +395,6 @@ public:
         }
     }
 
-    // TODO: Get rid of this?  Or rename these back without the underscore.
-    buffer_id topbuf_id_() const {
-        return active_window()->active_buf().first;
-    }
-
-    buffer& topbuf_() { return *lookup(topbuf_id_()); }
-    const buffer& topbuf_() const { return *lookup(topbuf_id_()); }
-
     // C-x prefixes and the like, but not M-x, which would be something like a prompt.
     // We don't enumerate them in types or anything -- they're handled dynamically.
     std::vector<keypress> keyprefix;
