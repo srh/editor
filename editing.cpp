@@ -670,18 +670,6 @@ undo_killring_handled alt_yank_from_clipboard(state *state, ui_window_ctx *ui, b
     }
 }
 
-undo_killring_handled split_vertically(state *state, buffer *active_buf) {
-    undo_killring_handled ret = note_navigation_action(state, active_buf);
-    if (!state->is_normal()) {
-        return ret;
-    }
-
-
-
-    (void)state;
-    return unimplemented_keypress();
-}
-
 void window_column(const window_layout *layout, window_number winnum,
                    size_t *col_num_out, size_t *col_begin_out, size_t *col_end_out) {
     size_t k = 0;
@@ -715,7 +703,23 @@ void renormalize_column(window_layout *layout, size_t col_num, size_t col_begin,
         layout->row_relsizes.begin() + col_end,
         [](const uint32_t& elem) { return elem; });
 
+    // TODO: XXX: This could set relsize to zero, breaking the sanity check.
     std::copy(true_sizes.begin(), true_sizes.end(), layout->row_relsizes.begin() + col_begin);
+}
+
+void renormalize_column_widths(window_layout *layout) {
+    const uint32_t column_divider_size = 1;  // TODO: Duplicated constant with rendering logic.
+    std::vector<uint32_t> true_sizes
+        = true_split_sizes<window_layout::col_data>(
+            layout->last_rendered_terminal_size.cols, column_divider_size,
+            layout->column_datas.begin(),
+            layout->column_datas.end(),
+            [](const window_layout::col_data& cd) { return cd.relsize; });
+
+    // TODO: XXX: This could set relsize to zero, breaking the sanity check.
+    for (size_t i = 0; i < true_sizes.size(); ++i) {
+        layout->column_datas[i].relsize = true_sizes[i];
+    }
 }
 
 // Does _everything_ about duplicating a window except it gives it a blank row size, and
@@ -769,12 +773,46 @@ undo_killring_handled split_horizontally(state *state, buffer *active_buf) {
     return ret;
 }
 
+undo_killring_handled split_vertically(state *state, buffer *active_buf) {
+    undo_killring_handled ret = note_navigation_action(state, active_buf);
+    if (!state->is_normal()) {
+        return ret;
+    }
+
+    const window_number active_winnum = state->layout.active_window;
+
+    renormalize_column_widths(&state->layout);
+
+    size_t col_num, col_begin, col_end;
+    window_column(&state->layout, active_winnum, &col_num, &col_begin, &col_end);
+
+    uint32_t active_column_width = state->layout.column_datas[col_num].relsize;
+    uint32_t new_column_width = active_column_width / 2;
+    uint32_t new_active_column_width = active_column_width - new_column_width;
+
+    if (new_column_width == 0) {
+        state->note_error_message("Window would be too narrow");  // TODO: UI logic
+        return ret;
+    }
+    logic_checkg(new_active_column_width != 0);  // Provably true because it's >= new_column_width.
+
+    help_duplicate_window(state, active_winnum, col_end);
+    state->layout.row_relsizes[col_end] = state->layout.last_rendered_terminal_size.rows;
+    state->layout.column_datas.insert(state->layout.column_datas.begin() + col_num + 1,
+                                      {.relsize = new_column_width, .num_rows = 1});
+    state->layout.column_datas[col_num].relsize = new_active_column_width;
+
+    return ret;
+}
+
 undo_killring_handled grow_window_size(state *state, buffer *active_buf, ortho_direction direction) {
     undo_killring_handled ret = note_navigation_action(state, active_buf);
     if (!state->is_normal()) {
         return ret;
     }
-    
+
+
+  
     (void)state, (void)direction;
     return unimplemented_keypress();
 }
