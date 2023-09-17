@@ -169,10 +169,10 @@ void render_normal_status_area(terminal_frame *frame, const state& state, termin
     render_string(frame, status_area_topleft, status_area_width, str, terminal_style::bold());
 }
 
-// Returns true if we should render the cursor for the active window.
+// Returns true if we should render (in red) the cursor for the active window.
 bool render_status_area_or_prompt(terminal_frame *frame, const state& state,
                                   terminal_coord status_area_topleft, uint32_t status_area_width) {
-    bool ret = !state.status_prompt.has_value();
+    bool ret = state.status_prompt.has_value();
     if (!state.live_error_message.empty()) {
         render_string(frame, {.row = status_area_topleft.row, .col = 0},
                       status_area_width,
@@ -298,9 +298,9 @@ redraw_state(int term, const terminal_size& window, const state& state) {
                     terminal_coord status_area_topleft =
                         {.row = rendering_row + winsize.rows, .col = rendering_column};
 
-                    bool render_buf_cursor = true;
+                    bool render_red_cursor = true;
                     if (state.layout.active_window.value == winnum.value) {
-                        render_buf_cursor = render_status_area_or_prompt(
+                        render_red_cursor = render_status_area_or_prompt(
                             &frame, state,
                             status_area_topleft,
                             winsize.cols);
@@ -311,9 +311,14 @@ redraw_state(int term, const terminal_size& window, const state& state) {
                             winsize.cols);
                     }
 
-                    if (render_buf_cursor && cursor_coord.has_value()) {
-                        frame.style_data[cursor_coord->row * frame.window.cols + cursor_coord->col].mask
-                            |= terminal_style::white_on_red().mask;
+                    if (render_red_cursor) {
+                        if (cursor_coord.has_value()) {
+                            frame.style_data[cursor_coord->row * frame.window.cols + cursor_coord->col].mask
+                                |= terminal_style::white_on_red().mask;
+                        }
+                    } else {
+                        // (If !cursor_coord.has_value(), assignment is a no-op.)
+                        frame.cursor = cursor_coord;
                     }
                 }
 
