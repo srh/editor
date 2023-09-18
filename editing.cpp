@@ -707,7 +707,6 @@ void renormalize_column(window_layout *layout, size_t col_num, size_t col_begin,
         layout->row_relsizes.begin() + col_end,
         [](const uint32_t& elem) { return elem; });
 
-    // TODO: XXX: This could set relsize to zero, breaking the sanity check.
     std::copy(true_sizes.begin(), true_sizes.end(), layout->row_relsizes.begin() + col_begin);
 }
 
@@ -720,7 +719,6 @@ void renormalize_column_widths(window_layout *layout) {
             layout->column_datas.end(),
             [](const window_layout::col_data& cd) { return cd.relsize; });
 
-    // TODO: XXX: This could set relsize to zero, breaking the sanity check.
     for (size_t i = 0; i < true_sizes.size(); ++i) {
         layout->column_datas[i].relsize = true_sizes[i];
     }

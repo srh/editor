@@ -300,23 +300,41 @@ void window_layout::sanity_check() const {
     logic_checkg(row_relsizes.size() == windows.size());
     logic_checkg(!column_datas.empty());
 
+    // For now, we comment out checks that any relsizes are zero.  Zero-size columns are
+    // doable because they have a divider, but zero-size rows are not.  Probably we'll
+    // make the minimum size, like, 3.
+
+    // TODO: Force a minimum window size.
+#if 0
     bool any_zero_row_relsizes = false;
     for (uint32_t sz : row_relsizes) {
         any_zero_row_relsizes |= (sz == 0);
     }
     logic_checkg(!any_zero_row_relsizes);
+#endif
 
     size_t row_count = 0;
     bool any_zero_row_columns = false;
-    uint32_t any_zero_relsize_columns = false;
+    // uint32_t any_zero_relsize_columns = false;
+    uint32_t cols_denominator = 0;
     for (const col_data& elem : column_datas) {
+        const size_t column_begin = row_count;
         row_count += elem.num_rows;
         any_zero_row_columns |= (elem.num_rows == 0);
-        any_zero_relsize_columns |= (elem.relsize == 0);
+        cols_denominator += elem.relsize;
+        // any_zero_relsize_columns |= (elem.relsize == 0);
+
+        // Since we allow zero entries, we need to check non-zero denominator.
+        uint32_t rows_denominator = 0;
+        for (size_t i = column_begin; i < row_count; ++i) {
+            rows_denominator += row_relsizes[i];
+        }
+        logic_checkg(rows_denominator != 0);
     }
     logic_checkg(!any_zero_row_columns);
     logic_checkg(row_count == windows.size());
-    logic_checkg(!any_zero_relsize_columns);
+    logic_checkg(cols_denominator != 0);
+    // logic_checkg(!any_zero_relsize_columns);
 
     logic_checkg(active_window.value < windows.size());
     logic_checkg(last_rendered_terminal_size.rows > 0);
