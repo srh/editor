@@ -59,7 +59,8 @@ struct mark_id {
 #define RUN_DETACH_CHECKS 0
 
 struct ui_window_ctx {
-    explicit ui_window_ctx(mark_id fvo) : first_visible_offset(fvo) { }
+    explicit ui_window_ctx(mark_id fvo, mark_id initial_cursor)
+        : first_visible_offset(fvo), cursor_mark(initial_cursor) { }
 
 #if RUN_DETACH_CHECKS
     ~ui_window_ctx() {
@@ -85,7 +86,12 @@ struct ui_window_ctx {
         return rendered_window.has_value() ? rendered_window->cols : SIZE_MAX;
     }
 
+    // TODO: I think this is improperly treated by insert_chars_right, if the cursor is at
+    // the first_visible_offset -- it pushes the f.v.o. forward.
     mark_id first_visible_offset;
+
+    // This is gross, and we manually update this whenever we move the cursor or edit the buf.
+    mark_id cursor_mark;
 
     // TODO: Rename set_last_rendered_window to set_last_rendered_size.
     void set_last_rendered_window(const window_size& win) {
@@ -250,12 +256,12 @@ struct prompt {
 
     std::function<undo_killring_handled(state *st, buffer&& promptBuf, bool *exit_loop)> procedure;  // only for proc
 
-    ui_window_ctx win_ctx{buf.add_mark(0)};
+    ui_window_ctx win_ctx{buf.add_mark(0), buf.add_mark(buf.cursor())};
 };
 
 struct popup {
     buffer buf;
-    ui_window_ctx win_ctx{buf.add_mark(0)};
+    ui_window_ctx win_ctx{buf.add_mark(0), buf.add_mark(buf.cursor())};
 };
 
 struct clip_board {

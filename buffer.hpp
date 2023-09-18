@@ -5,6 +5,11 @@
 
 namespace qwi {
 
+// Loads and sets cursor_mark.  It's ugly.  We'll soon remove buf->cursor() (as an
+// externally exposed concept) altogether.
+void load_ctx_cursor(ui_window_ctx *ui, buffer *buf);
+void save_ctx_cursor(ui_window_ctx *ui, buffer *buf);
+
 struct [[nodiscard]] insert_result {
     // Cursor position _after_ insertion
     size_t new_cursor;
@@ -61,7 +66,7 @@ inline void move_left(ui_window_ctx *ui, buffer *buf) {
     move_left_by(ui, buf, 1);
 }
 
-void set_mark(buffer *buf);
+void set_mark(ui_window_ctx *ui, buffer *buf);
 
 // See movement.hpp for more.
 

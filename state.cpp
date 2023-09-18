@@ -81,7 +81,7 @@ ui_window_ctx *ui_window::point_at(buffer_id id, state *st) {
         active_tab.value = 0;
     }
     window_ctxs.emplace(window_ctxs.begin() + active_tab.value,
-                       buf->id, std::make_unique<ui_window_ctx>(buf->add_mark(0)));
+                        buf->id, std::make_unique<ui_window_ctx>(buf->add_mark(0), buf->add_mark(buf->cursor())));
     return window_ctxs[active_tab.value].second.get();
 }
 

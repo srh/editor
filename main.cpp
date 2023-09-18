@@ -288,7 +288,7 @@ redraw_state(int term, const terminal_size& window, const state& state) {
 
                 const buffer *buf = state.lookup(buf_id);
 
-                std::vector<render_coord> coords = { {buf->cursor(), std::nullopt} };
+                std::vector<render_coord> coords = { {buf->get_mark_offset(buf_ctx->cursor_mark), std::nullopt} };
                 terminal_coord window_topleft = {.row = rendering_row, .col = rendering_column};
                 render_into_frame(&frame, window_topleft, winsize, *buf_ctx, *buf, &coords);
 
@@ -528,8 +528,8 @@ undo_killring_handled ctrl_y_keypress(state *state, ui_window_ctx *ui, buffer *a
     return yank_from_clipboard(state, ui, active_buf);
 }
 
-undo_killring_handled ctrl_space_keypress(state *state, buffer *active_buf) {
-    set_mark(active_buf);
+undo_killring_handled ctrl_space_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    set_mark(ui, active_buf);
     return note_backout_action(state, active_buf);
 }
 
@@ -687,7 +687,7 @@ undo_killring_handled process_keyprefix_in_buf(
             }
         } else if (kp.modmask == keypress::CTRL) {
             switch (kp.value) {
-            case ' ': return ctrl_space_keypress(state, active_buf);
+            case ' ': return ctrl_space_keypress(state, ui, active_buf);
             case 'a': return ctrl_a_keypress(state, ui, active_buf);
             case 'b': return ctrl_b_keypress(state, ui, active_buf);
             case 'c': return ctrl_c_keypress(state, active_buf, exit_loop);

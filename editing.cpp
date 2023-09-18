@@ -846,6 +846,7 @@ undo_killring_handled switch_to_next_window_action(state *state, buffer *active_
         winnum = 0;
     }
     state->layout.active_window = { winnum };
+
     return ret;
 }
 

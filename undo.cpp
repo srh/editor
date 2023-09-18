@@ -153,6 +153,8 @@ void atomic_undo(ui_window_ctx *ui, buffer *buf, atomic_undo_item&& item) {
 
     // TODO: opposite with std::move.
     buf->undo_info.future.push_back(opposite(item));
+
+    save_ctx_cursor(ui, buf);
 }
 
 void perform_undo(state *st, ui_window_ctx *ui, buffer *buf) {
