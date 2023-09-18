@@ -827,13 +827,11 @@ undo_killring_handled grow_window_size(state *state, buffer *active_buf, ortho_d
     return unimplemented_keypress();
 }
 
-undo_killring_handled switch_window_action(state *state, buffer *active_buf) {
+undo_killring_handled switch_to_next_window_action(state *state, buffer *active_buf) {
     undo_killring_handled ret = note_navigation_action(state, active_buf);
     if (!state->is_normal()) {
         return ret;
     }
-
-    // TODO: Don't forget general navigate away from buf logic, some fn we usually call.
 
     logic_checkg(state->layout.windows.size() > 0);
     if (state->layout.windows.size() == 1) {
@@ -848,6 +846,31 @@ undo_killring_handled switch_window_action(state *state, buffer *active_buf) {
         winnum = 0;
     }
     state->layout.active_window = { winnum };
+    return ret;
+}
+
+undo_killring_handled switch_to_window_number_action(state *state, buffer *active_buf, int number) {
+    logic_checkg(0 < number && number < 10);
+    size_t winnum = number - 1;
+
+    undo_killring_handled ret = note_navigation_action(state, active_buf);
+    if (!state->is_normal()) {
+        return ret;
+    }
+
+    if (winnum >= state->layout.windows.size()) {
+        state->note_error_message("Window number " + std::to_string(number) + " is out of range");
+        return ret;
+    }
+    if (winnum == state->layout.active_window.value) {
+        state->note_error_message("Window " + std::to_string(number) + " is already selected");
+        return ret;
+    }
+
+    note_navigate_away_from_buf(&state->layout.windows.at(state->layout.active_window.value), active_buf);
+
+    state->layout.active_window.value = winnum;
+
     return ret;
 }
 

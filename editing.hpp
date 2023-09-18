@@ -62,7 +62,8 @@ undo_killring_handled split_vertically(state *state, buffer *active_buf);
 undo_killring_handled split_horizontally(state *state, buffer *active_buf);
 enum class ortho_direction { Left, Right, Up, Down };
 undo_killring_handled grow_window_size(state *state, buffer *active_buf, ortho_direction direction);
-undo_killring_handled switch_window_action(state *state, buffer *active_buf);
+undo_killring_handled switch_to_next_window_action(state *state, buffer *active_buf);
+undo_killring_handled switch_to_window_number_action(state *state, buffer *active_buf, int number);
 
 undo_killring_handled buffer_switch_action(state *state, buffer *active_buf);
 undo_killring_handled help_menu(state *state);

@@ -426,6 +426,9 @@ undo_killring_handled meta_backspace_keypress(state *state, ui_window_ctx *ui, b
 undo_killring_handled meta_s_keypress(state *state, buffer *active_buf) {
     return save_as_file_action(state, active_buf);
 }
+undo_killring_handled meta_1_to_9_keypress(state *state, buffer *active_buf, char value) {
+    return switch_to_window_number_action(state, active_buf, int(value - '0'));
+}
 
 undo_killring_handled meta_w_keypress(state *state, buffer *active_buf) {
     return copy_region(state, active_buf);
@@ -495,7 +498,7 @@ undo_killring_handled ctrl_n_keypress(state *state, ui_window_ctx *ui, buffer *a
 }
 
 undo_killring_handled ctrl_o_keypress(state *state, buffer *active_buf) {
-    return switch_window_action(state, active_buf);
+    return switch_to_next_window_action(state, active_buf);
 }
 
 undo_killring_handled ctrl_p_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
@@ -665,6 +668,10 @@ undo_killring_handled process_keyprefix_in_buf(
         }
 
         if (kp.modmask == keypress::META) {
+            if (kp.value >= '1' && kp.value <= '9') {
+                return meta_1_to_9_keypress(state, active_buf, static_cast<char>(kp.value));
+            }
+
             switch (kp.value) {
             case 'f': return meta_f_keypress(state, ui, active_buf);
             case 'b': return meta_b_keypress(state, ui, active_buf);
