@@ -162,10 +162,41 @@ private:
     friend void save_buf_to_married_file_and_mark_unmodified(buffer *buf);
     friend buffer open_file_into_detached_buffer(state *state, const std::string& dirty_path);
 
+    static void stats_to_line_info(const region_stats& stats, size_t *line_out, size_t *col_out) {
+        *line_out = stats.newline_count + 1;
+        *col_out = stats.last_line_size;
+    }
 public:
-    void line_info(size_t *line, size_t *col) const {
-        *line = bef_stats_.newline_count + 1;
-        *col = bef_stats_.last_line_size;
+    void line_info(size_t *line_out, size_t *col_out) const {
+        stats_to_line_info(bef_stats_, line_out, col_out);
+    }
+
+    // TODO: Mvoe to state.cpp.
+    void line_info_at_pos(size_t pos, size_t *line_out, size_t *col_out) const {
+        region_stats stats;
+        if (pos == bef_.size()) {
+            stats = bef_stats_;
+        } else if (pos < bef_.size()) {
+            // Unsure what fraction is optimal; we're just making a Statement that
+            // subtract_stats_right is more complicated.
+            if (pos < (bef_.size() / 4) * 3) {
+                stats = compute_stats(bef_.data(), pos);
+            } else {
+                stats = subtract_stats_right(bef_stats_, bef_.data(), pos, bef_.size());
+            }
+        } else {
+            logic_checkg(pos < bef_.size() + aft_.size());
+            size_t apos = pos - bef_.size();
+            if (apos < (aft_.size() / 4) * 3) {
+                stats = append_stats(bef_stats_,
+                                     compute_stats(aft_.data(), apos));
+            } else {
+                stats = append_stats(bef_stats_,
+                                     subtract_stats_right(aft_stats_, aft_.data(), apos, aft_.size()));
+            }
+        }
+
+        return stats_to_line_info(stats, line_out, col_out);
     }
 
     // Absolute position of the mark, if there is one.
