@@ -359,6 +359,8 @@ struct state {
     // Right now we only have one window.
     window_layout layout;
 
+    // TODO: Unfortunate name class with layout.active_window field; I'd like layout to
+    // have the same function.
     const ui_window *active_window() const {
         return &layout.windows.at(layout.active_window.value);
     }

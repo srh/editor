@@ -494,9 +494,8 @@ undo_killring_handled ctrl_n_keypress(state *state, ui_window_ctx *ui, buffer *a
     return down_arrow_keypress(state, ui, active_buf);
 }
 
-// TODO: Make this switch windows, use C-x C-f to open.
 undo_killring_handled ctrl_o_keypress(state *state, buffer *active_buf) {
-    return open_file_action(state, active_buf);
+    return switch_window_action(state, active_buf);
 }
 
 undo_killring_handled ctrl_p_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
@@ -543,6 +542,10 @@ undo_killring_handled ctrl_x_2_keypress(state *state, buffer *active_buf) {
 
 undo_killring_handled ctrl_x_3_keypress(state *state, buffer *active_buf) {
     return split_vertically(state, active_buf);
+}
+
+undo_killring_handled ctrl_x_ctrl_f_keypress(state *state, buffer *active_buf) {
+    return open_file_action(state, active_buf);
 }
 
 undo_killring_handled ctrl_x_arrow_keypress(state *state, buffer *active_buf, ortho_direction direction) {
@@ -715,6 +718,8 @@ undo_killring_handled process_keyprefix_in_buf(
                         // More C-x-prefixed modmask == 0 keypresses might go here (or below).
                         break;
                     }
+                } else if (kp1.equals('f', keypress::CTRL)) {
+                    return ctrl_x_ctrl_f_keypress(state, active_buf);
                 }
 
                 // More C-x-prefixed keypresses would go here.

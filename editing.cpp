@@ -131,6 +131,10 @@ undo_killring_handled note_nop_action(state *state) {
     return undo_killring_handled{};
 }
 
+// TODO: We don't call this everywhere we should.  (e.g. file open, buffer close actions.)
+//
+// I'm not even sure whether this should cover window switching or not.  Should we remove this?
+//
 // Currently a nop, we might need a generic action or code adjustments in the future.
 // (Current callers also invoke note_navigation_action.)
 void note_navigate_away_from_buf(ui_window *win, buffer *buf) {
@@ -760,6 +764,7 @@ undo_killring_handled split_horizontally(state *state, buffer *active_buf) {
     uint32_t new_active_window_height = active_window_height - new_window_height;
 
     if (new_window_height == 0) {
+        state->layout.sanity_check();
         state->note_error_message("Window would be too short");  // TODO: UI logic
         return ret;
     }
@@ -770,6 +775,7 @@ undo_killring_handled split_horizontally(state *state, buffer *active_buf) {
     state->layout.row_relsizes[active_winnum.value] = new_active_window_height;
     state->layout.row_relsizes[active_winnum.value + 1] = new_window_height;
 
+    state->layout.sanity_check();
     return ret;
 }
 
@@ -795,6 +801,7 @@ undo_killring_handled split_vertically(state *state, buffer *active_buf) {
 
     // TODO: Kind of gross, assumes column_divider_size is 1.
     if (active_column_width == 0 || cols_after_divider == 0 || new_column_width == 0) {
+        state->layout.sanity_check();
         state->note_error_message("Window would be too narrow");  // TODO: UI logic
         return ret;
     }
@@ -806,6 +813,7 @@ undo_killring_handled split_vertically(state *state, buffer *active_buf) {
                                       {.relsize = new_column_width, .num_rows = 1});
     state->layout.column_datas[col_num].relsize = new_active_column_width;
 
+    state->layout.sanity_check();
     return ret;
 }
 
@@ -819,6 +827,30 @@ undo_killring_handled grow_window_size(state *state, buffer *active_buf, ortho_d
   
     (void)state, (void)direction;
     return unimplemented_keypress();
+}
+
+undo_killring_handled switch_window_action(state *state, buffer *active_buf) {
+    undo_killring_handled ret = note_navigation_action(state, active_buf);
+    if (!state->is_normal()) {
+        return ret;
+    }
+
+    // TODO: Don't forget general navigate away from buf logic, some fn we usually call.
+
+    logic_checkg(state->layout.windows.size() > 0);
+    if (state->layout.windows.size() == 1) {
+        state->note_error_message("No other window to select");  // TODO: UI logic
+        return ret;
+    }
+
+    note_navigate_away_from_buf(&state->layout.windows.at(state->layout.active_window.value), active_buf);
+    size_t winnum = state->layout.active_window.value;
+    winnum += 1;
+    if (winnum == state->layout.windows.size()) {
+        winnum = 0;
+    }
+    state->layout.active_window = { winnum };
+    return ret;
 }
 
 undo_killring_handled help_menu(state *state) {
