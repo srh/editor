@@ -43,6 +43,9 @@ void append_mask_difference(std::string *buf, uint8_t old_mask, uint8_t new_mask
     if (new_mask & terminal_style::WHITE_ON_RED_BIT) {
         *buf += ";37;41";
     }
+    if (new_mask & terminal_style::RED_TEXT_BIT) {
+        *buf += ";31";
+    }
     *buf += 'm';
 }
 
@@ -158,7 +161,7 @@ uint32_t render_string(terminal_frame *frame, const terminal_coord& coord, uint3
     return col - coord.col;
 }
 
-void render_normal_status_area(terminal_frame *frame, const state& state, const ui_window_ctx *ui, const buffer *buf, terminal_coord status_area_topleft, uint32_t status_area_width) {
+void render_normal_status_area(terminal_frame *frame, const state& state, window_number winnum, const ui_window_ctx *ui, const buffer *buf, const terminal_coord status_area_topleft, const uint32_t status_area_width) {
     buffer_string str = buffer_name(&state, buf->id);
     str += to_buffer_string(buf->modified_flag() ? " ** " : "    ");
 
@@ -173,7 +176,6 @@ void render_normal_status_area(terminal_frame *frame, const state& state, const 
         return;
     }
 
-    // TODO: Probably, I want the line number info not to be bold.
     size_t line, col;
     buf->line_info_at_pos(buf->get_mark_offset(ui->cursor_mark), &line, &col);
     str = buffer_char{'('};
@@ -190,11 +192,22 @@ void render_normal_status_area(terminal_frame *frame, const state& state, const 
     if (width == 0) {
         return;
     }
+
+    // TODO: A bit gross, stupid buffer_string
+    str = buffer_char{' '};
+    str += buffer_char{'['};
+    str += to_buffer_string(std::to_string(winnum.value + 1));  // TODO:  Put this +1 logic, converting 0-based window_number to user-visible 1-based window number, in one place.
+    str += buffer_char{']'};
+    str += buffer_char{' '};
+
+    count = render_string(frame, topleft, width, str, terminal_style::red_text());
+
+    // TODO: Probably, make the status line be gray.
 }
 
 // This is used for the active window only.  Returns true if we should render (in red) the
 // cursor for the active window.
-bool render_status_area_or_prompt(terminal_frame *frame, const state& state, const ui_window_ctx *ui, const buffer *buf,
+bool render_status_area_or_prompt(terminal_frame *frame, const state& state, window_number winnum, const ui_window_ctx *ui, const buffer *buf,
                                   terminal_coord status_area_topleft, uint32_t status_area_width) {
     bool ret = state.status_prompt.has_value();
     if (!state.live_error_message.empty()) {
@@ -230,7 +243,7 @@ bool render_status_area_or_prompt(terminal_frame *frame, const state& state, con
                     "attempted rendering status prompt cursor atop another rendered cursor");
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
     } else {
-        render_normal_status_area(frame, state, ui, buf, status_area_topleft, status_area_width);
+        render_normal_status_area(frame, state, winnum, ui, buf, status_area_topleft, status_area_width);
     }
     return ret;
 }
@@ -325,12 +338,12 @@ redraw_state(int term, const terminal_size& window, const state& state) {
                     bool render_red_cursor = true;
                     if (state.layout.active_window.value == winnum.value) {
                         render_red_cursor = render_status_area_or_prompt(
-                            &frame, state, buf_ctx, buf,
+                            &frame, state, winnum, buf_ctx, buf,
                             status_area_topleft,
                             winsize.cols);
                     } else {
                         render_normal_status_area(
-                            &frame, state, buf_ctx, buf,
+                            &frame, state, winnum, buf_ctx, buf,
                             status_area_topleft,
                             winsize.cols);
                     }
