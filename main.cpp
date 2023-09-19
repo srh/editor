@@ -502,7 +502,7 @@ undo_killring_handled ctrl_p_keypress(state *state, ui_window_ctx *ui, buffer *a
     return up_arrow_keypress(state, ui, active_buf);
 }
 
-undo_killring_handled ctrl_s_keypress(state *state, buffer *active_buf) {
+undo_killring_handled ctrl_x_ctrl_s_keypress(state *state, buffer *active_buf) {
     // May prompt if the buf isn't married to a file.
     return save_file_action(state, active_buf);
 }
@@ -699,7 +699,6 @@ undo_killring_handled process_keyprefix_in_buf(
             case 'n': return ctrl_n_keypress(state, ui, active_buf);
             case 'o': return ctrl_o_keypress(state, active_buf);
             case 'p': return ctrl_p_keypress(state, ui, active_buf);
-            case 's': return ctrl_s_keypress(state, active_buf);
             case 'w': return ctrl_w_keypress(state, ui, active_buf);
             case 'y': return ctrl_y_keypress(state, ui, active_buf);
             case 'x': {
@@ -727,10 +726,17 @@ undo_killring_handled process_keyprefix_in_buf(
                         // More C-x-prefixed modmask == 0 keypresses might go here (or below).
                         break;
                     }
-                } else if (kp1.equals('f', keypress::CTRL)) {
-                    return ctrl_x_ctrl_f_keypress(state, active_buf);
-                } else if (kp1.equals('c', keypress::CTRL)) {
-                    return ctrl_x_ctrl_c_keypress(state, active_buf, exit_loop);
+                } else if (kp1.modmask == keypress::CTRL) {
+                    switch (kp1.value) {
+                    case 'f':
+                        return ctrl_x_ctrl_f_keypress(state, active_buf);
+                    case 'c':
+                        return ctrl_x_ctrl_c_keypress(state, active_buf, exit_loop);
+                    case 's':
+                        return ctrl_x_ctrl_s_keypress(state, active_buf);
+                    default:
+                        break;
+                    }
                 }
 
                 // More C-x-prefixed keypresses would go here.
