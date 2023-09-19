@@ -503,8 +503,7 @@ prompt buffer_switch_prompt(buffer_id promptBufId, buffer_string&& data) {
 undo_killring_handled buffer_switch_action(state *state, buffer *active_buf) {
     undo_killring_handled ret = note_navigation_action(state, active_buf);
     if (state->status_prompt.has_value()) {
-        // TODO: We'll have to handle M-x C-s or C-x C-s somehow -- probably by generic
-        // logic at the keypress level.
+        state->note_error_message("Cannot buffer switch when prompt is active");  // TODO: UI logic
 
         // Ignore keypress.
         return ret;
