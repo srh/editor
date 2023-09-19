@@ -418,7 +418,7 @@ undo_killring_handled f3_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled f4_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled f5_keypress(state *state, buffer *active_buf) { return rotate_buf_right(state, active_buf); }
 undo_killring_handled f6_keypress(state *state, buffer *active_buf) { return rotate_buf_left(state, active_buf); }
-undo_killring_handled f7_keypress(state *state, buffer *active_buf) { return buffer_switch_action(state, active_buf); }
+undo_killring_handled f7_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled f8_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled f9_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled f10_keypress(state *, buffer *) { return nop_keypress(); }
@@ -456,9 +456,6 @@ undo_killring_handled meta_d_keypress(state *state, ui_window_ctx *ui, buffer *a
 }
 undo_killring_handled meta_backspace_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
     return delete_backward_word(state, ui, active_buf);
-}
-undo_killring_handled ctrl_x_ctrl_w_keypress(state *state, buffer *active_buf) {
-    return save_as_file_action(state, active_buf);
 }
 undo_killring_handled meta_1_to_9_keypress(state *state, buffer *active_buf, char value) {
     return switch_to_window_number_action(state, active_buf, int(value - '0'));
@@ -504,13 +501,6 @@ undo_killring_handled ctrl_b_keypress(state *state, ui_window_ctx *ui, buffer *a
     return left_arrow_keypress(state, ui, active_buf);
 }
 
-undo_killring_handled ctrl_x_ctrl_c_keypress(state *state, buffer *active_buf, bool *exit_loop) {
-    bool exit = false;
-    auto ret = exit_cleanly(state, active_buf, &exit);
-    if (exit) { *exit_loop = true; }
-    return ret;
-}
-
 undo_killring_handled ctrl_d_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
     return delete_keypress(state, ui, active_buf);
 }
@@ -537,11 +527,6 @@ undo_killring_handled ctrl_o_keypress(state *state, buffer *active_buf) {
 
 undo_killring_handled ctrl_p_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
     return up_arrow_keypress(state, ui, active_buf);
-}
-
-undo_killring_handled ctrl_x_ctrl_s_keypress(state *state, buffer *active_buf) {
-    // May prompt if the buf isn't married to a file.
-    return save_file_action(state, active_buf);
 }
 
 undo_killring_handled backspace_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
@@ -576,19 +561,31 @@ undo_killring_handled ctrl_underscore_keypress(state *state, ui_window_ctx *ui, 
 undo_killring_handled ctrl_x_2_keypress(state *state, buffer *active_buf) {
     return split_horizontally(state, active_buf);
 }
-
 undo_killring_handled ctrl_x_3_keypress(state *state, buffer *active_buf) {
     return split_vertically(state, active_buf);
 }
-
+undo_killring_handled ctrl_x_b_keypress(state *state, buffer *active_buf) {
+    return buffer_switch_action(state, active_buf);
+}
 undo_killring_handled ctrl_x_k_keypress(state *state, buffer *active_buf) {
     return buffer_close_action(state, active_buf);
 }
-
+undo_killring_handled ctrl_x_ctrl_c_keypress(state *state, buffer *active_buf, bool *exit_loop) {
+    bool exit = false;
+    auto ret = exit_cleanly(state, active_buf, &exit);
+    if (exit) { *exit_loop = true; }
+    return ret;
+}
 undo_killring_handled ctrl_x_ctrl_f_keypress(state *state, buffer *active_buf) {
     return open_file_action(state, active_buf);
 }
-
+undo_killring_handled ctrl_x_ctrl_s_keypress(state *state, buffer *active_buf) {
+    // May prompt if the buf isn't married to a file.
+    return save_file_action(state, active_buf);
+}
+undo_killring_handled ctrl_x_ctrl_w_keypress(state *state, buffer *active_buf) {
+    return save_as_file_action(state, active_buf);
+}
 undo_killring_handled ctrl_x_arrow_keypress(state *state, buffer *active_buf, ortho_direction direction) {
     return grow_window_size(state, active_buf, direction);
 }
@@ -748,6 +745,8 @@ undo_killring_handled process_keyprefix_in_buf(
                         return ctrl_x_2_keypress(state, active_buf);
                     case '3':
                         return ctrl_x_3_keypress(state, active_buf);
+                    case 'b':
+                        return ctrl_x_b_keypress(state, active_buf);
                     case 'k':
                         return ctrl_x_k_keypress(state, active_buf);
                     case keypress::special_to_key_type(special_key::Left):
