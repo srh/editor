@@ -420,7 +420,7 @@ undo_killring_handled meta_d_keypress(state *state, ui_window_ctx *ui, buffer *a
 undo_killring_handled meta_backspace_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
     return delete_backward_word(state, ui, active_buf);
 }
-undo_killring_handled meta_s_keypress(state *state, buffer *active_buf) {
+undo_killring_handled ctrl_x_ctrl_w_keypress(state *state, buffer *active_buf) {
     return save_as_file_action(state, active_buf);
 }
 undo_killring_handled meta_1_to_9_keypress(state *state, buffer *active_buf, char value) {
@@ -680,7 +680,6 @@ undo_killring_handled process_keyprefix_in_buf(
             case 'h': return meta_h_keypress(state, ui, active_buf);
             case 'y': return meta_y_keypress(state, ui, active_buf);
             case 'd': return meta_d_keypress(state, ui, active_buf);
-            case 's': return meta_s_keypress(state, active_buf);
             case keypress::special_to_key_type(special_key::Backspace):
                 return meta_backspace_keypress(state, ui, active_buf);
             default:
@@ -734,6 +733,8 @@ undo_killring_handled process_keyprefix_in_buf(
                         return ctrl_x_ctrl_c_keypress(state, active_buf, exit_loop);
                     case 's':
                         return ctrl_x_ctrl_s_keypress(state, active_buf);
+                    case 'w':
+                        return ctrl_x_ctrl_w_keypress(state, active_buf);
                     default:
                         break;
                     }
