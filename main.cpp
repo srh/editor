@@ -155,12 +155,12 @@ void render_string(terminal_frame *frame, const terminal_coord& coord, uint32_t 
     }
 }
 
-void render_normal_status_area(terminal_frame *frame, const state& state, const buffer *buf, terminal_coord status_area_topleft, uint32_t status_area_width) {
+void render_normal_status_area(terminal_frame *frame, const state& state, const ui_window_ctx *ui, const buffer *buf, terminal_coord status_area_topleft, uint32_t status_area_width) {
     buffer_string str = buffer_name(&state, buf->id);
     // TODO: Probably, I want the line number info not to be bold.
     str += to_buffer_string(buf->modified_flag() ? " ** (" : "    (");
     size_t line, col;
-    buf->line_info(&line, &col);
+    buf->line_info_at_pos(buf->get_mark_offset(ui->cursor_mark), &line, &col);
     str += to_buffer_string(std::to_string(line));  // TODO: Gross
     str += buffer_char{','};
     str += to_buffer_string(std::to_string(col));  // TODO: Gross
@@ -169,8 +169,9 @@ void render_normal_status_area(terminal_frame *frame, const state& state, const 
     render_string(frame, status_area_topleft, status_area_width, str, terminal_style::bold());
 }
 
-// Returns true if we should render (in red) the cursor for the active window.
-bool render_status_area_or_prompt(terminal_frame *frame, const state& state, const buffer *buf,
+// This is used for the active window only.  Returns true if we should render (in red) the
+// cursor for the active window.
+bool render_status_area_or_prompt(terminal_frame *frame, const state& state, const ui_window_ctx *ui, const buffer *buf,
                                   terminal_coord status_area_topleft, uint32_t status_area_width) {
     bool ret = state.status_prompt.has_value();
     if (!state.live_error_message.empty()) {
@@ -206,7 +207,7 @@ bool render_status_area_or_prompt(terminal_frame *frame, const state& state, con
                     "attempted rendering status prompt cursor atop another rendered cursor");
         frame->cursor = add(prompt_topleft, coords[0].rendered_pos);
     } else {
-        render_normal_status_area(frame, state, buf, status_area_topleft, status_area_width);
+        render_normal_status_area(frame, state, ui, buf, status_area_topleft, status_area_width);
     }
     return ret;
 }
@@ -301,12 +302,12 @@ redraw_state(int term, const terminal_size& window, const state& state) {
                     bool render_red_cursor = true;
                     if (state.layout.active_window.value == winnum.value) {
                         render_red_cursor = render_status_area_or_prompt(
-                            &frame, state, buf,
+                            &frame, state, buf_ctx, buf,
                             status_area_topleft,
                             winsize.cols);
                     } else {
                         render_normal_status_area(
-                            &frame, state, buf,
+                            &frame, state, buf_ctx, buf,
                             status_area_topleft,
                             winsize.cols);
                     }
