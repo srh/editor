@@ -12,4 +12,6 @@ std::string string_join(const std::string& inbetween, const std::vector<std::str
 // still render control chars as ^A, ^B, etc., in the buffer.)
 constexpr uint8_t CTRL_XOR_MASK = 64;
 
+#define MOVE(x) x = std::move(x)
+
 #endif  // QWERTILLION_UTIL_HPP_

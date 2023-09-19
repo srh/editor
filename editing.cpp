@@ -441,12 +441,10 @@ prompt exit_without_save_prompt(std::vector<std::string>&& bufnames, buffer&& in
     // TODO: UI logic
     std::string messageText = "exit without saving? (" + string_join(", ", bufnames) + ") (yes/no): ";
     return {prompt::type::proc, std::move(initialBuf), std::move(messageText),
-        // TODO: Make a macro for std::move into capture list.
-        [bufnames = std::move(bufnames)](state *state, buffer&& promptBuf, bool *exit_loop) mutable {
+        [MOVE(bufnames)](state *state, buffer&& promptBuf, bool *exit_loop) mutable {
             // killring important, undo not because we're destructing the status_prompt buf.
             undo_killring_handled ret = note_backout_action(state, &promptBuf);
             std::string text = promptBuf.copy_to_string();
-            // TODO: Implement displaying errors to the user.
             if (text == "yes") {
                 // Yes, exit without saving.
                 *exit_loop = true;
