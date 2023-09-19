@@ -46,6 +46,6 @@ struct terminal_restore {
 };
 
 void check_read_tty_char(int term_fd, char *out);
-keypress read_tty_keypress(int term);
+keypress_result read_tty_keypress(int term);
 
 #endif  // QWERTILLION_TERMINAL_HPP_

@@ -32,14 +32,10 @@ struct keypress {
 
     key_type value = 0;
     modmask_type modmask = 0;
-    bool isMisparsed = false;
-    std::string chars_read = "";  // Supplied for escape sequences irrespective of whether
-                                  // isMisparsed is true or not
 
-    // TODO: Actually separate out the {value, modmask} part.
-    // We really ought to separate the {value, modmask} part of the keypress to a separate
-    // type from isMisparsed and chars_read, which is a completely ancillary communication
-    // from the keypress parsing function.
+    bool operator==(const keypress&) const = default;
+
+    // These functions look weird (why not use operator==?) and they're left over after refactoring.
     bool equals(key_type _value, modmask_type _mm = 0) const {
         return value == _value && modmask == _mm;
     }
@@ -60,8 +56,21 @@ struct keypress {
     static keypress special(special_key k, modmask_type mm = 0) {
         return { .value = special_to_key_type(k), .modmask = mm };
     }
-    static keypress incomplete_parse(const std::string& chars) {
-        return { .isMisparsed = true, .chars_read = chars };
+};
+
+struct keypress_result {
+    // Making this explicit is low priority.
+    keypress_result(const keypress& _kp) : kp(_kp) {}
+
+    keypress kp;
+    bool isMisparsed = false;
+    std::string chars_read;  // Supplied for escape sequences irrespective of whether
+                             // isMisparsed is true or not
+    static keypress_result incomplete_parse(const std::string& chars) {
+        keypress_result ret(keypress{});
+        ret.isMisparsed = true;
+        ret.chars_read = chars;
+        return ret;
     }
 };
 

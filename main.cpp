@@ -586,20 +586,21 @@ bool process_keyprefix_in_status_prompt(state *state, bool *exit_loop) {
 
 undo_killring_handled read_and_process_tty_input(int term, state *state, bool *exit_loop) {
     // TODO: When term is non-blocking, we'll need to wait for readiness...?
-    keypress kp = read_tty_keypress(term);
+    const keypress_result kpr = read_tty_keypress(term);
+    const keypress& kp = kpr.kp;
 
     state->popup_display = std::nullopt;
 
-    if (kp.isMisparsed) {
-        state->note_error_message("Unparsed escape sequence: \\e" + kp.chars_read);
+    if (kpr.isMisparsed) {
+        state->note_error_message("Unparsed escape sequence: \\e" + kpr.chars_read);
 
         state->keyprefix.clear();
         // Do nothing for undo or killring.
         return handled_undo_killring_no_buf(state);
     }
-    if (!kp.chars_read.empty()) {
+    if (!kpr.chars_read.empty()) {
         // TODO: Get rid of this.
-        state->add_message("Successfully parsed escape sequence: \\e" + kp.chars_read);
+        state->add_message("Successfully parsed escape sequence: \\e" + kpr.chars_read);
     }
 
     // Append to keyprefix and process it later.

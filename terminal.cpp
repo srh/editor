@@ -230,7 +230,7 @@ bool read_tty_numeric_escape(int term, std::string *chars_read, char firstDigit,
     }
 }
 
-keypress read_tty_keypress(int term, std::string *chars_read_out) {
+keypress_result read_tty_keypress(int term, std::string *chars_read_out) {
     // TODO: When term is non-blocking, we'll need to wait for readiness...?
     char ch;
     check_read_tty_char(term, &ch);
@@ -369,7 +369,9 @@ keypress read_tty_keypress(int term, std::string *chars_read_out) {
             }
         }
 
-        return keypress::incomplete_parse(chars_read);
+        // TODO: It's kind of silly that we set chars_read and then overwrite the value
+        // again in the caller.
+        return keypress_result::incomplete_parse(chars_read);
     }
 
     if (ch == 8) {
@@ -396,17 +398,17 @@ keypress read_tty_keypress(int term, std::string *chars_read_out) {
             return keypress::ascii(maskch ^ ALPHA_SHIFT_MASK, keypress::CTRL);
         }
 
-        return { .value = maskch, .modmask = keypress::CTRL };
+        return keypress_result({ .value = maskch, .modmask = keypress::CTRL });
     } else {
         // TODO: Handle high characters -- do we just insert them, or do we validate
         // UTF-8, or what?
-        return { .value = uint8_t(ch), .modmask = 0 };
+        return keypress_result({ .value = uint8_t(ch), .modmask = 0 });
     }
 }
 
-keypress read_tty_keypress(int term) {
+keypress_result read_tty_keypress(int term) {
     std::string chars_read;
-    keypress ret = read_tty_keypress(term, &chars_read);
+    keypress_result ret = read_tty_keypress(term, &chars_read);
     ret.chars_read = std::move(chars_read);
     return ret;
 }
