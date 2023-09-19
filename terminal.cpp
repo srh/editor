@@ -10,6 +10,7 @@
 
 #include "error.hpp"
 #include "io.hpp"
+#include "util.hpp"
 
 inline void assume_ASCII() { }  // Used wherever we assume the ASCII character set in
                                 // terminal handling... hopefully with exhaustive

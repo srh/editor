@@ -14,8 +14,9 @@
 #include "keyboard.hpp"
 #include "region_stats.hpp"
 #include "undo.hpp"
-// TODO: Used only for terminal_size.  Move that type out?
-#include "terminal.hpp"
+// TODO: We don't want this dependency exactly -- we kind of want ui info to be separate from state.
+// Well, right now it's part of state -- this'll get resolved once we have a second GUI.
+#include "terminal_size.hpp"
 
 namespace qwi {
 

@@ -7,7 +7,6 @@
 #include "io.hpp"
 #include "movement.hpp"
 #include "layout.hpp"
-#include "terminal.hpp"  // TODO: gross
 #include "util.hpp"
 
 namespace fs = std::filesystem;

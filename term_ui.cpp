@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "arith.hpp"
+#include "util.hpp"
 
 namespace qwi {
 

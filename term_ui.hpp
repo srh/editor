@@ -7,8 +7,7 @@
 #include <vector>
 
 #include "state.hpp"
-// For terminal_size.  Not happy about this include dependency.
-#include "terminal.hpp"
+#include "terminal_size.hpp"
 
 namespace qwi {
 

@@ -4,8 +4,6 @@
 #include "buffer.hpp"  // for insert_result and delete_result in undo logic
 #include "editing.hpp"
 #include "error.hpp"
-// TODO: We don't want this dependency exactly -- we kind of want ui info to be separate from state.
-#include "terminal.hpp"
 #include "term_ui.hpp"
 
 namespace qwi {

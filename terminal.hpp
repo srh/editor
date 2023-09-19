@@ -7,15 +7,12 @@
 
 #include "error.hpp"
 #include "keyboard.hpp"
+#include "terminal_size.hpp"
 
 // We _don't_ include <termios.h> in this header, to avoid all the macro pollution.
 struct termios;
 
 struct file_descriptor;
-
-// Used in rendering of control characters -- also used for a human-readable switch
-// statement in main.cpp input processing.
-constexpr uint8_t CTRL_XOR_MASK = 64;
 
 #define TERMINAL_ESCAPE_SEQUENCE "\x1b["
 #define TESC(x) TERMINAL_ESCAPE_SEQUENCE #x
@@ -25,10 +22,6 @@ void display_tcattr(const struct termios& tcattr);
 void set_raw_mode(int fd);
 void clear_screen(int fd);
 
-struct terminal_size {
-    uint32_t rows = 0, cols = 0;
-    friend auto operator<=>(const terminal_size&, const terminal_size&) = default;
-};
 terminal_size get_terminal_size(int fd);
 
 struct terminal_restore {
