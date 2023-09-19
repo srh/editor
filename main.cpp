@@ -136,7 +136,9 @@ std::optional<terminal_coord> add(const terminal_coord& window_topleft, const st
     }
 }
 
-void render_string(terminal_frame *frame, const terminal_coord& coord, uint32_t rendering_width, const buffer_string& str, terminal_style style_mask = terminal_style{}) {
+// Returns the number of terminal cells used -- thus `rendering_width` minus that value is
+// how much space remains.  (Hence, returns `rendering_width` if there is a newline.)
+uint32_t render_string(terminal_frame *frame, const terminal_coord& coord, uint32_t rendering_width, const buffer_string& str, terminal_style style_mask = terminal_style{}) {
     uint32_t col = coord.col;
     const uint32_t end_col = u32_add(col, rendering_width);
     logic_check(end_col <= frame->window.cols, "render_string: coord out of range");
@@ -145,7 +147,7 @@ void render_string(terminal_frame *frame, const terminal_coord& coord, uint32_t 
         char_rendering rend = compute_char_rendering(str[i], &line_col);
         if (rend.count == SIZE_MAX) {
             // Newline...(?)
-            return;
+            return rendering_width;
         }
         size_t to_copy = std::min<size_t>(rend.count, end_col - col);
         size_t offset = coord.row * frame->window.cols + col;
@@ -153,20 +155,41 @@ void render_string(terminal_frame *frame, const terminal_coord& coord, uint32_t 
         std::fill(&frame->style_data[offset], &frame->style_data[offset + to_copy], style_mask);
         col += to_copy;
     }
+    return col - coord.col;
 }
 
 void render_normal_status_area(terminal_frame *frame, const state& state, const ui_window_ctx *ui, const buffer *buf, terminal_coord status_area_topleft, uint32_t status_area_width) {
     buffer_string str = buffer_name(&state, buf->id);
+    str += to_buffer_string(buf->modified_flag() ? " ** " : "    ");
+
+    uint32_t count = render_string(frame, status_area_topleft, status_area_width, str,
+                                   terminal_style::bold());
+    logic_checkg(count <= status_area_width);
+
+    terminal_coord topleft = {.row = status_area_topleft.row, .col = status_area_topleft.col + count};
+    uint32_t width = status_area_width - count;
+
+    if (width == 0) {
+        return;
+    }
+
     // TODO: Probably, I want the line number info not to be bold.
-    str += to_buffer_string(buf->modified_flag() ? " ** (" : "    (");
     size_t line, col;
     buf->line_info_at_pos(buf->get_mark_offset(ui->cursor_mark), &line, &col);
+    str = buffer_char{'('};
     str += to_buffer_string(std::to_string(line));  // TODO: Gross
     str += buffer_char{','};
     str += to_buffer_string(std::to_string(col));  // TODO: Gross
     str += buffer_char{')'};
 
-    render_string(frame, status_area_topleft, status_area_width, str, terminal_style::bold());
+    count = render_string(frame, topleft, width, str, terminal_style::zero());
+    logic_checkg(count <= width);
+
+    topleft.col += count;
+    width -= count;
+    if (width == 0) {
+        return;
+    }
 }
 
 // This is used for the active window only.  Returns true if we should render (in red) the
