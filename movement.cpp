@@ -188,12 +188,12 @@ void move_down(ui_window_ctx *ui, buffer *buf) {
 }
 
 void move_home(ui_window_ctx *ui, buffer *buf) {
-    size_t distance = buf->cursor_distance_to_beginning_of_line();
+    size_t distance = distance_to_beginning_of_line(*buf, buf->get_mark_offset(ui->cursor_mark));
     move_left_by(ui, buf, distance);
 }
 
 void move_end(ui_window_ctx *ui, buffer *buf) {
-    size_t distance = distance_to_eol(*buf, buf->cursor());
+    size_t distance = distance_to_eol(*buf, buf->get_mark_offset(ui->cursor_mark));
     move_right_by(ui, buf, distance);
 }
 
