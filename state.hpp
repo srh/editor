@@ -178,7 +178,7 @@ public:
         stats_to_line_info(bef_stats_, line_out, col_out);
     }
 
-    // TODO: Mvoe to state.cpp.
+    // TODO: Move to state.cpp.
     void line_info_at_pos(size_t pos, size_t *line_out, size_t *col_out) const {
         region_stats stats;
         if (pos == bef_.size()) {
@@ -397,7 +397,7 @@ struct state {
     // Right now we only have one window.
     window_layout layout;
 
-    // TODO: Unfortunate name class with layout.active_window field; I'd like layout to
+    // TODO: Unfortunate name clash with layout.active_window field; I'd like layout to
     // have the same function.
     const ui_window *active_window() const {
         return &layout.windows.at(layout.active_window.value);

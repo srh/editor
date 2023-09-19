@@ -171,17 +171,6 @@ window_size main_buf_window_from_terminal_window(const terminal_size& term_windo
     };
 }
 
-#if 0
-void resize_window(state *st, const terminal_size& new_window) {
-    window_size buf_window = main_buf_window_from_terminal_window(new_window);
-    for (std::unique_ptr<buffer>& buf : st->buflist) {
-        resize_buf_window(&buf->win_ctx, buf_window);
-    }
-
-    // TODO: Resize prompt window.
-}
-#endif
-
 void record_yank(clip_board *clb, const buffer_string& deletedText, yank_side side) {
     if (clb->justRecorded) {
         runtime_check(!clb->clips.empty(), "justRecorded true, clips empty");
@@ -251,7 +240,6 @@ buffer_id find_or_create_buf(state *state, const std::string& name, bool make_re
 }
 
 mark_id buffer::add_mark(size_t offset) {
-    // TODO: Doesn't scale, and with region-based undo, it will need to scale.
     for (size_t i = 0; i < marks.size(); ++i) {
         if (marks[i] == SIZE_MAX) {
             marks[i] = offset;
