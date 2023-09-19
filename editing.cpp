@@ -30,8 +30,6 @@ void note_undo(buffer *buf, insert_result&& i_res) {
     // Make and add the _reverse_ action in the undo items.
     // (Why the reverse action?  Because jsmacs did it that way.)
 
-    // TODO: Of course, in some cases we have reverseAddEdit -- but that's only when
-    // actually undoing, so there are none yet.
     add_edit(&buf->undo_info, make_reverse_action(&buf->undo_info, std::move(i_res)));
 }
 
@@ -147,7 +145,6 @@ prompt buffer_close_prompt(buffer&& initialBuf) {
             // killring important, undo not because we're destructing the status_prompt buf.
             undo_killring_handled ret = note_backout_action(state, &promptBuf);
             std::string text = promptBuf.copy_to_string();
-            // TODO: Implement displaying errors to the user.
             if (text == "yes") {
                 // Yes, close without saving.
 
@@ -206,11 +203,10 @@ prompt buffer_close_prompt(buffer&& initialBuf) {
 undo_killring_handled buffer_close_action(state *state, buffer *active_buf) {
     undo_killring_handled ret = note_backout_action(state, active_buf);
     if (state->status_prompt.has_value()) {
-        // TODO: Ignore keypress?  Or should we treat this like C-g for the status prompt?
+        state->note_error_message("Cannot close buffer while prompt is active");  // TODO: UI logic
         return ret;
     }
 
-    // TODO: Only complain if the buffer has been modified.  (Add a modified flag.)
     state->status_prompt = buffer_close_prompt(buffer(state->gen_buf_id()));
     return ret;
 }

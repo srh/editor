@@ -188,7 +188,6 @@ void move_down(ui_window_ctx *ui, buffer *buf) {
 }
 
 void move_home(ui_window_ctx *ui, buffer *buf) {
-    // TODO: Use uh, screen home and screen end?
     size_t distance = buf->cursor_distance_to_beginning_of_line();
     move_left_by(ui, buf, distance);
 }
