@@ -122,6 +122,7 @@ void atomic_undo(ui_window_ctx *ui, buffer *buf, atomic_undo_item&& item) {
     logic_check(item.before_node == buf->undo_info.current_node, "atomic_undo node number mismatch, item.before_node=%" PRIu64 " vs %" PRIu64,
                 item.before_node.value, buf->undo_info.current_node.value);
 
+    buf->replace_mark(ui->cursor_mark, item.beg);
     buf->set_cursor(item.beg);
 
     if (!item.text_deleted.empty()) {
