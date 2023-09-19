@@ -11,8 +11,12 @@ struct runtime_check_failure { };
 
 // TODO: Right now typically messages to stderr get printed in a weird terminal mode.
 
-// TODO: we are assuming _GNU_SOURCE, which returns const char * and sometimes doesn't use
-// the buf.
+// We are assuming _GNU_SOURCE, which returns const char * and sometimes doesn't use the
+// buf.
+#ifndef _GNU_SOURCE
+#error "Our invokation of strerror_r assumes _GNU_SOURCE"
+#endif
+
 #define runtime_check_strerror strerror_r(errno, runtime_check_strerr_buf, sizeof(runtime_check_strerr_buf))
 
 #define runtime_fail(fmt, ...) do { \
