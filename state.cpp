@@ -21,7 +21,9 @@ void buffer::line_info_at_pos(size_t pos, size_t *line_out, size_t *col_out) con
             stats = subtract_stats_right(bef_stats_, bef_.data(), pos, bef_.size());
         }
     } else {
-        logic_checkg(pos < bef_.size() + aft_.size());
+        logic_check(pos <= bef_.size() + aft_.size(),
+                    "line_info_at_pos: pos=%zu, bef_.size()=%zu, aft_.size()=%zu, sum=%zu",
+                    pos, bef_.size(), aft_.size(), bef_.size() + aft_.size());
         size_t apos = pos - bef_.size();
         if (apos < (aft_.size() / 4) * 3) {
             stats = append_stats(bef_stats_,
