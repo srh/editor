@@ -22,14 +22,14 @@ size_t pos_current_column(const buffer& buf, const size_t pos) {
 
 // TODO: Fix this cyclic reference cleanly somehow.
 // Used in buffer.cpp
-size_t current_column(const buffer& buf) {
-    return pos_current_column(buf, buf.cursor());
+size_t current_column(const ui_window_ctx *ui, const buffer *buf) {
+    return pos_current_column(*buf, get_ctx_cursor(ui, buf));
 }
 
 // TODO: Is this where we want this implemented?  Uh, sure.
 void ensure_virtual_column_initialized(ui_window_ctx *ui, const buffer *buf) {
     if (!ui->virtual_column.has_value()) {
-        ui->virtual_column = current_column(*buf);
+        ui->virtual_column = current_column(ui, buf);
     }
 }
 
@@ -303,9 +303,9 @@ void scroll_to_mid(ui_window_ctx *ui, buffer *buf, size_t buf_pos) {
     scroll_to_row(ui, buf, ui->rendered_window->rows / 2, buf_pos);
 }
 
-void recenter_cursor_if_offscreen(ui_window_ctx *ui, buffer *buf) {
-    if (cursor_is_offscreen(ui, buf, buf->cursor())) {
-        scroll_to_mid(ui, buf, buf->cursor());
+void recenter_cursor_if_offscreen_(ui_window_ctx *ui, buffer *buf) {
+    if (cursor_is_offscreen(ui, buf, get_ctx_cursor(ui, buf))) {
+        scroll_to_mid(ui, buf, get_ctx_cursor(ui, buf));
     }
 }
 

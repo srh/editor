@@ -50,7 +50,7 @@ undo_killring_handled delete_backward_word(state *state, ui_window_ctx *ui, buff
 undo_killring_handled delete_forward_word(state *state, ui_window_ctx *ui, buffer *buf);
 undo_killring_handled kill_line(state *state, ui_window_ctx *ui, buffer *buf);
 undo_killring_handled kill_region(state *state, ui_window_ctx *ui, buffer *buf);
-undo_killring_handled copy_region(state *state, buffer *buf);
+undo_killring_handled copy_region(state *state, ui_window_ctx *ui, buffer *buf);
 
 void rotate_to_buffer(state *state, buffer_id buf_id);
 undo_killring_handled rotate_buf_right(state *state, buffer *active_buf);

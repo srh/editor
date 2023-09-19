@@ -14,8 +14,7 @@ bool is_solid(buffer_char bch) {
         (ch >= '0' && ch <= '9');
 }
 
-size_t forward_word_distance(const buffer *buf) {
-    const size_t cursor = buf->cursor();
+size_t forward_word_distance(const buffer *buf, const size_t cursor) {
     size_t i = cursor;
     bool reachedSolid = false;
     for (; i < buf->size(); ++i) {
@@ -29,8 +28,7 @@ size_t forward_word_distance(const buffer *buf) {
     return i - cursor;
 }
 
-size_t backward_word_distance(const buffer *buf) {
-    const size_t cursor = buf->cursor();
+size_t backward_word_distance(const buffer *buf, const size_t cursor) {
     size_t count = 0;
     bool reachedSolid = false;
     while (count < cursor) {
@@ -47,18 +45,20 @@ size_t backward_word_distance(const buffer *buf) {
 }
 
 void move_forward_word(ui_window_ctx *ui, buffer *buf) {
-    size_t d = forward_word_distance(buf);
+    // TODO: It might be cleaner to compute the offset, instead of distance.  Then set the
+    // cursor more directly.  Ditto in move_backward_word.
+    size_t d = forward_word_distance(buf, get_ctx_cursor(ui, buf));
     move_right_by(ui, buf, d);
 }
 
 void move_backward_word(ui_window_ctx *ui, buffer *buf) {
-    size_t d = backward_word_distance(buf);
+    size_t d = backward_word_distance(buf, get_ctx_cursor(ui, buf));
     move_left_by(ui, buf, d);
 }
 
 // Maybe move_up and move_down should be in term_ui.cpp.
 void move_up(ui_window_ctx *ui, buffer *buf) {
-    load_ctx_cursor(ui, buf);
+    const size_t cursor = get_ctx_cursor(ui, buf);
 
     const size_t window_cols = ui->window_cols_or_maxval();
     // We're not interested in virtual_column as a "line column" -- just interested in the
@@ -80,8 +80,7 @@ void move_up(ui_window_ctx *ui, buffer *buf) {
     // Note that Emacs (in GUI mode, at least) never encounters the 4-b case because it
     // switches to line truncation when the window width gets low.
 
-    const size_t cursor = buf->cursor();
-    const size_t bol1 = cursor - buf->cursor_distance_to_beginning_of_line();
+    const size_t bol1 = cursor - distance_to_beginning_of_line(*buf, cursor);
     const size_t bol = bol1 == 0 ? 0 : (bol1 - 1) - distance_to_beginning_of_line(*buf, bol1 - 1);
 
     // So we're going to render forward from bol, which is the beginning of the previous
@@ -129,19 +128,20 @@ void move_up(ui_window_ctx *ui, buffer *buf) {
         // We're already on the top row.
         return;
     }
-    buf->set_cursor(prev_row_cursor_proposal);
-    recenter_cursor_if_offscreen(ui, buf);
-    save_ctx_cursor(ui, buf);
+    buf->set_cursor_(prev_row_cursor_proposal);  // For UI rendering (line,col) perf.
+    set_ctx_cursor(ui, buf);
+    recenter_cursor_if_offscreen_(ui, buf);
 }
 
 void move_down(ui_window_ctx *ui, buffer *buf) {
-    load_ctx_cursor(ui, buf);
+    const size_t cursor = get_ctx_cursor(ui, buf);
     const size_t window_cols = ui->window_cols_or_maxval();
+    // TODO: This may compute current_column -- if it does, reuse the value below.
     ensure_virtual_column_initialized(ui, buf);
     const size_t target_column = *ui->virtual_column % window_cols;
 
     // Remember we do some traversing in current_column.
-    size_t line_col = current_column(*buf);
+    size_t line_col = pos_current_column(*buf, cursor);
     size_t col = line_col % window_cols;
 
     // Simple: We walk forward until the number of rows traversed is >= 1 _and_ we're at
@@ -149,7 +149,7 @@ void move_down(ui_window_ctx *ui, buffer *buf) {
     // We use candidate_index != SIZE_MAX to determine if we've entered the next line.
 
     size_t candidate_index = SIZE_MAX;
-    for (size_t i = buf->cursor(), e = buf->size(); i < e; ++i) {
+    for (size_t i = cursor, e = buf->size(); i < e; ++i) {
         buffer_char ch = buf->get(i);
         char_rendering rend = compute_char_rendering(ch, &line_col);
         if (rend.count == SIZE_MAX) {
@@ -182,9 +182,9 @@ void move_down(ui_window_ctx *ui, buffer *buf) {
         candidate_index = buf->size();
     }
 
-    buf->set_cursor(candidate_index);
-    recenter_cursor_if_offscreen(ui, buf);
-    save_ctx_cursor(ui, buf);
+    buf->set_cursor_(candidate_index);
+    set_ctx_cursor(ui, buf);
+    recenter_cursor_if_offscreen_(ui, buf);
 }
 
 void move_home(ui_window_ctx *ui, buffer *buf) {

@@ -228,7 +228,7 @@ bool render_status_area_or_prompt(terminal_frame *frame, const state& state, win
 
         render_string(frame, status_area_topleft, status_area_width, to_buffer_string(message), terminal_style::bold());
 
-        std::vector<render_coord> coords = { {state.status_prompt->buf.cursor(), std::nullopt} };
+        std::vector<render_coord> coords = { {get_ctx_cursor(&state.status_prompt->win_ctx, &state.status_prompt->buf), std::nullopt} };
         terminal_coord prompt_topleft = {
             .row = status_area_topleft.row,
             .col = u32_add(status_area_topleft.col, std::min<uint32_t>(status_area_width, uint32_t(message.size())))
@@ -461,8 +461,8 @@ undo_killring_handled meta_1_to_9_keypress(state *state, buffer *active_buf, cha
     return switch_to_window_number_action(state, active_buf, int(value - '0'));
 }
 
-undo_killring_handled meta_w_keypress(state *state, buffer *active_buf) {
-    return copy_region(state, active_buf);
+undo_killring_handled meta_w_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return copy_region(state, ui, active_buf);
 }
 undo_killring_handled right_arrow_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
     move_right(ui, active_buf);
@@ -709,11 +709,12 @@ undo_killring_handled process_keyprefix_in_buf(
             }
 
             switch (kp.value) {
-            case 'f': return meta_f_keypress(state, ui, active_buf);
             case 'b': return meta_b_keypress(state, ui, active_buf);
-            case 'h': return meta_h_keypress(state, ui, active_buf);
-            case 'y': return meta_y_keypress(state, ui, active_buf);
             case 'd': return meta_d_keypress(state, ui, active_buf);
+            case 'f': return meta_f_keypress(state, ui, active_buf);
+            case 'h': return meta_h_keypress(state, ui, active_buf);
+            case 'w': return meta_w_keypress(state, ui, active_buf);
+            case 'y': return meta_y_keypress(state, ui, active_buf);
             case keypress::special_to_key_type(special_key::Backspace):
                 return meta_backspace_keypress(state, ui, active_buf);
             default:

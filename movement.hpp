@@ -5,8 +5,8 @@
 
 namespace qwi {
 
-size_t forward_word_distance(const buffer *buf);
-size_t backward_word_distance(const buffer *buf);
+size_t forward_word_distance(const buffer *buf, const size_t cursor);
+size_t backward_word_distance(const buffer *buf, const size_t cursor);
 
 void move_forward_word(ui_window_ctx *ui, buffer *buf);
 void move_backward_word(ui_window_ctx *ui, buffer *buf);

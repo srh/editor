@@ -5,11 +5,6 @@
 
 namespace qwi {
 
-// Loads and sets cursor_mark.  It's ugly.  We'll soon remove buf->cursor() (as an
-// externally exposed concept) altogether.
-void load_ctx_cursor(ui_window_ctx *ui, buffer *buf);
-void save_ctx_cursor(ui_window_ctx *ui, buffer *buf);
-
 struct [[nodiscard]] insert_result {
     // Cursor position _after_ insertion
     size_t new_cursor;

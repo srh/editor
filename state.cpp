@@ -107,8 +107,9 @@ ui_window_ctx *ui_window::point_at(buffer_id id, state *st) {
     if (active_tab.value == SIZE_MAX) {
         active_tab.value = 0;
     }
+    // TODO: XXX: point_at should take an optional param from another ui_window_ctx from which it borrows first_visible_offset and cursor.  In fact this is just broken because it sets the cursor but first_visible_offset is zero..
     window_ctxs.emplace(window_ctxs.begin() + active_tab.value,
-                        buf->id, std::make_unique<ui_window_ctx>(buf->add_mark(0), buf->add_mark(buf->cursor())));
+                        buf->id, std::make_unique<ui_window_ctx>(buf->add_mark(0), buf->add_mark(buf->cursor_())));
     return window_ctxs[active_tab.value].second.get();
 }
 
@@ -361,7 +362,7 @@ void state::add_message(const std::string& msg) {
         buffer_id buf_id = find_or_create_buf(this, "*Messages*", true /* read-only */);
         buffer *buf = buf_set.find(buf_id)->second.get();
 
-        size_t og_cursor = buf->cursor();
+        // size_t og_cursor = buf->cursor();  // see below
         force_insert_chars_end_before_cursor(
             buf,
             as_buffer_chars(msg.data()), msg.size());
@@ -378,7 +379,9 @@ void state::add_message(const std::string& msg) {
         //
         // The exception is that char coalescence needs to be broken, because if the
         // cursor's at the end of the buffer, we move it around.
-        if (og_cursor != buf->cursor()) {
+
+        // TODO: Update this code for multi-window and add back the conditional coalescence break.
+        if (true /* og_cursor != buf->cursor() */) {
             add_coalescence_break(&buf->undo_info);
 
             // TODO: If we are _yanking_ the current *Messages* buffer, _and_ the cursor

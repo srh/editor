@@ -181,8 +181,14 @@ public:
 
     bool read_only = false;
 
+    // TODO: Remove these as public functions.
     size_t cursor() const { return bef_.size(); }
     void set_cursor(size_t pos);
+
+    size_t cursor_() const { return cursor(); }
+    void set_cursor_(size_t pos) { set_cursor(pos); }
+
+public:
     size_t size() const { return bef_.size() + aft_.size(); }
     buffer_char at(size_t i) const {
         return i < bef_.size() ? bef_[i] : aft_.at(i - bef_.size());
@@ -210,6 +216,19 @@ public:
     static buffer from_data(buffer_id id, buffer_string&& data);
 };
 
+inline size_t get_ctx_cursor(const ui_window_ctx *ui, const buffer *buf) {
+    return buf->get_mark_offset(ui->cursor_mark);
+}
+inline void set_ctx_cursor(ui_window_ctx *ui, buffer *buf) {
+    buf->replace_mark(ui->cursor_mark, buf->cursor_());
+}
+
+// Loads and sets cursor_mark.  It's ugly.  We'll soon remove buf->cursor() (as an
+// externally exposed concept) altogether.  TODO: Remove these (replacing some callers with set_ctx_cursor).
+// TODO: These should be defined in state.cpp, not wherever they are.
+void load_ctx_cursor(ui_window_ctx *ui, buffer *buf);
+void save_ctx_cursor(ui_window_ctx *ui, buffer *buf);
+
 // Generated and returned to indicate that the code exhaustively handles undo and killring behavior.
 struct [[nodiscard]] undo_killring_handled { };
 
@@ -227,12 +246,12 @@ struct prompt {
 
     std::function<undo_killring_handled(state *st, buffer&& promptBuf, bool *exit_loop)> procedure;  // only for proc
 
-    ui_window_ctx win_ctx{buf.add_mark(0), buf.add_mark(buf.cursor())};
+    ui_window_ctx win_ctx{buf.add_mark(0), buf.add_mark(0)};
 };
 
 struct popup {
     buffer buf;
-    ui_window_ctx win_ctx{buf.add_mark(0), buf.add_mark(buf.cursor())};
+    ui_window_ctx win_ctx{buf.add_mark(0), buf.add_mark(0)};
 };
 
 struct clip_board {

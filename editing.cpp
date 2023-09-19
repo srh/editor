@@ -231,7 +231,7 @@ undo_killring_handled cancel_action(state *state, buffer *buf) {
 }
 
 undo_killring_handled delete_backward_word(state *state, ui_window_ctx *ui, buffer *buf) {
-    size_t d = backward_word_distance(buf);
+    size_t d = backward_word_distance(buf, get_ctx_cursor(ui, buf));
     delete_result delres = delete_left(ui, buf, d);
     record_yank(&state->clipboard, delres.deletedText, yank_side::left);
     state->note_error_message(std::move(delres.error_message));
@@ -240,7 +240,7 @@ undo_killring_handled delete_backward_word(state *state, ui_window_ctx *ui, buff
 }
 
 undo_killring_handled delete_forward_word(state *state, ui_window_ctx *ui, buffer *buf) {
-    size_t d = forward_word_distance(buf);
+    size_t d = forward_word_distance(buf, get_ctx_cursor(ui, buf));
     delete_result delres = delete_right(ui, buf, d);
     record_yank(&state->clipboard, delres.deletedText, yank_side::right);
     state->note_error_message(std::move(delres.error_message));
@@ -249,10 +249,11 @@ undo_killring_handled delete_forward_word(state *state, ui_window_ctx *ui, buffe
 }
 
 undo_killring_handled kill_line(state *state, ui_window_ctx *ui, buffer *buf) {
-    size_t eolDistance = distance_to_eol(*buf, buf->cursor());
+    const size_t og_cursor = get_ctx_cursor(ui, buf);
+    size_t eolDistance = distance_to_eol(*buf, og_cursor);
 
     delete_result delres;
-    if (eolDistance == 0 && buf->cursor() < buf->size()) {
+    if (eolDistance == 0 && og_cursor < buf->size()) {
         delres = delete_right(ui, buf, 1);
     } else {
         delres = delete_right(ui, buf, eolDistance);
@@ -270,8 +271,8 @@ undo_killring_handled kill_region(state *state, ui_window_ctx *ui, buffer *buf) 
         state->note_error_message("No mark set");  // TODO: UI logic
         return handled_undo_killring(state, buf);
     }
-    size_t mark = buf->get_mark_offset(*buf->mark);
-    size_t cursor = buf->cursor();
+    const size_t mark = buf->get_mark_offset(*buf->mark);
+    const size_t cursor = get_ctx_cursor(ui, buf);
     if (mark > cursor) {
         delete_result delres = delete_right(ui, buf, mark - cursor);
         record_yank(&state->clipboard, delres.deletedText, yank_side::right);
@@ -294,15 +295,15 @@ undo_killring_handled kill_region(state *state, ui_window_ctx *ui, buffer *buf) 
     }
 }
 
-undo_killring_handled copy_region(state *state, buffer *buf) {
+undo_killring_handled copy_region(state *state, ui_window_ctx *ui, buffer *buf) {
     if (!buf->mark.has_value()) {
         // (We do NOT want no_yank here.)  We do want to disrupt the undo action chain (if only because Emacs does that).
         note_nop_undo(buf);
         state->note_error_message("No mark set");  // TODO: UI logic, and duplicated string
         return handled_undo_killring(state, buf);
     }
-    size_t mark = buf->get_mark_offset(*buf->mark);
-    size_t cursor = buf->cursor();
+    const size_t mark = buf->get_mark_offset(*buf->mark);
+    const size_t cursor = get_ctx_cursor(ui, buf);
     size_t region_beg = std::min(mark, cursor);
     size_t region_end = std::max(mark, cursor);
 
