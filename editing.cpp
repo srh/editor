@@ -265,7 +265,6 @@ undo_killring_handled kill_line(state *state, ui_window_ctx *ui, buffer *buf) {
 
 undo_killring_handled kill_region(state *state, ui_window_ctx *ui, buffer *buf) {
     if (!buf->mark.has_value()) {
-        // TODO: Display error
         // (We do NOT want no_yank here.)  We do want to disrupt the undo action chain (if only because Emacs does that).
         note_nop_undo(buf);
         state->note_error_message("No mark set");  // TODO: UI logic
@@ -315,9 +314,8 @@ undo_killring_handled copy_region(state *state, buffer *buf) {
 void rotate_to_buffer(state *state, ui_window *win, buffer_id buf_id) {
     note_navigate_away_from_buf(win, state->lookup(buf_id));
 
-    // TODO: With multi-window, we will need to actually consider where to put the buffer
-    // into the window's ordered buf list.  (Right now it's moot because every buffer's
-    // actually in the list.  Probably the caller needs an understanding.
+    // (If the buf isn't part of the ui_window's buf list, this puts it in a specific
+    // place.)
     win->point_at(buf_id, state);
 }
 
@@ -328,7 +326,6 @@ prompt file_open_prompt(buffer_id promptBufId) {
             // killring important, undo not because we're destructing the status_prompt buf.
             undo_killring_handled ret = note_backout_action(state, &promptBuf);
             std::string text = promptBuf.copy_to_string();
-            // TODO: Implement displaying errors to the user.
 
             if (text != "") {
                 // TODO: Handle error!
@@ -401,9 +398,7 @@ undo_killring_handled save_file_action(state *state, buffer *active_buf) {
     // Specifically, I don't want to break the undo chain here.
     undo_killring_handled ret = note_noundo_killring_action(state, active_buf);
     if (state->status_prompt.has_value()) {
-        // TODO: We'll have to handle M-x C-s or C-x C-s somehow -- probably by generic
-        // logic at the keypress level.
-
+        state->note_error_message("Cannot save file when prompt is active");  // TODO: UI logic
         // Ignore keypress.
         return ret;
     }
@@ -420,8 +415,7 @@ undo_killring_handled save_as_file_action(state *state, buffer *active_buf) {
     // Specifically, I don't want to break the undo chain here.
     undo_killring_handled ret = note_noundo_killring_action(state, active_buf);
     if (state->status_prompt.has_value()) {
-        // TODO: We'll have to handle M-x C-s or C-x C-s somehow -- probably by generic
-        // logic at the keypress level.
+        state->note_error_message("Cannot save file when prompt is active");  // TODO: UI logic, duplicated string
 
         // Ignore keypress.
         return ret;
