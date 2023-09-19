@@ -6,7 +6,7 @@
 namespace qwi {
 
 // Belongs in util.cpp, maybe.
-// TODO: Make distance_to_beginning_of_line use this.
+// TODO: Make distance_to_beginning_of_line use this.  (Later.  It would depend on buffer's data structure.)
 size_t find_after_last(const buffer_char *data, size_t count, buffer_char ch) {
     size_t i = count - 1;
     // Playing games with underflow.
@@ -103,7 +103,6 @@ region_stats subtract_stats_right(const region_stats& stats, const buffer_char *
         saw_tab |= (ch == buffer_char{'\t'});
     }
 
-    std::optional<region_stats> shortcut_value;
     if (removed_newlines == 0 && !saw_tab) {
         // Incrementally walking stats backward is possible except when we encounter a tab
         // character or newline.  For now we refrain from making the code more complicated.
@@ -115,8 +114,7 @@ region_stats subtract_stats_right(const region_stats& stats, const buffer_char *
             (void)rend;
         }
 
-        // TODO: Return this value, remove the logic checks below.
-        shortcut_value = region_stats{
+        return region_stats{
             .newline_count = stats.newline_count,
             .last_line_size = stats.last_line_size - line_col,
             .first_tab_size = stats.first_tab_size,
@@ -129,19 +127,11 @@ region_stats subtract_stats_right(const region_stats& stats, const buffer_char *
     compute_line_stats(data + beginning_of_line, new_count - beginning_of_line,
                        &last_line_size, &first_tab_size);
 
-    region_stats ret = {
+    return region_stats{
         .newline_count = stats.newline_count - removed_newlines,
         .last_line_size = last_line_size,
         .first_tab_size = first_tab_size,
     };
-
-    if (shortcut_value.has_value()) {
-        logic_check(shortcut_value->newline_count == ret.newline_count, "subtract_stats_right shortcut calculation newline_count = %zu vs. %zu", shortcut_value->newline_count, ret.newline_count);
-        logic_check(shortcut_value->last_line_size == ret.last_line_size, "subtract_stats_right shortcut calculation last_line_size = %zu vs. %zu", shortcut_value->last_line_size, ret.last_line_size);
-        logic_check(shortcut_value->first_tab_size == ret.first_tab_size, "subtract_stats_right shortcut calculation first_tab_size = %zu vs. %zu", shortcut_value->first_tab_size, ret.first_tab_size);
-    }
-
-    return ret;
 }
 
 region_stats subtract_stats_left(const region_stats& stats, const region_stats& removed_stats,

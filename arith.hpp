@@ -56,7 +56,10 @@ inline uint32_t u32_sub(uint32_t x, uint32_t y) {
 }
 
 inline size_t size_mul(size_t x, size_t y) {
-    // TODO: Throw upon overflow.
+    // TODO: Come on, some better way.  OF flag.
+    if (x > SIZE_MAX / y) {
+        logic_fail("size_mul overflow %zu * %zu", x, y);
+    }
     return x * y;
 }
 inline size_t size_add(size_t x, size_t y) {
