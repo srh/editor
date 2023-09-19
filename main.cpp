@@ -411,9 +411,6 @@ undo_killring_handled meta_h_keypress(state *state, ui_window_ctx *ui, buffer *a
     (void)ui, (void)active_buf;
     return help_menu(state);
 }
-undo_killring_handled meta_q_keypress(state *state, buffer *active_buf) {
-    return buffer_close_action(state, active_buf);
-}
 undo_killring_handled meta_y_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
     return alt_yank_from_clipboard(state, ui, active_buf);
 }
@@ -470,7 +467,7 @@ undo_killring_handled ctrl_b_keypress(state *state, ui_window_ctx *ui, buffer *a
     return left_arrow_keypress(state, ui, active_buf);
 }
 
-undo_killring_handled ctrl_c_keypress(state *state, buffer *active_buf, bool *exit_loop) {
+undo_killring_handled ctrl_x_ctrl_c_keypress(state *state, buffer *active_buf, bool *exit_loop) {
     bool exit = false;
     auto ret = exit_cleanly(state, active_buf, &exit);
     if (exit) { *exit_loop = true; }
@@ -545,6 +542,10 @@ undo_killring_handled ctrl_x_2_keypress(state *state, buffer *active_buf) {
 
 undo_killring_handled ctrl_x_3_keypress(state *state, buffer *active_buf) {
     return split_vertically(state, active_buf);
+}
+
+undo_killring_handled ctrl_x_k_keypress(state *state, buffer *active_buf) {
+    return buffer_close_action(state, active_buf);
 }
 
 undo_killring_handled ctrl_x_ctrl_f_keypress(state *state, buffer *active_buf) {
@@ -676,7 +677,6 @@ undo_killring_handled process_keyprefix_in_buf(
             case 'f': return meta_f_keypress(state, ui, active_buf);
             case 'b': return meta_b_keypress(state, ui, active_buf);
             case 'h': return meta_h_keypress(state, ui, active_buf);
-            case 'q': return meta_q_keypress(state, active_buf);
             case 'y': return meta_y_keypress(state, ui, active_buf);
             case 'd': return meta_d_keypress(state, ui, active_buf);
             case 's': return meta_s_keypress(state, active_buf);
@@ -690,7 +690,6 @@ undo_killring_handled process_keyprefix_in_buf(
             case ' ': return ctrl_space_keypress(state, ui, active_buf);
             case 'a': return ctrl_a_keypress(state, ui, active_buf);
             case 'b': return ctrl_b_keypress(state, ui, active_buf);
-            case 'c': return ctrl_c_keypress(state, active_buf, exit_loop);
             case 'd': return ctrl_d_keypress(state, ui, active_buf);
             case 'e': return ctrl_e_keypress(state, ui, active_buf);
             case 'f': return ctrl_f_keypress(state, ui, active_buf);
@@ -713,6 +712,8 @@ undo_killring_handled process_keyprefix_in_buf(
                         return ctrl_x_2_keypress(state, active_buf);
                     case '3':
                         return ctrl_x_3_keypress(state, active_buf);
+                    case 'k':
+                        return ctrl_x_k_keypress(state, active_buf);
                     case keypress::special_to_key_type(special_key::Left):
                         return ctrl_x_arrow_keypress(state, active_buf, ortho_direction::Left);
                     case keypress::special_to_key_type(special_key::Right):
@@ -727,6 +728,8 @@ undo_killring_handled process_keyprefix_in_buf(
                     }
                 } else if (kp1.equals('f', keypress::CTRL)) {
                     return ctrl_x_ctrl_f_keypress(state, active_buf);
+                } else if (kp1.equals('c', keypress::CTRL)) {
+                    return ctrl_x_ctrl_c_keypress(state, active_buf, exit_loop);
                 }
 
                 // More C-x-prefixed keypresses would go here.
