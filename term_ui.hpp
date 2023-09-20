@@ -32,7 +32,8 @@ struct terminal_style {
     static constexpr uint8_t BACKGROUND_BIT = 1 << 2;
 
     static constexpr uint8_t BLACK = 0, RED = 1, GREEN = 2, YELLOW = 3,
-        BLUE = 4, MAGENTA = 5, CYAN = 6, WHITE = 7;
+        BLUE = 4, MAGENTA = 5, CYAN = 6, WHITE = 7,
+        BRIGHT = 8;
 
     // Zero means normal.
     static terminal_style zero() { return terminal_style{0, 0, 0}; }
@@ -42,7 +43,7 @@ struct terminal_style {
 
     uint8_t mask = 0;
 
-    // Ansi color values from 0-7.  (Maybe we'll support "bright" colors with 8-15 at some point.)
+    // Ansi color values from 0-7, bright ansi color values from 8-15.
     uint8_t foreground : 4 = 0;
     uint8_t background : 4 = 0;
 

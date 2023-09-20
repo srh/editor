@@ -40,16 +40,13 @@ void append_new_terminal_style(std::string *buf, const terminal_style& style) {
         *buf += ";1";
     }
     if (style.mask & terminal_style::FOREGROUND_BIT) {
-        logic_checkg(style.foreground < 8);
         *buf += ';';
-        *buf += '3';
-        *buf += '0' + style.foreground;
+        *buf += (style.foreground & terminal_style::BRIGHT) ? '9' : '3';
+        *buf += '0' + (style.foreground & 7);
     }
     if (style.mask & terminal_style::BACKGROUND_BIT) {
-        logic_checkg(style.foreground < 8);
-        *buf += ';';
-        *buf += '4';
-        *buf += '0' + style.foreground;
+        *buf += (style.background & terminal_style::BRIGHT) ? ";4" : ";10";
+        *buf += '0' + (style.background & 7);
     }
     *buf += 'm';
 }
@@ -206,7 +203,15 @@ void render_normal_status_area(terminal_frame *frame, const state& state, window
 
     count = render_string(frame, topleft, width, str, terminal_style::red_text());
 
-    // TODO: Probably, make the status line be gray.
+    // For now, the status bar has no background color -- we'll need RGB background colors
+    // for that to be comfortable.
+#if 0
+    size_t offset = frame->window.cols * status_area_topleft.row + status_area_topleft.col;
+    for (size_t i = 0; i < status_area_width; ++i) {
+        frame->style_data[offset + i].mask |= terminal_style::BACKGROUND_BIT;
+        frame->style_data[offset + i].background = terminal_style::BLACK | terminal_style::BRIGHT;
+    }
+#endif  // 0
 }
 
 // This is used for the active window only.  Returns true if we should render (in red) the
