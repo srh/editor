@@ -107,15 +107,19 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
 }
 
 
-atomic_undo_item opposite(const atomic_undo_item &item) {
+atomic_undo_item opposite(atomic_undo_item&& item) {
     // TODO: Is .beg value right in jsmacs?
-    atomic_undo_item ret = item;
+    atomic_undo_item ret = std::move(item);
     if (item.side == Side::left) {
         ret.beg = size_sub(size_add(ret.beg, item.text_inserted.size()), item.text_deleted.size());
     }
     std::swap(ret.text_inserted, ret.text_deleted);
     std::swap(ret.before_node, ret.after_node);
     return ret;
+}
+
+atomic_undo_item opposite(const atomic_undo_item& item) {
+    return opposite(atomic_undo_item(item));
 }
 
 void atomic_undo(ui_window_ctx *ui, buffer *buf, atomic_undo_item&& item) {
@@ -153,7 +157,6 @@ void atomic_undo(ui_window_ctx *ui, buffer *buf, atomic_undo_item&& item) {
 
     buf->undo_info.current_node = item.after_node;
 
-    // TODO: opposite with std::move.
     buf->undo_info.future.push_back(opposite(item));
 }
 
