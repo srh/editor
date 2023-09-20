@@ -27,16 +27,26 @@ inline const char *as_chars(const terminal_char *p) {
 }
 
 struct terminal_style {
-    // Zero means normal.
     static constexpr uint8_t BOLD_BIT = 1 << 0;
-    static constexpr uint8_t WHITE_ON_RED_BIT = 1 << 1;
-    static constexpr uint8_t RED_TEXT_BIT = 1 << 2;
-    static terminal_style zero() { return terminal_style{0}; }
-    static terminal_style bold() { return terminal_style{BOLD_BIT}; }
-    static terminal_style white_on_red() { return terminal_style{WHITE_ON_RED_BIT}; }
-    static terminal_style red_text() { return terminal_style{RED_TEXT_BIT}; }
+    static constexpr uint8_t FOREGROUND_BIT = 1 << 1;
+    static constexpr uint8_t BACKGROUND_BIT = 1 << 2;
+
+    static constexpr uint8_t BLACK = 0, RED = 1, GREEN = 2, YELLOW = 3,
+        BLUE = 4, MAGENTA = 5, CYAN = 6, WHITE = 7;
+
+    // Zero means normal.
+    static terminal_style zero() { return terminal_style{0, 0, 0}; }
+    static terminal_style bold() { return terminal_style{BOLD_BIT, 0, 0}; }
+    static terminal_style white_on_red() { return terminal_style{FOREGROUND_BIT | BACKGROUND_BIT, WHITE, RED}; }
+    static terminal_style red_text() { return terminal_style{FOREGROUND_BIT, RED, 0}; }
 
     uint8_t mask = 0;
+
+    // Ansi color values from 0-7.  (Maybe we'll support "bright" colors with 8-15 at some point.)
+    uint8_t foreground : 4 = 0;
+    uint8_t background : 4 = 0;
+
+    bool operator==(const terminal_style&) const = default;
 };
 
 // A coordinate relative to the terminal frame (as opposed to some smaller buffer window).

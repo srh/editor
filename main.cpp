@@ -31,20 +31,25 @@ struct command_line_args {
 
 namespace qwi {
 
-void append_mask_difference(std::string *buf, uint8_t old_mask, uint8_t new_mask) {
-    static_assert(std::is_same<decltype(old_mask), decltype(terminal_style::mask)>::value);
+void append_new_terminal_style(std::string *buf, const terminal_style& style) {
 
     // Right now this code is non-general -- it assumes there is _only_ a bold bit.
     *buf += TESC();
     *buf += '0';
-    if (new_mask & terminal_style::BOLD_BIT) {
+    if (style.mask & terminal_style::BOLD_BIT) {
         *buf += ";1";
     }
-    if (new_mask & terminal_style::WHITE_ON_RED_BIT) {
-        *buf += ";37;41";
+    if (style.mask & terminal_style::FOREGROUND_BIT) {
+        logic_checkg(style.foreground < 8);
+        *buf += ';';
+        *buf += '3';
+        *buf += '0' + style.foreground;
     }
-    if (new_mask & terminal_style::RED_TEXT_BIT) {
-        *buf += ";31";
+    if (style.mask & terminal_style::BACKGROUND_BIT) {
+        logic_checkg(style.foreground < 8);
+        *buf += ';';
+        *buf += '4';
+        *buf += '0' + style.foreground;
     }
     *buf += 'm';
 }
@@ -52,8 +57,7 @@ void append_mask_difference(std::string *buf, uint8_t old_mask, uint8_t new_mask
 // Notably, this function does not write any ansi color or style escape sequences if the
 // style is uninital
 void write_frame(int fd, const terminal_frame& frame) {
-    uint8_t mask = 0;
-    static_assert(std::is_same<decltype(mask), decltype(terminal_style::mask)>::value);
+    terminal_style prev = terminal_style::zero();
 
     std::string buf;
     buf += TESC(?25l);
@@ -61,15 +65,15 @@ void write_frame(int fd, const terminal_frame& frame) {
     for (size_t i = 0; i < frame.window.rows; ++i) {
         for (size_t j = 0; j < frame.window.cols; ++j) {
             size_t offset = i * frame.window.cols + j;
-            if (mask != frame.style_data[offset].mask) {
-                append_mask_difference(&buf, mask, frame.style_data[offset].mask);
-                mask = frame.style_data[offset].mask;
+            if (prev != frame.style_data[offset]) {
+                append_new_terminal_style(&buf, frame.style_data[offset]);
+                prev = frame.style_data[offset];
             }
             buf += frame.data[offset].as_char();
         }
-        if (mask != 0) {
-            append_mask_difference(&buf, mask, 0);
-            mask = 0;
+        if (prev != terminal_style::zero()) {
+            append_new_terminal_style(&buf, terminal_style::zero());
+            prev = terminal_style::zero();
         }
         if (i < frame.window.rows - 1) {
             buf += "\r\n";
