@@ -122,7 +122,7 @@ atomic_undo_item opposite(const atomic_undo_item& item) {
     return opposite(atomic_undo_item(item));
 }
 
-void atomic_undo(ui_window_ctx *ui, buffer *buf, atomic_undo_item&& item) {
+void atomic_undo(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf, atomic_undo_item&& item) {
     logic_check(item.before_node == buf->undo_info.current_node, "atomic_undo node number mismatch, item.before_node=%" PRIu64 " vs %" PRIu64,
                 item.before_node.value, buf->undo_info.current_node.value);
 
@@ -134,10 +134,10 @@ void atomic_undo(ui_window_ctx *ui, buffer *buf, atomic_undo_item&& item) {
         delete_result res;
         switch (item.side) {
         case Side::left:
-            res = delete_left(ui, buf, item.text_deleted.size());
+            res = delete_left(scratch, ui, buf, item.text_deleted.size());
             break;
         case Side::right:
-            res = delete_right(ui, buf, item.text_deleted.size());
+            res = delete_right(scratch, ui, buf, item.text_deleted.size());
             break;
         }
         logic_check(res.deletedText == item.text_deleted, "undo deletion action expecting text to match deleted text");
@@ -147,10 +147,10 @@ void atomic_undo(ui_window_ctx *ui, buffer *buf, atomic_undo_item&& item) {
         insert_result res;
         switch (item.side) {
         case Side::left:
-            res = insert_chars(ui, buf, item.text_inserted.data(), item.text_inserted.size());
+            res = insert_chars(scratch, ui, buf, item.text_inserted.data(), item.text_inserted.size());
             break;
         case Side::right:
-            res = insert_chars_right(ui, buf, item.text_inserted.data(), item.text_inserted.size());
+            res = insert_chars_right(scratch, ui, buf, item.text_inserted.data(), item.text_inserted.size());
             break;
         }
     }
@@ -169,7 +169,7 @@ void perform_undo(state *st, ui_window_ctx *ui, buffer *buf) {
     buf->undo_info.past.pop_back();
     switch (item.type) {
     case undo_item::Type::atomic: {
-        atomic_undo(ui, buf, std::move(item.atomic));
+        atomic_undo(st->scratch(), ui, buf, std::move(item.atomic));
     } break;
     case undo_item::Type::mountain: {
         atomic_undo_item it = std::move(item.history.back());
@@ -181,7 +181,7 @@ void perform_undo(state *st, ui_window_ctx *ui, buffer *buf) {
         if (!item.history.empty()) {
             buf->undo_info.past.push_back(std::move(item));
         }
-        atomic_undo(ui, buf, std::move(it));
+        atomic_undo(st->scratch(), ui, buf, std::move(it));
     } break;
     }
 }

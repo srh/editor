@@ -44,20 +44,20 @@ size_t backward_word_distance(const buffer *buf, const size_t cursor) {
     return count;
 }
 
-void move_forward_word(ui_window_ctx *ui, buffer *buf) {
+void move_forward_word(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf) {
     // TODO: It might be cleaner to compute the offset, instead of distance.  Then set the
     // cursor more directly.  Ditto in move_backward_word.
     size_t d = forward_word_distance(buf, get_ctx_cursor(ui, buf));
-    move_right_by(ui, buf, d);
+    move_right_by(scratch, ui, buf, d);
 }
 
-void move_backward_word(ui_window_ctx *ui, buffer *buf) {
+void move_backward_word(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf) {
     size_t d = backward_word_distance(buf, get_ctx_cursor(ui, buf));
-    move_left_by(ui, buf, d);
+    move_left_by(scratch, ui, buf, d);
 }
 
 // Maybe move_up and move_down should be in term_ui.cpp.
-void move_up(ui_window_ctx *ui, buffer *buf) {
+void move_up(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf) {
     const size_t cursor = get_ctx_cursor(ui, buf);
 
     const size_t window_cols = ui->window_cols_or_maxval();
@@ -130,10 +130,10 @@ void move_up(ui_window_ctx *ui, buffer *buf) {
     }
     buf->set_cursor_(prev_row_cursor_proposal);  // For UI rendering (line,col) perf.
     set_ctx_cursor(ui, buf);
-    recenter_cursor_if_offscreen(ui, buf);
+    recenter_cursor_if_offscreen(scratch, ui, buf);
 }
 
-void move_down(ui_window_ctx *ui, buffer *buf) {
+void move_down(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf) {
     const size_t cursor = get_ctx_cursor(ui, buf);
     const size_t window_cols = ui->window_cols_or_maxval();
     // TODO: This may compute current_column -- if it does, reuse the value below.
@@ -184,17 +184,17 @@ void move_down(ui_window_ctx *ui, buffer *buf) {
 
     buf->set_cursor_(candidate_index);
     set_ctx_cursor(ui, buf);
-    recenter_cursor_if_offscreen(ui, buf);
+    recenter_cursor_if_offscreen(scratch, ui, buf);
 }
 
-void move_home(ui_window_ctx *ui, buffer *buf) {
+void move_home(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf) {
     size_t distance = distance_to_beginning_of_line(*buf, buf->get_mark_offset(ui->cursor_mark));
-    move_left_by(ui, buf, distance);
+    move_left_by(scratch, ui, buf, distance);
 }
 
-void move_end(ui_window_ctx *ui, buffer *buf) {
+void move_end(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf) {
     size_t distance = distance_to_eol(*buf, buf->get_mark_offset(ui->cursor_mark));
-    move_right_by(ui, buf, distance);
+    move_right_by(scratch, ui, buf, distance);
 }
 
 }

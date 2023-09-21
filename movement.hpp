@@ -8,14 +8,14 @@ namespace qwi {
 size_t forward_word_distance(const buffer *buf, const size_t cursor);
 size_t backward_word_distance(const buffer *buf, const size_t cursor);
 
-void move_forward_word(ui_window_ctx *ui, buffer *buf);
-void move_backward_word(ui_window_ctx *ui, buffer *buf);
+void move_forward_word(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf);
+void move_backward_word(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf);
 
-void move_up(ui_window_ctx *ui, buffer *buf);
-void move_down(ui_window_ctx *ui, buffer *buf);
+void move_up(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf);
+void move_down(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf);
 // TODO: Do these respect \n or visible line?
-void move_home(ui_window_ctx *ui, buffer *buf);
-void move_end(ui_window_ctx *ui, buffer *buf);
+void move_home(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf);
+void move_end(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf);
 
 }  // namespace qwi
 

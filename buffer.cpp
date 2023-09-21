@@ -33,7 +33,7 @@ void add_to_marks_as_of(buffer *buf, size_t first_offset, size_t count) {
     }
 }
 
-insert_result insert_chars(ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count) {
+insert_result insert_chars(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count) {
     // TODO: We don't want to load_ctx_cursor for read-only bufs (for performance).  In
     // other functions here as well.
     const size_t og_cursor = get_ctx_cursor(ui, buf);
@@ -56,7 +56,7 @@ insert_result insert_chars(ui_window_ctx *ui, buffer *buf, const buffer_char *ch
 
     set_ctx_cursor(ui, buf);
 
-    recenter_cursor_if_offscreen(ui, buf);
+    recenter_cursor_if_offscreen(scratch, ui, buf);
 
     return {
         .new_cursor = new_cursor,
@@ -65,7 +65,7 @@ insert_result insert_chars(ui_window_ctx *ui, buffer *buf, const buffer_char *ch
         .error_message = NO_ERROR };
 }
 
-insert_result insert_chars_right(ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count) {
+insert_result insert_chars_right(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count) {
     const size_t og_cursor = get_ctx_cursor(ui, buf);
     load_ctx_cursor(ui, buf);
     if (buf->read_only) {
@@ -88,7 +88,7 @@ insert_result insert_chars_right(ui_window_ctx *ui, buffer *buf, const buffer_ch
     // Actually necessary, as long as add_to_marks_as_of above pushes cursor_mark to the right.
     set_ctx_cursor(ui, buf);
 
-    recenter_cursor_if_offscreen(ui, buf);
+    recenter_cursor_if_offscreen(scratch_frame, ui, buf);
 
     return {
         .new_cursor = og_cursor,
@@ -138,7 +138,7 @@ void update_marks_for_delete_range(buffer *buf, size_t range_beg, size_t range_e
     }
 }
 
-delete_result delete_left(ui_window_ctx *ui, buffer *buf, size_t og_count) {
+delete_result delete_left(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t og_count) {
     const size_t og_cursor = get_ctx_cursor(ui, buf);
     if (buf->read_only) {
         return {
@@ -168,7 +168,7 @@ delete_result delete_left(ui_window_ctx *ui, buffer *buf, size_t og_count) {
 
     set_ctx_cursor(ui, buf);  // Should be a no-op, but whatever.
 
-    recenter_cursor_if_offscreen(ui, buf);
+    recenter_cursor_if_offscreen(scratch_frame, ui, buf);
 
     if (count < og_count) {
         ret.error_message = "Beginning of buffer";  // TODO: Bad place for UI logic
@@ -176,7 +176,7 @@ delete_result delete_left(ui_window_ctx *ui, buffer *buf, size_t og_count) {
     return ret;
 }
 
-delete_result delete_right(ui_window_ctx *ui, buffer *buf, size_t og_count) {
+delete_result delete_right(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t og_count) {
     const size_t cursor = get_ctx_cursor(ui, buf);
     if (buf->read_only) {
         return {
@@ -206,7 +206,7 @@ delete_result delete_right(ui_window_ctx *ui, buffer *buf, size_t og_count) {
 
     set_ctx_cursor(ui, buf);  // Definitely a no-op.
 
-    recenter_cursor_if_offscreen(ui, buf);
+    recenter_cursor_if_offscreen(scratch_frame, ui, buf);
 
     if (count < og_count) {
         ret.error_message = "End of buffer";  // TODO: Bad place for UI logic
@@ -214,7 +214,7 @@ delete_result delete_right(ui_window_ctx *ui, buffer *buf, size_t og_count) {
     return ret;
 }
 
-void move_right_by(ui_window_ctx *ui, buffer *buf, size_t count) {
+void move_right_by(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t count) {
     const size_t cursor = get_ctx_cursor(ui, buf);
     count = std::min<size_t>(count, buf->size() - cursor);
     // Calling set_cursor isn't necessary, but it reduces (line, col) computation cost when rendering.
@@ -222,10 +222,10 @@ void move_right_by(ui_window_ctx *ui, buffer *buf, size_t count) {
     // TODO: Should we set virtual_column if count is 0?  (Can count be 0?)
     ui->virtual_column = std::nullopt;
     set_ctx_cursor(ui, buf);
-    recenter_cursor_if_offscreen(ui, buf);
+    recenter_cursor_if_offscreen(scratch_frame, ui, buf);
 }
 
-void move_left_by(ui_window_ctx *ui, buffer *buf, size_t count) {
+void move_left_by(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t count) {
     const size_t cursor = get_ctx_cursor(ui, buf);
     count = std::min<size_t>(count, cursor);
     // Calling set_cursor isn't necessary, but it reduces (line, col) computation cost when rendering.
@@ -233,7 +233,7 @@ void move_left_by(ui_window_ctx *ui, buffer *buf, size_t count) {
     // TODO: Should we set virtual_column if count is 0?  (Can count be 0?)
     ui->virtual_column = std::nullopt;
     set_ctx_cursor(ui, buf);
-    recenter_cursor_if_offscreen(ui, buf);
+    recenter_cursor_if_offscreen(scratch_frame, ui, buf);
 }
 
 void set_mark(ui_window_ctx *ui, buffer *buf) {

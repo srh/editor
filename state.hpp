@@ -22,6 +22,7 @@ namespace qwi {
 
 struct insert_result;
 struct delete_result;
+struct scratch_frame;
 
 struct window_size {
     uint32_t rows = 0, cols = 0;
@@ -154,18 +155,18 @@ private:
     region_stats aft_stats_;
 
     // True friends, necessary mutation functions.
-    friend insert_result insert_chars(ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count);
-    friend insert_result insert_chars_right(ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count);
-    friend delete_result delete_left(ui_window_ctx *ui, buffer *buf, size_t og_count);
-    friend delete_result delete_right(ui_window_ctx *ui, buffer *buf, size_t og_count);
+    friend insert_result insert_chars(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count);
+    friend insert_result insert_chars_right(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count);
+    friend delete_result delete_left(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t og_count);
+    friend delete_result delete_right(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t og_count);
 
     // Half friends -- a function I don't want to exist.
     friend void force_insert_chars_end_before_cursor(
         buffer *buf, const buffer_char *chs, size_t count);
 
     // False friends, that access bef and aft, but we'd like them to use the buf more abstractly.
-    friend void move_right_by(ui_window_ctx *ui, buffer *buf, size_t count);
-    friend void move_left_by(ui_window_ctx *ui, buffer *buf, size_t count);
+    friend void move_right_by(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t count);
+    friend void move_left_by(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t count);
     friend void save_buf_to_married_file_and_mark_unmodified(buffer *buf);
     friend buffer open_file_into_detached_buffer(state *state, const std::string& dirty_path);
 
@@ -372,7 +373,7 @@ public:
 };
 
 struct state {
-    state() = default;
+    state();
     ~state();
 
     NO_COPY(state);
@@ -442,6 +443,9 @@ public:
     clip_board clipboard;
 
     ui_mode ui_config;
+
+    std::unique_ptr<scratch_frame> scratch_;
+    scratch_frame *scratch() { return scratch_.get(); }
 };
 
 // TODO: Rename to be buffer_name_linear_time

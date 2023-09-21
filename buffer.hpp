@@ -14,17 +14,17 @@ struct [[nodiscard]] insert_result {
     std::string error_message;  // "" or "Buffer is read only"
 };
 
-insert_result insert_chars(ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count);
+insert_result insert_chars(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count);
 
-inline insert_result insert_char(ui_window_ctx *ui, buffer *buf, buffer_char sch) {
-    return insert_chars(ui, buf, &sch, 1);
+inline insert_result insert_char(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, buffer_char sch) {
+    return insert_chars(scratch_frame, ui, buf, &sch, 1);
 }
-inline insert_result insert_char(ui_window_ctx *ui, buffer *buf, uint8_t uch) {
+inline insert_result insert_char(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, uint8_t uch) {
     buffer_char ch = {uch};
-    return insert_chars(ui, buf, &ch, 1);
+    return insert_chars(scratch_frame, ui, buf, &ch, 1);
 }
 
-insert_result insert_chars_right(ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count);
+insert_result insert_chars_right(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count);
 
 void force_insert_chars_end_before_cursor(ui_window_ctx *ui, buffer *buf,
                                           const buffer_char *chs, size_t count);
@@ -37,28 +37,28 @@ struct [[nodiscard]] delete_result {
     Side side;
     std::string error_message;
 };
-delete_result delete_left(ui_window_ctx *ui, buffer *buf, size_t count);
+delete_result delete_left(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t count);
 
-inline delete_result backspace_char(ui_window_ctx *ui, buffer *buf) {
-    return delete_left(ui, buf, 1);
+inline delete_result backspace_char(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf) {
+    return delete_left(scratch_frame, ui, buf, 1);
 }
 
-delete_result delete_right(ui_window_ctx *ui, buffer *buf, size_t count);
+delete_result delete_right(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t count);
 
-inline delete_result delete_char(ui_window_ctx *ui, buffer *buf) {
-    return delete_right(ui, buf, 1);
+inline delete_result delete_char(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf) {
+    return delete_right(scratch_frame, ui, buf, 1);
 }
 
-void move_right_by(ui_window_ctx *ui, buffer *buf, size_t count);
+void move_right_by(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t count);
 
-inline void move_right(ui_window_ctx *ui, buffer *buf) {
-    move_right_by(ui, buf, 1);
+inline void move_right(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf) {
+    move_right_by(scratch_frame, ui, buf, 1);
 }
 
-void move_left_by(ui_window_ctx *ui, buffer *buf, size_t count);
+void move_left_by(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t count);
 
-inline void move_left(ui_window_ctx *ui, buffer *buf) {
-    move_left_by(ui, buf, 1);
+inline void move_left(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf) {
+    move_left_by(scratch_frame, ui, buf, 1);
 }
 
 void set_mark(ui_window_ctx *ui, buffer *buf);

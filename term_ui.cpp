@@ -220,7 +220,7 @@ bool too_small_to_render(const window_size& window) {
     return window.cols < 2 || window.rows == 0;
 }
 
-bool cursor_is_offscreen(terminal_frame *scratch_frame, const ui_window_ctx *ui, const buffer *buf, size_t cursor) {
+bool cursor_is_offscreen(scratch_frame *scratch_frame, const ui_window_ctx *ui, const buffer *buf, size_t cursor) {
     if (!ui->rendered_window.has_value()) {
         // We treat as infinite window, and specifically any buf without a window should
         // have no scrolling.
@@ -322,14 +322,14 @@ void scroll_to_mid(ui_window_ctx *ui, buffer *buf, size_t buf_pos) {
     scroll_to_row(ui, buf, ui->rendered_window->rows / 2, buf_pos);
 }
 
-void recenter_cursor_if_offscreen(terminal_frame *scratch_frame, ui_window_ctx *ui, buffer *buf) {
+void recenter_cursor_if_offscreen(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf) {
     if (cursor_is_offscreen(scratch_frame, ui, buf, get_ctx_cursor(ui, buf))) {
         scroll_to_mid(ui, buf, get_ctx_cursor(ui, buf));
     }
 }
 
-void recenter_cursor_if_offscreen(ui_window_ctx *ui, buffer *buf) {
-    terminal_frame scratch_frame;
+void recenter_cursor_if_offscreen_(ui_window_ctx *ui, buffer *buf) {
+    scratch_frame scratch_frame;
     recenter_cursor_if_offscreen(&scratch_frame, ui, buf);
 }
 

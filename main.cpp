@@ -417,12 +417,12 @@ void push_printable_repr(buffer_string *str, char sch) {
 undo_killring_handled insert_printable_repr(state *state, ui_window_ctx *ui, buffer *buf, char sch) {
     buffer_string str;
     push_printable_repr(&str, sch);
-    insert_result res = insert_chars(ui, buf, str.data(), str.size());
+    insert_result res = insert_chars(state->scratch(), ui, buf, str.data(), str.size());
     return note_action(state, buf, std::move(res));
 }
 
 undo_killring_handled delete_keypress(state *state, ui_window_ctx *ui, buffer *buf) {
-    delete_result res = delete_char(ui, buf);
+    delete_result res = delete_char(state->scratch(), ui, buf);
     // TODO: Here, and perhaps in general, handle cases where no characters were actually deleted.
     return note_coalescent_action(state, buf, std::move(res));
 }
@@ -448,7 +448,7 @@ undo_killring_handled f12_keypress(state *, buffer *) { return nop_keypress(); }
 undo_killring_handled shift_delete_keypress(state *, buffer *) { return unimplemented_keypress(); }
 
 undo_killring_handled character_keypress(state *state, ui_window_ctx *ui, buffer *active_buf, uint8_t uch) {
-    insert_result res = insert_char(ui, active_buf, uch);
+    insert_result res = insert_char(state->scratch(), ui, active_buf, uch);
     return note_coalescent_action(state, active_buf, std::move(res));
 }
 
@@ -457,11 +457,11 @@ undo_killring_handled tab_keypress(state *state, ui_window_ctx *ui, buffer *acti
 }
 
 undo_killring_handled meta_f_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
-    move_forward_word(ui, active_buf);
+    move_forward_word(state->scratch(), ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
 undo_killring_handled meta_b_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
-    move_backward_word(ui, active_buf);
+    move_backward_word(state->scratch(), ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
 undo_killring_handled meta_h_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
@@ -485,27 +485,27 @@ undo_killring_handled meta_w_keypress(state *state, ui_window_ctx *ui, buffer *a
     return copy_region(state, ui, active_buf);
 }
 undo_killring_handled right_arrow_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
-    move_right(ui, active_buf);
+    move_right(state->scratch(), ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
 undo_killring_handled left_arrow_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
-    move_left(ui, active_buf);
+    move_left(state->scratch(), ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
 undo_killring_handled up_arrow_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
-    move_up(ui, active_buf);
+    move_up(state->scratch(), ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
 undo_killring_handled down_arrow_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
-    move_down(ui, active_buf);
+    move_down(state->scratch(), ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
 undo_killring_handled home_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
-    move_home(ui, active_buf);
+    move_home(state->scratch(), ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
 undo_killring_handled end_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
-    move_end(ui, active_buf);
+    move_end(state->scratch(), ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
 
@@ -551,7 +551,7 @@ undo_killring_handled ctrl_p_keypress(state *state, ui_window_ctx *ui, buffer *a
 
 undo_killring_handled backspace_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
     // TODO: Here, and perhaps elsewhere, handle undo where no characters were actually deleted.
-    delete_result res = backspace_char(ui, active_buf);
+    delete_result res = backspace_char(state->scratch(), ui, active_buf);
     return note_coalescent_action(state, active_buf, std::move(res));
 }
 

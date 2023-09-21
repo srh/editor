@@ -396,6 +396,8 @@ void state::note_error_message(std::string&& msg) {
     live_error_message = std::move(msg);
 }
 
+state::state() : scratch_{new scratch_frame{}} {}
+
 state::~state() {
     if (popup_display.has_value()) {
         detach_ui_window_ctx(&popup_display->buf, &popup_display->win_ctx);
