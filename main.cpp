@@ -641,10 +641,11 @@ undo_killring_handled read_and_process_tty_input(int term, state *state, bool *e
         // Do nothing for undo or killring.
         return handled_undo_killring_no_buf(state);
     }
+#if 0
     if (!kpr.chars_read.empty()) {
-        // TODO: Get rid of this.
         state->add_message("Successfully parsed escape sequence: \\e" + kpr.chars_read);
     }
+#endif  // 0
 
     // Append to keyprefix and process it later.
     state->keyprefix.push_back(kp);
