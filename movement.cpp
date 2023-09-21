@@ -130,7 +130,7 @@ void move_up(ui_window_ctx *ui, buffer *buf) {
     }
     buf->set_cursor_(prev_row_cursor_proposal);  // For UI rendering (line,col) perf.
     set_ctx_cursor(ui, buf);
-    recenter_cursor_if_offscreen_(ui, buf);
+    recenter_cursor_if_offscreen(ui, buf);
 }
 
 void move_down(ui_window_ctx *ui, buffer *buf) {
@@ -184,7 +184,7 @@ void move_down(ui_window_ctx *ui, buffer *buf) {
 
     buf->set_cursor_(candidate_index);
     set_ctx_cursor(ui, buf);
-    recenter_cursor_if_offscreen_(ui, buf);
+    recenter_cursor_if_offscreen(ui, buf);
 }
 
 void move_home(ui_window_ctx *ui, buffer *buf) {

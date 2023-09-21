@@ -53,10 +53,11 @@ void append_new_terminal_style(std::string *buf, const terminal_style& style) {
 
 // Notably, this function does not write any ansi color or style escape sequences if the
 // style is uninital
-void write_frame(int fd, const terminal_frame& frame) {
+void write_frame(int fd, const terminal_frame& frame, std::string *write_buffer) {
     terminal_style prev = terminal_style::zero();
 
-    std::string buf;
+    write_buffer->resize(0);
+    std::string& buf = *write_buffer;
     buf += TESC(?25l);
     buf += TESC(H);
     for (size_t i = 0; i < frame.window.rows; ++i) {
@@ -98,7 +99,8 @@ void draw_empty_frame_for_exit(int fd, const terminal_size& window) {
     // TODO: Ensure cursor is restored on non-happy-paths.
     frame.cursor = {0, 0};
 
-    write_frame(fd, frame);
+    std::string write_buffer;
+    write_frame(fd, frame, &write_buffer);
 }
 
 state initial_state(const command_line_args& args) {
@@ -272,6 +274,7 @@ struct reused_redraw_state_bufs {
     terminal_frame frame;
     std::vector<uint32_t> columnar_splits;
     std::vector<uint32_t> row_splits;
+    std::string write_buffer;
 };
 
 const std::vector<std::pair<const ui_window_ctx *, window_size>>&
@@ -390,7 +393,7 @@ redraw_state(int term, reused_redraw_state_bufs *reused, const terminal_size& wi
         }
     }
 
-    write_frame(term, frame);
+    write_frame(term, frame, &reused->write_buffer);
 
     return frame.rendered_window_sizes;
 }

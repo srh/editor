@@ -220,7 +220,7 @@ bool too_small_to_render(const window_size& window) {
     return window.cols < 2 || window.rows == 0;
 }
 
-bool cursor_is_offscreen(const ui_window_ctx *ui, const buffer *buf, size_t cursor) {
+bool cursor_is_offscreen(terminal_frame *scratch_frame, const ui_window_ctx *ui, const buffer *buf, size_t cursor) {
     if (!ui->rendered_window.has_value()) {
         // We treat as infinite window, and specifically any buf without a window should
         // have no scrolling.
@@ -243,10 +243,10 @@ bool cursor_is_offscreen(const ui_window_ctx *ui, const buffer *buf, size_t curs
     }
 
     terminal_size window = terminal_size{rendered_window.rows, rendered_window.cols};
-    terminal_frame frame = init_frame(window);
+    reinit_frame(scratch_frame, window);
     render_coord coords[1] = { {cursor, std::nullopt} };
     terminal_coord window_topleft = { 0, 0 };
-    render_into_frame(&frame, window_topleft, rendered_window, *ui, *buf, std::span{coords});
+    render_into_frame(scratch_frame, window_topleft, rendered_window, *ui, *buf, std::span{coords});
     return !coords[0].rendered_pos.has_value();
 }
 
@@ -322,11 +322,17 @@ void scroll_to_mid(ui_window_ctx *ui, buffer *buf, size_t buf_pos) {
     scroll_to_row(ui, buf, ui->rendered_window->rows / 2, buf_pos);
 }
 
-void recenter_cursor_if_offscreen_(ui_window_ctx *ui, buffer *buf) {
-    if (cursor_is_offscreen(ui, buf, get_ctx_cursor(ui, buf))) {
+void recenter_cursor_if_offscreen(terminal_frame *scratch_frame, ui_window_ctx *ui, buffer *buf) {
+    if (cursor_is_offscreen(scratch_frame, ui, buf, get_ctx_cursor(ui, buf))) {
         scroll_to_mid(ui, buf, get_ctx_cursor(ui, buf));
     }
 }
+
+void recenter_cursor_if_offscreen(ui_window_ctx *ui, buffer *buf) {
+    terminal_frame scratch_frame;
+    recenter_cursor_if_offscreen(&scratch_frame, ui, buf);
+}
+
 
 #if 0
 void resize_buf_window(ui_window_ctx *ui, const window_size& buf_window) {

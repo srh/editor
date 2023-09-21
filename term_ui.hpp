@@ -103,7 +103,8 @@ constexpr bool INIT_FRAME_INITIALIZES_WITH_SPACES = true;
 
 size_t pos_current_column(const buffer& buf, const size_t pos);
 size_t current_column(const ui_window_ctx *ui, const buffer *buf);
-void recenter_cursor_if_offscreen_(ui_window_ctx *ui, buffer *buf);
+void recenter_cursor_if_offscreen(terminal_frame *scratch_frame, ui_window_ctx *ui, buffer *buf);
+void recenter_cursor_if_offscreen(ui_window_ctx *ui, buffer *buf);
 
 #if 0
 // Changes buf->window; also resets virtual_column.

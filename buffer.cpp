@@ -56,7 +56,7 @@ insert_result insert_chars(ui_window_ctx *ui, buffer *buf, const buffer_char *ch
 
     set_ctx_cursor(ui, buf);
 
-    recenter_cursor_if_offscreen_(ui, buf);
+    recenter_cursor_if_offscreen(ui, buf);
 
     return {
         .new_cursor = new_cursor,
@@ -88,7 +88,7 @@ insert_result insert_chars_right(ui_window_ctx *ui, buffer *buf, const buffer_ch
     // Actually necessary, as long as add_to_marks_as_of above pushes cursor_mark to the right.
     set_ctx_cursor(ui, buf);
 
-    recenter_cursor_if_offscreen_(ui, buf);
+    recenter_cursor_if_offscreen(ui, buf);
 
     return {
         .new_cursor = og_cursor,
@@ -168,7 +168,7 @@ delete_result delete_left(ui_window_ctx *ui, buffer *buf, size_t og_count) {
 
     set_ctx_cursor(ui, buf);  // Should be a no-op, but whatever.
 
-    recenter_cursor_if_offscreen_(ui, buf);
+    recenter_cursor_if_offscreen(ui, buf);
 
     if (count < og_count) {
         ret.error_message = "Beginning of buffer";  // TODO: Bad place for UI logic
@@ -206,7 +206,7 @@ delete_result delete_right(ui_window_ctx *ui, buffer *buf, size_t og_count) {
 
     set_ctx_cursor(ui, buf);  // Definitely a no-op.
 
-    recenter_cursor_if_offscreen_(ui, buf);
+    recenter_cursor_if_offscreen(ui, buf);
 
     if (count < og_count) {
         ret.error_message = "End of buffer";  // TODO: Bad place for UI logic
@@ -222,7 +222,7 @@ void move_right_by(ui_window_ctx *ui, buffer *buf, size_t count) {
     // TODO: Should we set virtual_column if count is 0?  (Can count be 0?)
     ui->virtual_column = std::nullopt;
     set_ctx_cursor(ui, buf);
-    recenter_cursor_if_offscreen_(ui, buf);
+    recenter_cursor_if_offscreen(ui, buf);
 }
 
 void move_left_by(ui_window_ctx *ui, buffer *buf, size_t count) {
@@ -233,7 +233,7 @@ void move_left_by(ui_window_ctx *ui, buffer *buf, size_t count) {
     // TODO: Should we set virtual_column if count is 0?  (Can count be 0?)
     ui->virtual_column = std::nullopt;
     set_ctx_cursor(ui, buf);
-    recenter_cursor_if_offscreen_(ui, buf);
+    recenter_cursor_if_offscreen(ui, buf);
 }
 
 void set_mark(ui_window_ctx *ui, buffer *buf) {
