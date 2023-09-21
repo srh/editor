@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include <string>
+#include <span>
 
 namespace qwi {
 
@@ -44,6 +45,14 @@ inline buffer_char *as_buffer_chars(char *chs) {
 inline const buffer_char *as_buffer_chars(const char *chs) {
     static_assert(sizeof(*chs) == sizeof(buffer_char));
     return reinterpret_cast<const buffer_char *>(chs);
+}
+
+inline std::span<const char> as_char_span(const buffer_string& bs) {
+    return std::span<const char>{as_chars(bs.data()), bs.size()};
+}
+
+inline std::span<const buffer_char> as_buffer_char_span(const std::string& s) {
+    return {as_buffer_chars(s.data()), s.size()};
 }
 
 

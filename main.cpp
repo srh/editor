@@ -144,7 +144,7 @@ std::optional<terminal_coord> add(const terminal_coord& window_topleft, const st
 
 // Returns the number of terminal cells used -- thus `rendering_width` minus that value is
 // how much space remains.  (Hence, returns `rendering_width` if there is a newline.)
-uint32_t render_string(terminal_frame *frame, const terminal_coord& coord, uint32_t rendering_width, const buffer_string& str, terminal_style style_mask = terminal_style{}) {
+uint32_t render_string(terminal_frame *frame, const terminal_coord& coord, uint32_t rendering_width, std::span<const buffer_char> str, terminal_style style_mask = terminal_style{}) {
     uint32_t col = coord.col;
     const uint32_t end_col = u32_add(col, rendering_width);
     logic_check(end_col <= frame->window.cols, "render_string: coord out of range");
@@ -224,25 +224,24 @@ bool render_status_area_or_prompt(terminal_frame *frame, const state& state, win
     if (!state.live_error_message.empty()) {
         render_string(frame, {.row = status_area_topleft.row, .col = 0},
                       status_area_width,
-                      to_buffer_string(state.live_error_message), terminal_style::zero());
+                      as_buffer_char_span(state.live_error_message), terminal_style::zero());
         return ret;
     }
 
     if (state.status_prompt.has_value()) {
-        std::string message;
+        const std::string *message;
         switch (state.status_prompt->typ) {
         case prompt::type::proc:
-            // TODO: Such a gratuitous copy.
-            message = state.status_prompt->messageText;
+            message = &state.status_prompt->messageText;
             break;
         }
 
-        render_string(frame, status_area_topleft, status_area_width, to_buffer_string(message), terminal_style::bold());
+        uint32_t message_cells = render_string(frame, status_area_topleft, status_area_width, as_buffer_char_span(*message), terminal_style::bold());
 
         std::vector<render_coord> coords = { {get_ctx_cursor(&state.status_prompt->win_ctx, &state.status_prompt->buf), std::nullopt} };
         terminal_coord prompt_topleft = {
             .row = status_area_topleft.row,
-            .col = u32_add(status_area_topleft.col, std::min<uint32_t>(status_area_width, uint32_t(message.size())))
+            .col = u32_add(status_area_topleft.col, message_cells)
         };
 
         window_size winsize = {.rows = 1, .cols = status_area_topleft.col + status_area_width - prompt_topleft.col};
