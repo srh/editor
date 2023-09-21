@@ -290,8 +290,8 @@ redraw_state(int term, reused_redraw_state_bufs *reused, const terminal_size& wi
         reused->columnar_splits
             = true_split_sizes<window_layout::col_data>(
                 window.cols, column_divider_size,
-                state.layout.column_datas.begin(),
-                state.layout.column_datas.end(),
+                std::span{state.layout.column_datas.data(),
+                    state.layout.column_datas.size()},
                 [](const window_layout::col_data& cd) { return cd.relsize; });
         std::vector<uint32_t>& columnar_splits = reused->columnar_splits;
 
@@ -313,8 +313,8 @@ redraw_state(int term, reused_redraw_state_bufs *reused, const terminal_size& wi
             const uint32_t row_divider_size = 0;
             reused->row_splits = true_split_sizes<uint32_t>(
                 window.rows, row_divider_size,
-                state.layout.row_relsizes.begin() + col_relsizes_begin,
-                state.layout.row_relsizes.begin() + col_relsizes_end,
+                std::span{state.layout.row_relsizes.begin() + col_relsizes_begin,
+                    state.layout.row_relsizes.begin() + col_relsizes_end},
                 [](const uint32_t& elem) { return elem; });
             std::vector<uint32_t>& row_splits = reused->row_splits;
 

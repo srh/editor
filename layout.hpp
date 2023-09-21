@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 
+#include <span>
 #include <vector>
 
 #include "arith.hpp"
@@ -16,15 +17,14 @@ namespace qwi {
 template <class T, class Callable>
 std::vector<uint32_t> true_split_sizes(
         uint32_t rendering_span, uint32_t divider_size,
-        typename std::vector<T>::const_iterator splits_begin,
-        typename std::vector<T>::const_iterator splits_end,
+        std::span<const T> splits,
         Callable&& splits_accessor) {
-    const size_t n = splits_end - splits_begin;
+    const size_t n = splits.size();
     logic_checkg(n != 0);
 
     uint32_t splits_denominator = 0;
-    for (auto it = splits_begin; it != splits_end; ++it) {
-        splits_denominator += splits_accessor(*it);
+    for (const T& elem : splits) {
+        splits_denominator += splits_accessor(elem);
     }
     logic_checkg(splits_denominator != 0);
 
@@ -36,7 +36,7 @@ std::vector<uint32_t> true_split_sizes(
     for (size_t i = 0; i < n; ++i) {
         // We want, approximately, rendering_cells * (pane.first / splits_denominator),
         // with the values rounded to add up to rendering_cells.
-        uint32_t rendered_pane_size = u32_mul_div(rendering_cells, splits_accessor(*(splits_begin + i)), splits_denominator);
+        uint32_t rendered_pane_size = u32_mul_div(rendering_cells, splits_accessor(splits[i]), splits_denominator);
         ret[i] = rendered_pane_size;
         sum += rendered_pane_size;
     }

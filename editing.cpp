@@ -690,8 +690,9 @@ void renormalize_column(window_layout *layout, size_t col_num, size_t col_begin,
     std::vector<uint32_t> true_sizes = true_split_sizes<uint32_t>(
         layout->last_rendered_terminal_size.rows,
         divider_size,
-        layout->row_relsizes.begin() + col_begin,
-        layout->row_relsizes.begin() + col_end,
+        std::span{
+            layout->row_relsizes.begin() + col_begin,
+            layout->row_relsizes.begin() + col_end},
         [](const uint32_t& elem) { return elem; });
 
     std::copy(true_sizes.begin(), true_sizes.end(), layout->row_relsizes.begin() + col_begin);
@@ -702,8 +703,8 @@ void renormalize_column_widths(window_layout *layout) {
     std::vector<uint32_t> true_sizes
         = true_split_sizes<window_layout::col_data>(
             layout->last_rendered_terminal_size.cols, column_divider_size,
-            layout->column_datas.begin(),
-            layout->column_datas.end(),
+            std::span{layout->column_datas.begin(),
+                layout->column_datas.end()},
             [](const window_layout::col_data& cd) { return cd.relsize; });
 
     for (size_t i = 0; i < true_sizes.size(); ++i) {
