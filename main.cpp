@@ -607,7 +607,6 @@ bool process_keyprefix_in_status_prompt(state *state, bool *exit_loop) {
 
     logic_checkg(state->status_prompt.has_value());
     if (kp.equals(keypress::special_key::Enter)) {
-        // TODO: Do we want enter_handle_status_prompt to return an undo_killring_handled value?
         undo_killring_handled discard = enter_handle_status_prompt(state, exit_loop);
         (void)discard;
         return true;
@@ -618,8 +617,7 @@ bool process_keyprefix_in_status_prompt(state *state, bool *exit_loop) {
 
         // At some point we should probably add a switch statement to handle all cases, or
         // a, uh, cancel handler on the `prompt` type, but for now this is correct for
-        // buffer-based proc prompts.  (At some point we'll want message reporting like
-        // "C-x C-g is undefined".)
+        // buffer-based proc prompts.
         // TODO: Message reporting that we closed the prompt.
         close_status_prompt(state);
         return true;
