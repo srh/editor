@@ -269,8 +269,9 @@ void render_column_divider(terminal_frame *frame, uint32_t rendering_column) {
 }
 
 std::vector<std::pair<const ui_window_ctx *, window_size>>
-redraw_state(int term, const terminal_size& window, const state& state) {
-    terminal_frame frame = init_frame(window);
+redraw_state(int term, terminal_frame *reused_frame, const terminal_size& window, const state& state) {
+    reinit_frame(reused_frame, window);
+    terminal_frame& frame = *reused_frame;
 
     if (state.popup_display.has_value()) {
         window_size winsize = {window.rows, window.cols};
@@ -847,10 +848,11 @@ void main_loop(int term, const command_line_args& args) {
     state state = initial_state(args);
 
     terminal_size window = get_terminal_size(term);
+    terminal_frame frame;
 
     auto redraw = [&] {
         std::vector<std::pair<const ui_window_ctx *, window_size>> window_sizes
-            = redraw_state(term, window, state);
+            = redraw_state(term, &frame, window, state);
         for (auto& elem : window_sizes) {
             // const-ness is inherited from state being passed as a const param -- we now
             // un-const and set_last_rendered_window.

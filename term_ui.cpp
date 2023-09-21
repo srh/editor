@@ -2,8 +2,13 @@
 
 #include <string.h>
 
+#include <ranges>
+
 #include "arith.hpp"
 #include "util.hpp"
+
+namespace ranges = std::ranges;
+namespace views = std::ranges::views;
 
 namespace qwi {
 
@@ -66,13 +71,27 @@ char_rendering compute_char_rendering(const buffer_char bch, size_t *line_col) {
     return ret;
 }
 
-terminal_frame init_frame(const terminal_size& window) {
-    terminal_frame ret;
+void reinit_frame(terminal_frame *frame, const terminal_size& window) {
+    // Reinitializes the frame, typically avoiding memory reallocation.
+
     static_assert(INIT_FRAME_INITIALIZES_WITH_SPACES);
     uint32_t area = u32_mul(window.rows, window.cols);
-    ret.data.resize(area, terminal_char{' '});
-    ret.style_data.resize(area, terminal_style());
-    ret.window = window;
+
+    frame->window = window;
+    frame->cursor = std::nullopt;
+
+    ranges::fill(views::take(frame->data, area), terminal_char{' '});
+    frame->data.resize(area, terminal_char{' '});
+
+    ranges::fill(views::take(frame->style_data, area), terminal_style::zero());
+    frame->style_data.resize(area, terminal_style::zero());
+
+    frame->rendered_window_sizes.resize(0);
+}
+
+terminal_frame init_frame(const terminal_size& window) {
+    terminal_frame ret;
+    reinit_frame(&ret, window);
     return ret;
 }
 

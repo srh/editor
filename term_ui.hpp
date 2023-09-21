@@ -85,6 +85,7 @@ struct char_rendering {
 
 char_rendering compute_char_rendering(const buffer_char bch, size_t *line_col);
 
+void reinit_frame(terminal_frame *frame, const terminal_size& window);
 terminal_frame init_frame(const terminal_size& window);
 
 // render_coords must be sorted by buf_pos.
