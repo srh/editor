@@ -80,8 +80,7 @@ insert_result insert_chars_right(scratch_frame *scratch_frame, ui_window_ctx *ui
     buf->set_cursor_(og_cursor);
     buf->aft_.insert(0, chs, count);
     buf->aft_stats_ = append_stats(compute_stats(chs, count), buf->aft_stats_);
-    // TODO: Probably should do og_cursor+1, or get a notion of right-inclined and left-inclined mark.  This does og_cursor because of some crackpot reasons having to do with the end of the *Messages* buf.
-    add_to_marks_as_of(buf, og_cursor, count);
+    add_to_marks_as_of(buf, og_cursor + 1, count);
 
     ui->virtual_column = std::nullopt;
 
