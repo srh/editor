@@ -687,25 +687,28 @@ void renormalize_column(window_layout *layout, size_t col_num, size_t col_begin,
     // TODO: Actually, this whole code is duplicated -- we could make a function returning
     // true_sizes from window_layout and col_-params.
     const uint32_t divider_size = 0;  // TODO: Duplicated constant with rendering logic.
-    std::vector<uint32_t> true_sizes = true_split_sizes<uint32_t>(
+    std::vector<uint32_t> true_sizes;
+    true_split_sizes<uint32_t>(
         layout->last_rendered_terminal_size.rows,
         divider_size,
         std::span{
             layout->row_relsizes.begin() + col_begin,
             layout->row_relsizes.begin() + col_end},
-        [](const uint32_t& elem) { return elem; });
+        [](const uint32_t& elem) { return elem; },
+        &true_sizes);
 
     std::copy(true_sizes.begin(), true_sizes.end(), layout->row_relsizes.begin() + col_begin);
 }
 
 void renormalize_column_widths(window_layout *layout) {
     const uint32_t column_divider_size = 1;  // TODO: Duplicated constant with rendering logic.
-    std::vector<uint32_t> true_sizes
-        = true_split_sizes<window_layout::col_data>(
+    std::vector<uint32_t> true_sizes;
+    true_split_sizes<window_layout::col_data>(
             layout->last_rendered_terminal_size.cols, column_divider_size,
             std::span{layout->column_datas.begin(),
                 layout->column_datas.end()},
-            [](const window_layout::col_data& cd) { return cd.relsize; });
+            [](const window_layout::col_data& cd) { return cd.relsize; },
+            &true_sizes);
 
     for (size_t i = 0; i < true_sizes.size(); ++i) {
         layout->column_datas[i].relsize = true_sizes[i];

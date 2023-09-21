@@ -287,12 +287,12 @@ redraw_state(int term, reused_redraw_state_bufs *reused, const terminal_size& wi
         render_into_frame(&frame, window_topleft, winsize, state.popup_display->win_ctx,
                           state.popup_display->buf, std::span<render_coord>{});
     } else {
-        reused->columnar_splits
-            = true_split_sizes<window_layout::col_data>(
+        true_split_sizes<window_layout::col_data>(
                 window.cols, column_divider_size,
                 std::span{state.layout.column_datas.data(),
                     state.layout.column_datas.size()},
-                [](const window_layout::col_data& cd) { return cd.relsize; });
+                [](const window_layout::col_data& cd) { return cd.relsize; },
+                &reused->columnar_splits);
         std::vector<uint32_t>& columnar_splits = reused->columnar_splits;
 
         uint32_t rendering_column = 0;
@@ -311,11 +311,12 @@ redraw_state(int term, reused_redraw_state_bufs *reused, const terminal_size& wi
             const size_t col_relsizes_end = col_relsizes_begin + num_rows;
 
             const uint32_t row_divider_size = 0;
-            reused->row_splits = true_split_sizes<uint32_t>(
+            true_split_sizes<uint32_t>(
                 window.rows, row_divider_size,
                 std::span{state.layout.row_relsizes.begin() + col_relsizes_begin,
                     state.layout.row_relsizes.begin() + col_relsizes_end},
-                [](const uint32_t& elem) { return elem; });
+                [](const uint32_t& elem) { return elem; },
+                &reused->row_splits);
             std::vector<uint32_t>& row_splits = reused->row_splits;
 
             uint32_t rendering_row = 0;

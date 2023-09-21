@@ -15,10 +15,11 @@ namespace qwi {
 
 
 template <class T, class Callable>
-std::vector<uint32_t> true_split_sizes(
+void true_split_sizes(
         uint32_t rendering_span, uint32_t divider_size,
         std::span<const T> splits,
-        Callable&& splits_accessor) {
+        Callable&& splits_accessor,
+        std::vector<uint32_t> *true_splits_out) {
     const size_t n = splits.size();
     logic_checkg(n != 0);
 
@@ -30,7 +31,8 @@ std::vector<uint32_t> true_split_sizes(
 
     uint32_t rendering_cells = rendering_span - std::min<uint32_t>(rendering_span, u32_mul(divider_size, n - 1));
 
-    std::vector<uint32_t> ret;
+    // We reuse the memory buffer.
+    std::vector<uint32_t>& ret = *true_splits_out;
     ret.resize(n);
     uint32_t sum = 0;
     for (size_t i = 0; i < n; ++i) {
@@ -49,8 +51,6 @@ std::vector<uint32_t> true_split_sizes(
         ++i;
         if (i == n) { i = 0; }
     }
-
-    return ret;
 }
 
 
