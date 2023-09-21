@@ -246,7 +246,7 @@ bool render_status_area_or_prompt(terminal_frame *frame, const state& state, win
         window_size winsize = {.rows = 1, .cols = status_area_topleft.col + status_area_width - prompt_topleft.col};
         // TODO: Should render_into_frame be appending to rendered_window_sizes instead of ALL its callers?
         frame->rendered_window_sizes.emplace_back(&state.status_prompt->win_ctx, winsize);
-        render_into_frame(frame, prompt_topleft, winsize, state.status_prompt->win_ctx, state.status_prompt->buf, &coords);
+        render_into_frame(frame, prompt_topleft, winsize, state.status_prompt->win_ctx, state.status_prompt->buf, std::span{coords});
 
         logic_check(!frame->cursor.has_value(),
                     "attempted rendering status prompt cursor atop another rendered cursor");
@@ -277,9 +277,8 @@ redraw_state(int term, const terminal_size& window, const state& state) {
         frame.rendered_window_sizes.emplace_back(&state.popup_display->win_ctx, winsize);
 
         terminal_coord window_topleft = {0, 0};
-        std::vector<render_coord> coords;
         render_into_frame(&frame, window_topleft, winsize, state.popup_display->win_ctx,
-                          state.popup_display->buf, &coords);
+                          state.popup_display->buf, std::span<render_coord>{});
     } else {
         std::vector<uint32_t> columnar_splits
             = true_split_sizes<window_layout::col_data>(
@@ -334,9 +333,9 @@ redraw_state(int term, const terminal_size& window, const state& state) {
 
                 const buffer *buf = state.lookup(buf_id);
 
-                std::vector<render_coord> coords = { {buf->get_mark_offset(buf_ctx->cursor_mark), std::nullopt} };
+                render_coord coords[1] = { {buf->get_mark_offset(buf_ctx->cursor_mark), std::nullopt} };
                 terminal_coord window_topleft = {.row = rendering_row, .col = rendering_column};
-                render_into_frame(&frame, window_topleft, winsize, *buf_ctx, *buf, &coords);
+                render_into_frame(&frame, window_topleft, winsize, *buf_ctx, *buf, std::span{coords});
 
                 {
                     std::optional<terminal_coord> cursor_coord

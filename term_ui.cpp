@@ -80,7 +80,7 @@ terminal_frame init_frame(const terminal_size& window) {
 // render_frame doesn't render the cursor -- that's computed with render_coords and rendered then.
 void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
                        const window_size& window, const ui_window_ctx& ui, const buffer& buf,
-                       std::vector<render_coord> *render_coords) {
+                       std::span<render_coord> render_coords) {
     terminal_frame& frame = *frame_ptr;
     // Some very necessary checks for memory safety.
     runtime_check(u32_add(window_topleft.row, window.rows) <= frame.window.rows,
@@ -118,7 +118,7 @@ void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
                           &frame.data[(window_topleft.row + row) * frame.window.cols + window_topleft.col]);
 
                 while (render_coords_begin < render_coords_end) {
-                    (*render_coords)[render_coords_begin].rendered_pos->row = row;
+                    render_coords[render_coords_begin].rendered_pos->row = row;
                     ++render_coords_begin;
                 }
             }
@@ -126,17 +126,17 @@ void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
         }
         // Note that this only does anything if the while loop above wasn't hit.
         while (render_coords_begin < render_coords_end) {
-            (*render_coords)[render_coords_begin].rendered_pos = std::nullopt;
+            render_coords[render_coords_begin].rendered_pos = std::nullopt;
             ++render_coords_begin;
         }
     };
-    size_t render_coord_target = render_coords_end < render_coords->size() ? (*render_coords)[render_coords_end].buf_pos : SIZE_MAX;
+    size_t render_coord_target = render_coords_end < render_coords.size() ? render_coords[render_coords_end].buf_pos : SIZE_MAX;
     while (row < window.rows && i < buf.size()) {
         // col < window.cols.
         while (i == render_coord_target) {
-            (*render_coords)[render_coords_end].rendered_pos = {UINT32_MAX, uint32_t(col)};
+            render_coords[render_coords_end].rendered_pos = {UINT32_MAX, uint32_t(col)};
             ++render_coords_end;
-            render_coord_target = render_coords_end < render_coords->size() ? (*render_coords)[render_coords_end].buf_pos : SIZE_MAX;
+            render_coord_target = render_coords_end < render_coords.size() ? render_coords[render_coords_end].buf_pos : SIZE_MAX;
         }
 
         buffer_char ch = buf.get(i);
@@ -170,9 +170,9 @@ void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
     }
 
     while (i == render_coord_target) {
-        (*render_coords)[render_coords_end].rendered_pos = {UINT32_MAX, uint32_t(col)};
+        render_coords[render_coords_end].rendered_pos = {UINT32_MAX, uint32_t(col)};
         ++render_coords_end;
-        render_coord_target = render_coords_end < render_coords->size() ? (*render_coords)[render_coords_end].buf_pos : SIZE_MAX;
+        render_coord_target = render_coords_end < render_coords.size() ? render_coords[render_coords_end].buf_pos : SIZE_MAX;
     }
 
     // If we reached end of buffer, we might still need to copy the current render_row and
@@ -185,14 +185,14 @@ void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
         std::copy(render_row.begin(), render_row.end(),
                   &frame.data[(window_topleft.row + row) * frame.window.cols + window_topleft.col]);
         while (render_coords_begin < render_coords_end) {
-            (*render_coords)[render_coords_begin].rendered_pos->row = row;
+            render_coords[render_coords_begin].rendered_pos->row = row;
             ++render_coords_begin;
         }
         ++row;
         col = 0;
     }
     while (render_coords_begin < render_coords_end) {
-        (*render_coords)[render_coords_begin].rendered_pos = std::nullopt;
+        render_coords[render_coords_begin].rendered_pos = std::nullopt;
         ++render_coords_begin;
     }
 }
@@ -225,9 +225,9 @@ bool cursor_is_offscreen(const ui_window_ctx *ui, const buffer *buf, size_t curs
 
     terminal_size window = terminal_size{rendered_window.rows, rendered_window.cols};
     terminal_frame frame = init_frame(window);
-    std::vector<render_coord> coords = { {cursor, std::nullopt} };
+    render_coord coords[1] = { {cursor, std::nullopt} };
     terminal_coord window_topleft = { 0, 0 };
-    render_into_frame(&frame, window_topleft, rendered_window, *ui, *buf, &coords);
+    render_into_frame(&frame, window_topleft, rendered_window, *ui, *buf, std::span{coords});
     return !coords[0].rendered_pos.has_value();
 }
 

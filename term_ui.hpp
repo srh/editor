@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include <optional>
+#include <span>
 #include <vector>
 
 #include "state.hpp"
@@ -89,7 +90,8 @@ terminal_frame init_frame(const terminal_size& window);
 // render_coords must be sorted by buf_pos.
 // render_frame doesn't render the cursor -- that's computed with render_coords and rendered then.
 void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
-                       const window_size& window, const ui_window_ctx& ui, const buffer& buf, std::vector<render_coord> *render_coords);
+                       const window_size& window, const ui_window_ctx& ui, const buffer& buf,
+                       std::span<render_coord> render_coords);
 
 
 bool too_small_to_render(const window_size& window);
