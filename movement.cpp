@@ -197,4 +197,4 @@ void move_end(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf) {
     move_right_by(scratch, ui, buf, distance);
 }
 
-}
+}  // namespace qwi
