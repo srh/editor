@@ -122,7 +122,8 @@ atomic_undo_item opposite(const atomic_undo_item& item) {
     return opposite(atomic_undo_item(item));
 }
 
-void atomic_undo(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf, atomic_undo_item&& item) {
+// Returns the opposite undo item that we should push onto future or use for other purposes.
+[[nodiscard]] atomic_undo_item atomic_undo(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf, atomic_undo_item&& item) {
     logic_check(item.before_node == buf->undo_info.current_node, "atomic_undo node number mismatch, item.before_node=%" PRIu64 " vs %" PRIu64,
                 item.before_node.value, buf->undo_info.current_node.value);
 
@@ -157,7 +158,7 @@ void atomic_undo(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf, atomic_
 
     buf->undo_info.current_node = item.after_node;
 
-    buf->undo_info.future.push_back(opposite(item));
+    return opposite(std::move(item));
 }
 
 void perform_undo(state *st, ui_window_ctx *ui, buffer *buf) {
@@ -169,15 +170,19 @@ void perform_undo(state *st, ui_window_ctx *ui, buffer *buf) {
     buf->undo_info.past.pop_back();
     switch (item.type) {
     case undo_item::Type::atomic: {
-        atomic_undo(st->scratch(), ui, buf, std::move(item.atomic));
+        atomic_undo_item reverse_item = atomic_undo(st->scratch(), ui, buf, std::move(item.atomic));
+        buf->undo_info.future.push_back(std::move(reverse_item));
     } break;
     case undo_item::Type::mountain: {
         atomic_undo_item it = std::move(item.history.back());
         item.history.pop_back();
-        atomic_undo(st->scratch(), ui, buf, atomic_undo_item(it));
+        // TODO: As this code now makes clear, it is always bad that we are duplicating the undo item (and deep copying the strings, etc.)
+        atomic_undo_item reverse_it = atomic_undo(st->scratch(), ui, buf, atomic_undo_item(it));
+
+        buf->undo_info.future.push_back(reverse_it);
         buf->undo_info.past.push_back({
                 .type = undo_item::Type::atomic,
-                .atomic = opposite(std::move(it)),
+                .atomic = std::move(reverse_it),
             });
         if (!item.history.empty()) {
             buf->undo_info.past.push_back(std::move(item));
