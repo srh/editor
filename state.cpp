@@ -91,7 +91,9 @@ buffer buffer::from_data(buffer_id id, buffer_string&& data) {
 // TODO: With C++ exceptions lurking, this actually does need to be in some destructor.
 void detach_ui_window_ctx(buffer *buf, ui_window_ctx *ui) {
     buf->remove_mark(ui->first_visible_offset);
-    ui->first_visible_offset = { SIZE_MAX };
+    ui->first_visible_offset = { SIZE_MAX, 0 };
+    buf->remove_mark(ui->cursor_mark);
+    ui->cursor_mark = { SIZE_MAX, 0 };
 }
 
 ui_window_ctx *ui_window::point_at(buffer_id id, state *st) {
