@@ -144,6 +144,7 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
 
     buf->undo_info.current_node = item.after_node;
 
+    logic_checkg(inserted ? buf->cursor_() == i_res.new_cursor : deleted ? buf->cursor_() == d_res.new_cursor : true);
     atomic_undo_item ret = {
         .beg = buf->cursor_(),  // TODO: Why do we even return new_cursor in the insert or deletion result?
         .text_inserted = deleted ? std::move(d_res.deletedText) : buffer_string{},
