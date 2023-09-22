@@ -128,9 +128,22 @@ struct buffer {
     std::optional<std::string> married_file;
 
 private:
+    struct mark_data {
+        // mark_ids, which are array offsets, get reused, so in some cases, where "weak"
+        // references to marks are used, we have a version number.
+        //
+        // Zero value means the mark is unused.
+        static constexpr uint64_t unused = 0;
+        uint64_t version;
+        // offset into the buffer.
+        size_t offset;
+    };
+
+    uint64_t prev_mark_version = 0;
+
     // SIZE_MAX is the value for invalid, removed, reusable marks.
     // The values of these range within `0 <= marks[_] <= size()`.
-    std::vector<size_t> marks;
+    std::vector<mark_data> marks;
 
     friend void add_to_marks_as_of(buffer *buf, size_t first_offset, size_t count);
     friend void update_marks_for_delete_range(buffer *buf, size_t range_beg, size_t range_end,

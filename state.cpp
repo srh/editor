@@ -271,35 +271,38 @@ buffer_id find_or_create_buf(state *state, const std::string& name, bool make_re
 
 mark_id buffer::add_mark(size_t offset) {
     for (size_t i = 0; i < marks.size(); ++i) {
-        if (marks[i] == SIZE_MAX) {
-            marks[i] = offset;
+        if (marks[i].version == mark_data::unused) {
+            marks[i].version = ++prev_mark_version;
+            marks[i].offset = offset;
             return mark_id{i};
         }
     }
     mark_id ret{marks.size()};
-    marks.push_back(offset);
+    marks.push_back({.version = ++prev_mark_version, .offset = offset});
     return ret;
 }
 
 size_t buffer::get_mark_offset(mark_id id) const {
     logic_check(id.index < marks.size(), "get_mark_offset");
-    size_t mark_offset = marks[id.index];
-    logic_checkg(mark_offset != SIZE_MAX);
+    const mark_data& elem = marks[id.index];
+    size_t mark_offset = elem.offset;
+    logic_checkg(elem.version != mark_data::unused);
     return mark_offset;
 }
 
 void buffer::remove_mark(mark_id id) {
     logic_check(id.index < marks.size(), "remove_mark");
-    size_t mark_offset = marks[id.index];
-    logic_checkg(mark_offset != SIZE_MAX);
-    marks[id.index] = SIZE_MAX;
+    mark_data& elem = marks[id.index];
+    logic_checkg(elem.version != mark_data::unused);
+    elem.version = mark_data::unused;
+    elem.offset = 0;
 }
 
 void buffer::replace_mark(mark_id id, size_t new_offset) {
     logic_check(id.index < marks.size(), "replace_mark");
-    size_t mark_offset = marks[id.index];
-    logic_checkg(mark_offset != SIZE_MAX);
-    marks[id.index] = new_offset;
+    mark_data& elem = marks[id.index];
+    logic_checkg(elem.version != mark_data::unused);
+    elem.offset = new_offset;
 }
 
 void ui_window::note_rendered_window_size(
