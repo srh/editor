@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "chars.hpp"
+#include "state_types.hpp"
 
 namespace qwi {
 
@@ -16,9 +17,13 @@ struct atomic_undo_item {
     // The cursor _before_ we apply this undo action.  This departs from jsmacs, where
     // it's the cursor after the action, or something incoherent and broken.
     size_t beg = 0;
-    buffer_string text_inserted{};
+    buffer_string text_inserted_{};
     buffer_string text_deleted{};
     Side side = Side::left;
+
+    // If we have text_inserted non-empty, then we may need to adjust marks, if their
+    // offset is exactly at the insertion point.
+    std::vector<std::pair<weak_mark_id, size_t>> mark_adjustments;
 
     undo_node_number before_node;
     undo_node_number after_node;

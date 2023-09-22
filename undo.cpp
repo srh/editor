@@ -37,7 +37,7 @@ void add_coalescence_break(undo_history *history) {
 bool item_has_effect(const atomic_undo_item& item) {
     // We consider non-empty but equal text_inserted and text_deleted strings to have an
     // "effect".
-    return !(item.text_inserted.empty() && item.text_deleted.empty());
+    return !(item.text_inserted_.empty() && item.text_deleted.empty());
 }
 
 void add_edit(undo_history *history, atomic_undo_item&& item) {
@@ -70,27 +70,37 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
                 break;
             case undo_history::char_coalescence::insert_char:
                 logic_check(back.side == Side::left && item.side == Side::left, "incompatible insert_char coalescence");
-                logic_check(back.text_inserted.empty() && item.text_inserted.empty(), "incompatible insert_char coalescence");
+                logic_check(back.text_inserted_.empty() && item.text_inserted_.empty(), "incompatible insert_char coalescence");
                 logic_check(back.beg == size_sub(item.beg, item.text_deleted.size()), "incompatible insert_char coalescence");
                 back.text_deleted += item.text_deleted;
                 back.beg = item.beg;
                 {
                     return;
                 }
-            case undo_history::char_coalescence::delete_left:
+            case undo_history::char_coalescence::delete_left: {
                 logic_check(back.side == Side::left && item.side == Side::left, "incompatible delete_left coalescence");
                 logic_check(back.text_deleted.empty() && item.text_deleted.empty(), "incompatible delete_left coalescence");
-                logic_check(size_add(item.beg, item.text_inserted.size()) == back.beg, "incompatible delete_left coalescence");
-                back.text_inserted = std::move(item.text_inserted) + back.text_inserted;
+                logic_check(size_add(item.beg, item.text_inserted_.size()) == back.beg, "incompatible delete_left coalescence");
+                size_t num_deleted = item.text_inserted_.size();
+                for (auto& elem : back.mark_adjustments) {
+                    elem.second += num_deleted;
+                }
+                // TODO: XXX: Might we have multiple adjustments for the same mark (if it's at the end of the range or something)?
+                back.mark_adjustments.insert(back.mark_adjustments.end(), item.mark_adjustments.begin(), item.mark_adjustments.end());
+                back.text_inserted_ = std::move(item.text_inserted_) + back.text_inserted_;
+
                 back.beg = item.beg;
                 {
                     return;
                 }
+            }
             case undo_history::char_coalescence::delete_right:
                 logic_check(back.side == Side::right && item.side == Side::right, "incompatible delete_right coalescence");
                 logic_check(back.text_deleted.empty() && item.text_deleted.empty(), "incompatible delete_right coalescence");
                 logic_check(back.beg == item.beg, "incompatible delete_right coalescence");
-                back.text_inserted += item.text_inserted;
+                back.text_inserted_ += item.text_inserted_;
+                // TODO: XXX: Might we have multiple adjustments for the same mark (if it's at the end of the range or something)?
+                back.mark_adjustments.insert(back.mark_adjustments.end(), item.mark_adjustments.begin(), item.mark_adjustments.end());
                 {
                     return;
                 }
@@ -130,14 +140,14 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
     }
 
     insert_result i_res;
-    bool inserted = !item.text_inserted.empty();
+    bool inserted = !item.text_inserted_.empty();
     if (inserted) {
         switch (item.side) {
         case Side::left:
-            i_res = insert_chars(scratch, ui, buf, item.text_inserted.data(), item.text_inserted.size());
+            i_res = insert_chars(scratch, ui, buf, item.text_inserted_.data(), item.text_inserted_.size());
             break;
         case Side::right:
-            i_res = insert_chars_right(scratch, ui, buf, item.text_inserted.data(), item.text_inserted.size());
+            i_res = insert_chars_right(scratch, ui, buf, item.text_inserted_.data(), item.text_inserted_.size());
             break;
         }
     }
@@ -147,9 +157,12 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
     logic_checkg(inserted ? buf->cursor_() == i_res.new_cursor : deleted ? buf->cursor_() == d_res.new_cursor : true);
     atomic_undo_item ret = {
         .beg = buf->cursor_(),  // TODO: Why do we even return new_cursor in the insert or deletion result?
-        .text_inserted = deleted ? std::move(d_res.deletedText) : buffer_string{},
+        .text_inserted_ = deleted ? std::move(d_res.deletedText) : buffer_string{},
         .text_deleted = inserted ? std::move(i_res.insertedText) : buffer_string{},
         .side = item.side,  // or d_res.side, or i_res.side, all the same value
+        .mark_adjustments = std::move(d_res.squeezed_marks),
+
+        /* we swap these, of course */
         .before_node = item.after_node,
         .after_node = item.before_node,
     };
