@@ -142,6 +142,8 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
     insert_result i_res;
     bool inserted = !item.text_inserted_.empty();
     if (inserted) {
+        // I hate that cursor_before_insert is repeating the logic inside the insert functions.
+        size_t cursor_before_insert = get_ctx_cursor(ui, buf);
         switch (item.side) {
         case Side::left:
             i_res = insert_chars(scratch, ui, buf, item.text_inserted_.data(), item.text_inserted_.size());
@@ -150,13 +152,24 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
             i_res = insert_chars_right(scratch, ui, buf, item.text_inserted_.data(), item.text_inserted_.size());
             break;
         }
+
+        for (const std::pair<weak_mark_id, size_t>& elem : item.mark_adjustments) {
+            if (elem.first.index == ui->cursor_mark.index) {
+                continue;
+            }
+            std::optional<size_t> offset = buf->try_get_mark_offset(elem.first);
+            if (offset.has_value() && *offset == cursor_before_insert) {
+                buf->replace_mark(elem.first.as_nonweak_ref(), cursor_before_insert + elem.second);
+            }
+        }
     }
 
     buf->undo_info.current_node = item.after_node;
 
-    logic_checkg(inserted ? buf->cursor_() == i_res.new_cursor : deleted ? buf->cursor_() == d_res.new_cursor : true);
+    // TODO: XXX: Use get_ctx_cursor instead of buf->cursor_.  Or use the delete/insert_result values.  (Cringing...)
+    logic_checkg(inserted ? get_ctx_cursor(ui, buf) == i_res.new_cursor : deleted ? get_ctx_cursor(ui, buf) == d_res.new_cursor : true);
     atomic_undo_item ret = {
-        .beg = buf->cursor_(),  // TODO: Why do we even return new_cursor in the insert or deletion result?
+        .beg = get_ctx_cursor(ui, buf),
         .text_inserted_ = deleted ? std::move(d_res.deletedText) : buffer_string{},
         .text_deleted = inserted ? std::move(i_res.insertedText) : buffer_string{},
         .side = item.side,  // or d_res.side, or i_res.side, all the same value

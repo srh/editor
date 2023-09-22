@@ -21,6 +21,8 @@ struct atomic_undo_item {
     buffer_string text_deleted{};
     Side side = Side::left;
 
+    // TODO: At some point, when we have limited undo info, we'll also want to GC expired weak mark refs.
+
     // If we have text_inserted non-empty, then we may need to adjust marks, if their
     // offset is exactly at the insertion point.
     std::vector<std::pair<weak_mark_id, size_t>> mark_adjustments;
