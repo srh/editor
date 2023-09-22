@@ -13,6 +13,7 @@
 #include "error.hpp"
 #include "keyboard.hpp"
 #include "region_stats.hpp"
+#include "state_types.hpp"
 #include "undo.hpp"
 // TODO: We don't want this dependency exactly -- we kind of want ui info to be separate from state.
 // Well, right now it's part of state -- this'll get resolved once we have a second GUI.
@@ -50,22 +51,6 @@ struct std::hash<qwi::buffer_id> {
 };
 
 namespace qwi {
-
-// This is used for _strong_ mark references -- the mark needs to get removed when the
-// owning object goes away.
-struct mark_id {
-    // index into marks array
-    size_t index = SIZE_MAX;
-
-    // This isn't a weak ref but we still assert and exit if the assertion fails.
-    uint64_t assertion_version = 0;
-};
-
-struct weak_mark_id {
-    // Real version numbers start at 1, so zero means what it means.
-    uint64_t version = 0;
-    size_t index = SIZE_MAX;
-};
 
 // We remove detach checks because we haven't defined move constructors that leave the
 // object in a "valid" state by the reasoning of the detach checks.
