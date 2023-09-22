@@ -51,8 +51,19 @@ struct std::hash<qwi::buffer_id> {
 
 namespace qwi {
 
+// This is used for _strong_ mark references -- the mark needs to get removed when the
+// owning object goes away.
 struct mark_id {
     // index into marks array
+    size_t index = SIZE_MAX;
+
+    // This isn't a weak ref but we still assert and exit if the assertion fails.
+    uint64_t assertion_version = 0;
+};
+
+struct weak_mark_id {
+    // Real version numbers start at 1, so zero means what it means.
+    uint64_t version = 0;
     size_t index = SIZE_MAX;
 };
 
@@ -154,6 +165,8 @@ public:
     mark_id add_mark(size_t offset);
     size_t get_mark_offset(mark_id id) const;
     void remove_mark(mark_id id);
+
+    weak_mark_id make_weak_mark_ref(mark_id id) const;
 
     // Same as remove_mark and add_mark.
     void replace_mark(mark_id, size_t offset);

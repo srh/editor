@@ -270,30 +270,32 @@ buffer_id find_or_create_buf(state *state, const std::string& name, bool make_re
 }
 
 mark_id buffer::add_mark(size_t offset) {
+    uint64_t new_version = ++prev_mark_version;
     for (size_t i = 0; i < marks.size(); ++i) {
         if (marks[i].version == mark_data::unused) {
-            marks[i].version = ++prev_mark_version;
+            marks[i].version = new_version;
             marks[i].offset = offset;
-            return mark_id{i};
+            return mark_id{.index = i, .assertion_version = new_version};
         }
     }
-    mark_id ret{marks.size()};
-    marks.push_back({.version = ++prev_mark_version, .offset = offset});
+    mark_id ret = {.index = marks.size(), .assertion_version = new_version};
+    marks.push_back({.version = new_version, .offset = offset});
     return ret;
 }
 
 size_t buffer::get_mark_offset(mark_id id) const {
     logic_check(id.index < marks.size(), "get_mark_offset");
     const mark_data& elem = marks[id.index];
-    size_t mark_offset = elem.offset;
-    logic_checkg(elem.version != mark_data::unused);
-    return mark_offset;
+    logic_check(elem.version != mark_data::unused, "get_mark_offset");
+    logic_check(id.assertion_version == elem.version, "get_mark_offset");
+    return elem.offset;
 }
 
 void buffer::remove_mark(mark_id id) {
     logic_check(id.index < marks.size(), "remove_mark");
     mark_data& elem = marks[id.index];
-    logic_checkg(elem.version != mark_data::unused);
+    logic_check(elem.version != mark_data::unused, "remove_mark");
+    logic_check(id.assertion_version == elem.version, "remove_mark");
     elem.version = mark_data::unused;
     elem.offset = 0;
 }
@@ -301,8 +303,19 @@ void buffer::remove_mark(mark_id id) {
 void buffer::replace_mark(mark_id id, size_t new_offset) {
     logic_check(id.index < marks.size(), "replace_mark");
     mark_data& elem = marks[id.index];
-    logic_checkg(elem.version != mark_data::unused);
+    logic_check(elem.version != mark_data::unused, "replace_mark");
+    logic_check(id.assertion_version == elem.version, "replace_mark");
     elem.offset = new_offset;
+}
+
+weak_mark_id buffer::make_weak_mark_ref(mark_id id) const {
+    logic_check(id.index < marks.size(), "make_weak_mark_ref");
+    const mark_data& elem = marks[id.index];
+    logic_checkg(elem.version != mark_data::unused);
+    return {
+        .version = elem.version,
+        .index = id.index,
+    };
 }
 
 void ui_window::note_rendered_window_size(
