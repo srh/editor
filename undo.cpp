@@ -174,14 +174,14 @@ void perform_undo(state *st, ui_window_ctx *ui, buffer *buf) {
     case undo_item::Type::mountain: {
         atomic_undo_item it = std::move(item.history.back());
         item.history.pop_back();
+        atomic_undo(st->scratch(), ui, buf, atomic_undo_item(it));
         buf->undo_info.past.push_back({
                 .type = undo_item::Type::atomic,
-                .atomic = opposite(it)
+                .atomic = opposite(std::move(it)),
             });
         if (!item.history.empty()) {
             buf->undo_info.past.push_back(std::move(item));
         }
-        atomic_undo(st->scratch(), ui, buf, std::move(it));
     } break;
     }
 }
