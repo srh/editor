@@ -167,6 +167,7 @@ public:
     void remove_mark(mark_id id);
 
     weak_mark_id make_weak_mark_ref(mark_id id) const;
+    std::optional<size_t> try_get_mark_offset(weak_mark_id id) const;
 
     // Same as remove_mark and add_mark.
     void replace_mark(mark_id, size_t offset);

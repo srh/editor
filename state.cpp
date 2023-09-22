@@ -318,6 +318,16 @@ weak_mark_id buffer::make_weak_mark_ref(mark_id id) const {
     };
 }
 
+std::optional<size_t> buffer::try_get_mark_offset(weak_mark_id id) const {
+    logic_check(id.index < marks.size(), "try_get_mark_offset");
+    const mark_data& elem = marks[id.index];
+    if (elem.version != id.version) {
+        return std::nullopt;
+    }
+    return std::make_optional(elem.offset);
+}
+
+
 void ui_window::note_rendered_window_size(
     buffer_id buf_id, const window_size& window_size) {
 
