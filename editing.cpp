@@ -26,6 +26,19 @@ atomic_undo_item make_reverse_action(const undo_history *history, insert_result&
     return item;
 }
 
+atomic_undo_item make_reverse_action(const undo_history *history, delete_result&& d_res) {
+    atomic_undo_item item = {
+        .beg = d_res.new_cursor,
+        .text_inserted = std::move(d_res.deletedText),
+        .text_deleted = buffer_string{},
+        .side = d_res.side,  // We deleted on left (right), hence we insert on left (right)
+        .before_node = history->unused_node_number(),
+        .after_node = history->current_node,
+    };
+
+    return item;
+}
+
 void note_undo(buffer *buf, insert_result&& i_res) {
     // Make and add the _reverse_ action in the undo items.
     // (Why the reverse action?  Because jsmacs did it that way.)
@@ -52,19 +65,6 @@ undo_killring_handled note_coalescent_action(state *state, buffer *buf, insert_r
                         undo_history::char_coalescence::insert_char);
     state->clear_error_message();
     return undo_killring_handled{};
-}
-
-atomic_undo_item make_reverse_action(const undo_history *history, delete_result&& d_res) {
-    atomic_undo_item item = {
-        .beg = d_res.new_cursor,
-        .text_inserted = std::move(d_res.deletedText),
-        .text_deleted = buffer_string{},
-        .side = d_res.side,  // We deleted on left (right), hence we insert on left (right)
-        .before_node = history->unused_node_number(),
-        .after_node = history->current_node,
-    };
-
-    return item;
 }
 
 void note_undo(buffer *buf, delete_result&& d_res) {

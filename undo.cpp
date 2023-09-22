@@ -106,22 +106,6 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
     history->next_node_number.value += 1;
 }
 
-
-atomic_undo_item opposite(atomic_undo_item&& item) {
-    // TODO: Is .beg value right in jsmacs?
-    atomic_undo_item ret = std::move(item);
-    if (item.side == Side::left) {
-        ret.beg = size_sub(size_add(ret.beg, item.text_inserted.size()), item.text_deleted.size());
-    }
-    std::swap(ret.text_inserted, ret.text_deleted);
-    std::swap(ret.before_node, ret.after_node);
-    return ret;
-}
-
-atomic_undo_item opposite(const atomic_undo_item& item) {
-    return opposite(atomic_undo_item(item));
-}
-
 // Returns the opposite undo item that we should push onto future or use for other purposes.
 [[nodiscard]] atomic_undo_item atomic_undo(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf, atomic_undo_item&& item) {
     logic_check(item.before_node == buf->undo_info.current_node, "atomic_undo node number mismatch, item.before_node=%" PRIu64 " vs %" PRIu64,
@@ -131,34 +115,45 @@ atomic_undo_item opposite(const atomic_undo_item& item) {
     // perform the operation which uses that value.
     buf->replace_mark(ui->cursor_mark, item.beg);
 
-    if (!item.text_deleted.empty()) {
-        delete_result res;
+    delete_result d_res;
+    bool deleted = !item.text_deleted.empty();
+    if (deleted) {
         switch (item.side) {
         case Side::left:
-            res = delete_left(scratch, ui, buf, item.text_deleted.size());
+            d_res = delete_left(scratch, ui, buf, item.text_deleted.size());
             break;
         case Side::right:
-            res = delete_right(scratch, ui, buf, item.text_deleted.size());
+            d_res = delete_right(scratch, ui, buf, item.text_deleted.size());
             break;
         }
-        logic_check(res.deletedText == item.text_deleted, "undo deletion action expecting text to match deleted text");
+        logic_check(d_res.deletedText == item.text_deleted, "undo deletion action expecting text to match deleted text");
     }
 
-    if (!item.text_inserted.empty()) {
-        insert_result res;
+    insert_result i_res;
+    bool inserted = !item.text_inserted.empty();
+    if (inserted) {
         switch (item.side) {
         case Side::left:
-            res = insert_chars(scratch, ui, buf, item.text_inserted.data(), item.text_inserted.size());
+            i_res = insert_chars(scratch, ui, buf, item.text_inserted.data(), item.text_inserted.size());
             break;
         case Side::right:
-            res = insert_chars_right(scratch, ui, buf, item.text_inserted.data(), item.text_inserted.size());
+            i_res = insert_chars_right(scratch, ui, buf, item.text_inserted.data(), item.text_inserted.size());
             break;
         }
     }
 
     buf->undo_info.current_node = item.after_node;
 
-    return opposite(std::move(item));
+    atomic_undo_item ret = {
+        .beg = buf->cursor_(),  // TODO: Why do we even return new_cursor in the insert or deletion result?
+        .text_inserted = deleted ? std::move(d_res.deletedText) : buffer_string{},
+        .text_deleted = inserted ? std::move(i_res.insertedText) : buffer_string{},
+        .side = item.side,  // or d_res.side, or i_res.side, all the same value
+        .before_node = item.after_node,
+        .after_node = item.before_node,
+    };
+
+    return ret;
 }
 
 void perform_undo(state *st, ui_window_ctx *ui, buffer *buf) {
