@@ -121,7 +121,8 @@ void force_insert_chars_end_before_cursor(buffer *buf,
     // We _don't_ recenter cursor if offscreen.
 }
 
-void update_marks_for_delete_range(buffer *buf, size_t range_beg, size_t range_end) {
+void update_marks_for_delete_range(buffer *buf, size_t range_beg, size_t range_end,
+                                   std::vector<std::pair<mark_id, size_t>> *squeezed_marks_append) {
     for (size_t i = 0; i < buf->marks.size(); ++i) {
         if (buf->marks[i] == SIZE_MAX) {
             continue;
@@ -131,6 +132,8 @@ void update_marks_for_delete_range(buffer *buf, size_t range_beg, size_t range_e
         if (offset > range_end) {
             offset -= (range_end - range_beg);
         } else if (offset > range_beg) {
+            // TODO: XXX: Test or review edge cases where we delete left or right a range, and another (window's) mark is on the end or beginning of it.
+            squeezed_marks_append->emplace_back(mark_id{.index = i}, offset - range_beg);
             offset = range_beg;
         }
         buf->marks[i] = offset;
@@ -144,6 +147,7 @@ delete_result delete_left(scratch_frame *scratch_frame, ui_window_ctx *ui, buffe
             .new_cursor = og_cursor,
             .deletedText = buffer_string{},
             .side = Side::left,
+            .squeezed_marks = {},
             .error_message = "Buffer is read-only",  // TODO: UI logic
         };
     }
@@ -161,7 +165,8 @@ delete_result delete_left(scratch_frame *scratch_frame, ui_window_ctx *ui, buffe
     buf->bef_stats_ = subtract_stats_right(buf->bef_stats_,
                                            buf->bef_.data(), new_cursor, buf->bef_.size());
     buf->bef_.resize(new_cursor);
-    update_marks_for_delete_range(buf, new_cursor, og_cursor);
+    update_marks_for_delete_range(buf, new_cursor, og_cursor, &ret.squeezed_marks);
+    // TODO: XXX: squeezed_marks might include the current window ctx's cursor.  Should it?  Maybe it should -- if we delet-left, then we undo a delete-left in another window, we want the current window's cursor to move right.  Don't we?
 
     ui->virtual_column = std::nullopt;
 
@@ -182,6 +187,7 @@ delete_result delete_right(scratch_frame *scratch_frame, ui_window_ctx *ui, buff
             .new_cursor = cursor,
             .deletedText = buffer_string{},
             .side = Side::right,
+            .squeezed_marks = {},
             .error_message = "Buffer is read-only",  // TODO: UI logic
         };
     }
@@ -198,7 +204,8 @@ delete_result delete_right(scratch_frame *scratch_frame, ui_window_ctx *ui, buff
     buf->aft_stats_ = subtract_stats_left(buf->aft_stats_, compute_stats(buf->aft_.data(), count),
                                           buf->aft_.data() + count, buf->aft_.size() - count);
     buf->aft_.erase(0, count);
-    update_marks_for_delete_range(buf, cursor, cursor + count);
+    update_marks_for_delete_range(buf, cursor, cursor + count, &ret.squeezed_marks);
+    // TODO: XXX: squeezed_marks might include the current window ctx's cursor.  Keep it clean.
 
     // TODO: We don't do this for doDeleteRight (or doAppendRight) in jsmacs -- the bug is in jsmacs!
     ui->virtual_column = std::nullopt;

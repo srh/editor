@@ -35,7 +35,13 @@ struct [[nodiscard]] delete_result {
     size_t new_cursor;
     buffer_string deletedText;
     Side side;
+    // A list of all marks that were in the region of text that got deleted.  Contains the
+    // offset relative to the _beginning_ of the deleted interval (regardless of the value
+    // of `side`).
+    std::vector<std::pair<mark_id, size_t>> squeezed_marks;
     std::string error_message;
+
+    // TODO: XXX: With squeezed_marks, we face the problem that mark_id's get reused.
 };
 delete_result delete_left(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t count);
 
