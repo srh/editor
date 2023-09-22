@@ -38,7 +38,7 @@ struct [[nodiscard]] delete_result {
     // A list of all marks that were in the region of text that got deleted.  Contains the
     // offset relative to the _beginning_ of the deleted interval (regardless of the value
     // of `side`).
-    std::vector<std::pair<mark_id, size_t>> squeezed_marks;
+    std::vector<std::pair<weak_mark_id, size_t>> squeezed_marks;
     std::string error_message;
 
     // TODO: XXX: With squeezed_marks, we face the problem that mark_id's get reused.

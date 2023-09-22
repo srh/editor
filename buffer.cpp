@@ -122,18 +122,20 @@ void force_insert_chars_end_before_cursor(buffer *buf,
 }
 
 void update_marks_for_delete_range(buffer *buf, size_t range_beg, size_t range_end,
-                                   std::vector<std::pair<mark_id, size_t>> *squeezed_marks_append) {
+                                   std::vector<std::pair<weak_mark_id, size_t>> *squeezed_marks_append) {
     for (size_t i = 0; i < buf->marks.size(); ++i) {
-        if (buf->marks[i].version == 0) {
+        const buffer::mark_data& elem = buf->marks[i];
+        if (elem.version == 0) {
             continue;
         }
 
-        size_t offset = buf->marks[i].offset;
+        size_t offset = elem.offset;
         if (offset > range_end) {
             offset -= (range_end - range_beg);
         } else if (offset > range_beg) {
             // TODO: XXX: Test or review edge cases where we delete left or right a range, and another (window's) mark is on the end or beginning of it.
-            squeezed_marks_append->emplace_back(mark_id{.index = i}, offset - range_beg);
+            squeezed_marks_append->emplace_back(weak_mark_id{.version = elem.version, .index = i},
+                                                offset - range_beg);
             offset = range_beg;
         }
         buf->marks[i].offset = offset;
