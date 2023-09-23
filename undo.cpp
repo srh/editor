@@ -82,19 +82,18 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
                 logic_check(back.text_deleted.empty() && item.text_deleted.empty(), "incompatible delete_left coalescence");
                 logic_check(size_add(item.beg, item.text_inserted_.size()) == back.beg, "incompatible delete_left coalescence");
 
-                // Let's say we had mark adjustments in range (0, M], or [1, M], and now
-                // we deleted N more characters.  Our mark_adjustment values now get
-                // changed to [N+1, N+M], which is correct.  And then...
-                size_t num_deleted = item.text_inserted_.size();
-                for (auto& elem : back.mark_adjustments) {
-                    elem.second += num_deleted;
+                // Mark adjustments are the value we _subtract_ from the end -- see
+                // atomic_undo or atomic_undo_item comments.  Let's say we had a left
+                // deletion of M and then N characters.  The negative adjustments, treated
+                // as negative numbers, are in range (-M-N, -M] for the N characters of
+                // the second deletion, and (-M, 0] for the M characters of the first
+                // deletion.  Of course, the values are subtracted, and are positive
+                // size_t values.
+                size_t prev_deletion = back.text_inserted_.size();
+                for (auto& elem : item.mark_adjustments) {
+                    elem.second += prev_deletion;
                 }
-                // Then the new deletion's mark adjustments are in range (0, N] i.e. [1,
-                // N].  There is a problem: Every mark which got adjusted previously is
-                // also part of this list (because it's now at the end of the deleted
-                // interval).  So we have duplicate entries for _every_ cursor.  We need
-                // to combine and dedup entries, drop the num_deleted logic above, and
-                // just add the adjustments together.
+
                 back.mark_adjustments.insert(back.mark_adjustments.end(), item.mark_adjustments.begin(), item.mark_adjustments.end());
 
                 back.text_inserted_ = std::move(item.text_inserted_) + back.text_inserted_;
@@ -108,14 +107,13 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
                 logic_check(back.side == Side::right && item.side == Side::right, "incompatible delete_right coalescence");
                 logic_check(back.text_deleted.empty() && item.text_deleted.empty(), "incompatible delete_right coalescence");
                 logic_check(back.beg == item.beg, "incompatible delete_right coalescence");
-                size_t num_deleted = item.text_inserted_.size();
-                // We don't have duplicate mark adjustments because in a sequence of N and
-                // M deletions, the (1, N] marks that got adjusted are now at zero.
-                size_t i = back.mark_adjustments.size();
-                back.mark_adjustments.insert(back.mark_adjustments.end(), item.mark_adjustments.begin(), item.mark_adjustments.end());
-                for (auto& elem : std::span{back.mark_adjustments.data() + i, back.mark_adjustments.size()}) {
-                    elem.second += num_deleted;
+                size_t prev_deletion = back.text_inserted_.size();
+                for (auto& elem : item.mark_adjustments) {
+                    elem.second += prev_deletion;
                 }
+
+                back.mark_adjustments.insert(back.mark_adjustments.end(), item.mark_adjustments.begin(), item.mark_adjustments.end());
+
                 back.text_inserted_ += item.text_inserted_;
                 {
                     return;
@@ -162,22 +160,33 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
         // I hate that cursor_before_insert is repeating the logic inside the insert functions.
         size_t cursor_before_insert = get_ctx_cursor(ui, buf);
         switch (item.side) {
-        case Side::left:
-            i_res = insert_chars(scratch, ui, buf, item.text_inserted_.data(), item.text_inserted_.size());
-            break;
+        case Side::left: {
+            const size_t num_inserted = item.text_inserted_.size();
+            i_res = insert_chars(scratch, ui, buf, item.text_inserted_.data(), num_inserted);
+            for (const std::pair<weak_mark_id, size_t>& elem : item.mark_adjustments) {
+                if (elem.first.index == ui->cursor_mark.index) {
+                    continue;
+                }
+                std::optional<size_t> offset = buf->try_get_mark_offset(elem.first);
+                if (offset.has_value() && *offset == cursor_before_insert) {
+                    buf->replace_mark(elem.first.as_nonweak_ref(), cursor_before_insert + num_inserted - elem.second);
+                }
+            }
+
+        } break;
         case Side::right:
             i_res = insert_chars_right(scratch, ui, buf, item.text_inserted_.data(), item.text_inserted_.size());
-            break;
-        }
 
-        for (const std::pair<weak_mark_id, size_t>& elem : item.mark_adjustments) {
-            if (elem.first.index == ui->cursor_mark.index) {
-                continue;
+            for (const std::pair<weak_mark_id, size_t>& elem : item.mark_adjustments) {
+                if (elem.first.index == ui->cursor_mark.index) {
+                    continue;
+                }
+                std::optional<size_t> offset = buf->try_get_mark_offset(elem.first);
+                if (offset.has_value() && *offset == cursor_before_insert) {
+                    buf->replace_mark(elem.first.as_nonweak_ref(), cursor_before_insert + elem.second);
+                }
             }
-            std::optional<size_t> offset = buf->try_get_mark_offset(elem.first);
-            if (offset.has_value() && *offset == cursor_before_insert) {
-                buf->replace_mark(elem.first.as_nonweak_ref(), cursor_before_insert + elem.second);
-            }
+            break;
         }
     }
 

@@ -142,8 +142,10 @@ private:
     std::vector<mark_data> marks;
 
     friend void add_to_marks_as_of(buffer *buf, size_t first_offset, size_t count);
-    friend void update_marks_for_delete_range(buffer *buf, size_t range_beg, size_t range_end,
-                                              std::vector<std::pair<weak_mark_id, size_t>> *squeezed_marks_append);
+    friend void update_marks_for_delete_left_range(buffer *buf, size_t range_beg, size_t range_end,
+                                                   std::vector<std::pair<weak_mark_id, size_t>> *squeezed_marks_append);
+    friend void update_marks_for_delete_right_range(buffer *buf, size_t range_beg, size_t range_end,
+                                                    std::vector<std::pair<weak_mark_id, size_t>> *squeezed_marks_append);
 
 public:
     // An excessively(?) simple interface for mark handling.

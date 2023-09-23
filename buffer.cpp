@@ -121,8 +121,33 @@ void force_insert_chars_end_before_cursor(buffer *buf,
     // We _don't_ recenter cursor if offscreen.
 }
 
-void update_marks_for_delete_range(buffer *buf, size_t range_beg, size_t range_end,
-                                   std::vector<std::pair<weak_mark_id, size_t>> *squeezed_marks_append) {
+// squeezed_marks has different values for delete_left than delete_right -- see comment in
+// atomic_undo_item, undo logic, etc.
+void update_marks_for_delete_left_range(buffer *buf, size_t range_beg, size_t range_end,
+                                         std::vector<std::pair<weak_mark_id, size_t>> *squeezed_marks_append) {
+    for (size_t i = 0; i < buf->marks.size(); ++i) {
+        const buffer::mark_data& elem = buf->marks[i];
+        if (elem.version == 0) {
+            continue;
+        }
+
+        size_t offset = elem.offset;
+        if (offset >= range_end) {
+            offset -= (range_end - range_beg);
+        } else if (offset >= range_beg) {
+            // A squeezed mark is the value, in (0, N], where N = range_end - range_beg,
+            // that we subtract from the end of the range, when moving the mark back to
+            // its final position.
+            squeezed_marks_append->emplace_back(weak_mark_id{.version = elem.version, .index = i},
+                                                range_end - offset);
+            offset = range_beg;
+        }
+        buf->marks[i].offset = offset;
+    }
+}
+
+void update_marks_for_delete_right_range(buffer *buf, size_t range_beg, size_t range_end,
+                                         std::vector<std::pair<weak_mark_id, size_t>> *squeezed_marks_append) {
     for (size_t i = 0; i < buf->marks.size(); ++i) {
         const buffer::mark_data& elem = buf->marks[i];
         if (elem.version == 0) {
@@ -133,7 +158,6 @@ void update_marks_for_delete_range(buffer *buf, size_t range_beg, size_t range_e
         if (offset > range_end) {
             offset -= (range_end - range_beg);
         } else if (offset > range_beg) {
-            // TODO: XXX: Test or review edge cases where we delete left or right a range, and another (window's) mark is on the end or beginning of it.
             squeezed_marks_append->emplace_back(weak_mark_id{.version = elem.version, .index = i},
                                                 offset - range_beg);
             offset = range_beg;
@@ -167,8 +191,8 @@ delete_result delete_left(scratch_frame *scratch_frame, ui_window_ctx *ui, buffe
     buf->bef_stats_ = subtract_stats_right(buf->bef_stats_,
                                            buf->bef_.data(), new_cursor, buf->bef_.size());
     buf->bef_.resize(new_cursor);
-    update_marks_for_delete_range(buf, new_cursor, og_cursor, &ret.squeezed_marks);
-    // TODO: XXX: squeezed_marks might include the current window ctx's cursor.  Should it?  Maybe it should -- if we delet-left, then we undo a delete-left in another window, we want the current window's cursor to move right.  Don't we?
+    update_marks_for_delete_left_range(buf, new_cursor, og_cursor, &ret.squeezed_marks);
+    // TODO: XXX: Where should we filter the current window ctx's cursor in squeezed_marks?
 
     ui->virtual_column = std::nullopt;
 
@@ -206,7 +230,7 @@ delete_result delete_right(scratch_frame *scratch_frame, ui_window_ctx *ui, buff
     buf->aft_stats_ = subtract_stats_left(buf->aft_stats_, compute_stats(buf->aft_.data(), count),
                                           buf->aft_.data() + count, buf->aft_.size() - count);
     buf->aft_.erase(0, count);
-    update_marks_for_delete_range(buf, cursor, cursor + count, &ret.squeezed_marks);
+    update_marks_for_delete_right_range(buf, cursor, cursor + count, &ret.squeezed_marks);
     // TODO: XXX: squeezed_marks might include the current window ctx's cursor.  Keep it clean.
 
     // TODO: We don't do this for doDeleteRight (or doAppendRight) in jsmacs -- the bug is in jsmacs!
