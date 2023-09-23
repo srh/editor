@@ -81,12 +81,22 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
                 logic_check(back.side == Side::left && item.side == Side::left, "incompatible delete_left coalescence");
                 logic_check(back.text_deleted.empty() && item.text_deleted.empty(), "incompatible delete_left coalescence");
                 logic_check(size_add(item.beg, item.text_inserted_.size()) == back.beg, "incompatible delete_left coalescence");
+
+                // Let's say we had mark adjustments in range (0, M], or [1, M], and now
+                // we deleted N more characters.  Our mark_adjustment values now get
+                // changed to [N+1, N+M], which is correct.  And then...
                 size_t num_deleted = item.text_inserted_.size();
                 for (auto& elem : back.mark_adjustments) {
                     elem.second += num_deleted;
                 }
-                // TODO: XXX: Might we have multiple adjustments for the same mark (if it's at the end of the range or something)?
+                // Then the new deletion's mark adjustments are in range (0, N] i.e. [1,
+                // N].  There is a problem: Every mark which got adjusted previously is
+                // also part of this list (because it's now at the end of the deleted
+                // interval).  So we have duplicate entries for _every_ cursor.  We need
+                // to combine and dedup entries, drop the num_deleted logic above, and
+                // just add the adjustments together.
                 back.mark_adjustments.insert(back.mark_adjustments.end(), item.mark_adjustments.begin(), item.mark_adjustments.end());
+
                 back.text_inserted_ = std::move(item.text_inserted_) + back.text_inserted_;
 
                 back.beg = item.beg;

@@ -35,9 +35,9 @@ struct [[nodiscard]] delete_result {
     size_t new_cursor;
     buffer_string deletedText;
     Side side;
-    // A list of all marks that were in the region of text that got deleted.  Contains the
-    // offset relative to the _beginning_ of the deleted interval (regardless of the value
-    // of `side`).
+    // Given the text in interval [a, b) got deleted, a list of all marks in the interval
+    // (a, b], whose positions got "squashed" to `a`, and might get unsquashed upon an
+    // undo action.
     std::vector<std::pair<weak_mark_id, size_t>> squeezed_marks;
     std::string error_message;
 

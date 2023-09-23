@@ -25,6 +25,8 @@ struct atomic_undo_item {
 
     // If we have text_inserted non-empty, then we may need to adjust marks, if their
     // offset is exactly at the insertion point.
+    //
+    // The .second values are in the range (0, text_inserted.size()].
     std::vector<std::pair<weak_mark_id, size_t>> mark_adjustments;
 
     undo_node_number before_node;
