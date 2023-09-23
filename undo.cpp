@@ -162,7 +162,7 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
         switch (item.side) {
         case Side::left: {
             const size_t num_inserted = item.text_inserted_.size();
-            i_res = insert_chars(scratch, ui, buf, item.text_inserted_.data(), num_inserted);
+            i_res = insert_chars(scratch, ui, buf, item.text_inserted_.data(), num_inserted, false);
             for (const std::pair<weak_mark_id, size_t>& elem : item.mark_adjustments) {
                 if (elem.first.index == ui->cursor_mark.index) {
                     continue;

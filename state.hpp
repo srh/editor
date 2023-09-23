@@ -170,7 +170,7 @@ private:
     region_stats aft_stats_;
 
     // True friends, necessary mutation functions.
-    friend insert_result insert_chars(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count);
+    friend insert_result insert_chars(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count, bool keep_marks_left);
     friend insert_result insert_chars_right(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count);
     friend delete_result delete_left(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t og_count);
     friend delete_result delete_right(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t og_count);

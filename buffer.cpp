@@ -33,7 +33,11 @@ void add_to_marks_as_of(buffer *buf, size_t first_offset, size_t count) {
     }
 }
 
-insert_result insert_chars(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count) {
+// keep_marks_left (default to true) says keep the buffer's marks (other than the window's
+// cursor) on the left side of the insertion.  This is normal editor behavior.  We set to
+// false when undoing a deletion, which is used for one interval edge of careful mark
+// un-adjustment logic.
+insert_result insert_chars(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count, bool keep_marks_left) {
     // TODO: We don't want to load_ctx_cursor for read-only bufs (for performance).  In
     // other functions here as well.
     const size_t og_cursor = get_ctx_cursor(ui, buf);
@@ -50,7 +54,7 @@ insert_result insert_chars(scratch_frame *scratch, ui_window_ctx *ui, buffer *bu
     buf->bef_.append(chs, count);
     const size_t new_cursor = buf->bef_.size();
     buf->bef_stats_ = append_stats(buf->bef_stats_, compute_stats(chs, count));
-    add_to_marks_as_of(buf, og_cursor + 1, count);
+    add_to_marks_as_of(buf, og_cursor + keep_marks_left, count);
 
     ui->virtual_column = std::nullopt;
 

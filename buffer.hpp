@@ -14,7 +14,7 @@ struct [[nodiscard]] insert_result {
     std::string error_message;  // "" or "Buffer is read only"
 };
 
-insert_result insert_chars(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count);
+insert_result insert_chars(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, const buffer_char *chs, size_t count, bool keep_marks_left = true);
 
 inline insert_result insert_char(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, buffer_char sch) {
     return insert_chars(scratch_frame, ui, buf, &sch, 1);
