@@ -104,16 +104,23 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
                     return;
                 }
             }
-            case undo_history::char_coalescence::delete_right:
+            case undo_history::char_coalescence::delete_right: {
                 logic_check(back.side == Side::right && item.side == Side::right, "incompatible delete_right coalescence");
                 logic_check(back.text_deleted.empty() && item.text_deleted.empty(), "incompatible delete_right coalescence");
                 logic_check(back.beg == item.beg, "incompatible delete_right coalescence");
-                back.text_inserted_ += item.text_inserted_;
-                // TODO: XXX: Might we have multiple adjustments for the same mark (if it's at the end of the range or something)?
+                size_t num_deleted = item.text_inserted_.size();
+                // We don't have duplicate mark adjustments because in a sequence of N and
+                // M deletions, the (1, N] marks that got adjusted are now at zero.
+                size_t i = back.mark_adjustments.size();
                 back.mark_adjustments.insert(back.mark_adjustments.end(), item.mark_adjustments.begin(), item.mark_adjustments.end());
+                for (auto& elem : std::span{back.mark_adjustments.data() + i, back.mark_adjustments.size()}) {
+                    elem.second += num_deleted;
+                }
+                back.text_inserted_ += item.text_inserted_;
                 {
                     return;
                 }
+            }
             }
         }
     }
