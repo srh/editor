@@ -38,9 +38,10 @@ void close_fd(int fd) {
     runtime_check(res != -1 || errno == EINTR, "close failed: %s", runtime_check_strerror);
 }
 
-qwi::buffer_string read_file(const fs::path& path) {
+ui_result read_file(const fs::path& path, qwi::buffer_string *out) {
     if (!fs::is_regular_file(path)) {
-        runtime_fail("Tried opening non-regular file %s", path.c_str());
+        // Maybe be some portability issues with native(), on Windows, idk.
+        return ui_result::error("Tried opening non-regular file " + path.native());
     }
 
     static_assert(sizeof(qwi::buffer_char) == 1);
@@ -48,17 +49,30 @@ qwi::buffer_string read_file(const fs::path& path) {
     // TODO: Use system lib at some point (like, when we care, if ever).
     std::ifstream f{path, std::ios::binary};
     f.seekg(0, std::ios::end);
-    runtime_check(!f.fail(), "error seeking to end of file %s", path.c_str());
+    if (f.fail()) {
+        return ui_result::error("error seeking to end of file " + path.native());
+    }
     int64_t filesize = f.tellg();
-    runtime_check(filesize != -1, "error reading file size of %s", path.c_str());
-    runtime_check(filesize <= SSIZE_MAX, "Size of file %s is too big", path.c_str());
+    if (filesize == -1) {
+        return ui_result::error("error reading file size of " + path.native());
+    }
+    if (filesize > SSIZE_MAX) {
+        return ui_result::error("size of file " + path.native() + " is too big for this program");
+    }
+
     // TODO: Use resize_and_overwrite (to avoid having to write memory).
     ret.resize(filesize);
+
     f.seekg(0);
-    runtime_check(!f.fail(), "error seeking back to beginning of file %s", path.c_str());
+    if (f.fail()) {
+        return ui_result::error("could not seek back to beginning of file " + path.native());
+    }
 
     f.read(as_chars(ret.data()), ret.size());
-    runtime_check(!f.fail(), "error reading file %s", path.c_str());
+    if (f.fail()) {
+        return ui_result::error("error reading file " + path.native());
+    }
 
-    return ret;
+    *out = std::move(ret);
+    return ui_result::success();
 }

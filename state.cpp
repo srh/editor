@@ -424,6 +424,12 @@ void state::note_error_message(std::string&& msg) {
     live_error_message = std::move(msg);
 }
 
+void state::note_error(ui_result&& res) {
+    logic_check(res.errored(), "note_error");
+    add_message(res.message);
+    live_error_message = std::move(res.message);
+}
+
 state::state() : scratch_{new scratch_frame{}} {}
 
 state::~state() {

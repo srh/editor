@@ -12,7 +12,8 @@ void write_data(int fd, const char *s, size_t count);
 void write_cstring(int fd, const char *s);
 void close_fd(int fd);
 // TODO: Violates our "only one use of qwi:: prefix" rule.
-qwi::buffer_string read_file(const std::filesystem::path& path);
+// TODO: Also, UI logic (with ui_result)
+ui_result read_file(const std::filesystem::path& path, qwi::buffer_string *out);
 
 struct file_descriptor {
     int fd = -1;

@@ -36,7 +36,7 @@ undo_killring_handled save_file_action(state *state, buffer *active_buf);
 undo_killring_handled save_as_file_action(state *state, buffer *active_buf);
 undo_killring_handled exit_cleanly(state *state, buffer *active_buf, bool *exit_loop);  // L312
 undo_killring_handled buffer_switch_action(state *state, buffer *active_buf);
-buffer open_file_into_detached_buffer(state *state, const std::string& dirty_path);
+ui_result open_file_into_detached_buffer(state *state, const std::string& dirty_path, buffer *out);
 void apply_number_to_buf(state *state, buffer_id buf_id);
 buffer scratch_buffer(buffer_id id);
 undo_killring_handled enter_handle_status_prompt(state *state, bool *exit_loop);

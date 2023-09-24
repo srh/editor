@@ -331,8 +331,12 @@ prompt file_open_prompt(buffer_id promptBufId) {
             std::string text = promptBuf.copy_to_string();
 
             if (text != "") {
-                // TODO: Handle error!
-                buffer buf = open_file_into_detached_buffer(state, text);
+                buffer buf{buffer_id{0}};
+                ui_result res = open_file_into_detached_buffer(state, text, &buf);
+                if (res.errored()) {
+                    state->note_error(std::move(res));
+                    return ret;
+                }
 
                 buffer_id buf_id = buf.id;
                 state->buf_set.emplace(buf_id, std::make_unique<buffer>(std::move(buf)));
@@ -518,16 +522,22 @@ undo_killring_handled buffer_switch_action(state *state, buffer *active_buf) {
 }
 
 // Caller needs to call set_window on the buf, generally, or other ui-specific stuff.
-buffer open_file_into_detached_buffer(state *state, const std::string& dirty_path) {
+ui_result open_file_into_detached_buffer(state *state, const std::string& dirty_path, buffer *out) {
     fs::path path = dirty_path;
-    buffer_string data = read_file(path);
+    buffer_string data;
+    ui_result ret = read_file(path, &data);
+    if (ret.errored()) {
+        return ret;
+    }
     std::string name = buf_name_from_file_path(path);
 
-    buffer ret(state->gen_buf_id());
-    ret.name_str = std::move(name);
-    ret.married_file = path.string();
-    ret.aft_ = std::move(data);
-    ret.aft_stats_ = compute_stats(ret.aft_);
+    buffer buf(state->gen_buf_id());
+    buf.name_str = std::move(name);
+    buf.married_file = path.string();
+    buf.aft_ = std::move(data);
+    buf.aft_stats_ = compute_stats(buf.aft_);
+    *out = std::move(buf);
+
     return ret;
 }
 

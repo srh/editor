@@ -116,7 +116,10 @@ state initial_state(const command_line_args& args) {
     } else {
         state.buf_set.reserve(n_files);
         for (size_t i = 0; i < n_files; ++i) {
-            auto buf = std::make_unique<buffer>(open_file_into_detached_buffer(&state, args.files.at(i)));
+            auto buf = std::make_unique<buffer>(buffer_id{0});
+            ui_result err = open_file_into_detached_buffer(&state, args.files.at(i), buf.get());
+            // TODO: Cleanly support this error at startup.
+            runtime_check(!err.errored(), "Error opening file: %s", err.message.c_str());
             buffer_id id = buf->id;
             state.buf_set.emplace(id, std::move(buf));
             apply_number_to_buf(&state, id);

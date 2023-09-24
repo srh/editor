@@ -62,5 +62,13 @@ struct runtime_check_failure { };
 #define debugf(fmt, ...) [](...){}(fmt, ##__VA_ARGS__)
 #endif
 
+// Maybe this doesn't belong here.
+struct ui_result {
+    bool erred = false;
+    std::string message;
+    bool errored() const { return erred; }
+    static ui_result error(std::string msg) { return {.erred = true, .message = std::move(msg)}; }
+    static ui_result success() { return {.erred = false, .message = {}}; }
+};
 
 #endif  // QWERTILLION_ERROR_HPP_

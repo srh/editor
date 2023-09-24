@@ -38,6 +38,8 @@ struct tab_number {
 
 struct buffer_id {
     uint64_t value;
+    // Zero is an invalid buffer_id -- they start at 1.
+    bool empty() const { return value == 0; }
     friend auto operator<=>(buffer_id x, buffer_id y) = default;
 };
 
@@ -183,7 +185,7 @@ private:
     friend void move_right_by(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t count);
     friend void move_left_by(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t count);
     friend void save_buf_to_married_file_and_mark_unmodified(buffer *buf);
-    friend buffer open_file_into_detached_buffer(state *state, const std::string& dirty_path);
+    friend ui_result open_file_into_detached_buffer(state *state, const std::string& dirty_path, buffer *out);
 
     static void stats_to_line_info(const region_stats& stats, size_t *line_out, size_t *col_out) {
         *line_out = stats.newline_count + 1;
@@ -415,7 +417,7 @@ struct state {
     }
 
 private:
-    uint64_t next_buf_id_value = 0;
+    uint64_t prev_buf_id_value = 0;
 
 public:
     buffer *lookup(buffer_id id) {
@@ -429,7 +431,7 @@ public:
         return it->second.get();
     }
 
-    buffer_id gen_buf_id() { return buffer_id{next_buf_id_value++}; }
+    buffer_id gen_buf_id() { return buffer_id{++prev_buf_id_value}; }
 
     std::optional<buffer_id> pick_buf_for_empty_window() const {
         auto it = buf_set.begin();
@@ -452,6 +454,7 @@ public:
     void add_message(const std::string& msg);
     // TODO: Every use of this function is probably a bad place for UI logic.
     void note_error_message(std::string&& msg);
+    void note_error(ui_result&& err);
     void clear_error_message() { live_error_message = ""; }
     std::string live_error_message;  // empty means there is none
 
