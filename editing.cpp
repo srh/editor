@@ -537,18 +537,33 @@ undo_killring_handled buffer_switch_action(state *state, buffer *active_buf) {
 ui_result open_file_into_detached_buffer(state *state, const std::string& dirty_path, buffer *out) {
     fs::path path = dirty_path;
     fs::file_status status = fs::status(path);
-    if (!fs::exists(status)) {
-        // Maybe be some portability issues with native(), on Windows, idk.
-        return ui_result::error("file does not exist: " + path.native());
-    }
-    if (!fs::is_regular_file(status)) {
-        // Maybe be some portability issues with native(), on Windows, idk.
-        return ui_result::error("Tried opening non-regular file " + path.native());
-    }
     buffer_string data;
-    ui_result ret = read_file(path, &data);
-    if (ret.errored()) {
-        return ret;
+    if (!fs::exists(status)) {
+        if (!path.has_parent_path()) {
+            // Such a bad error message.
+            // TODO: We should try to make an absolute path before giving up.
+            return ui_result::error("file does not exist and has no parent path: " + path.native());
+        } else {
+            fs::path parent = path.parent_path();
+
+            fs::file_status parent_status = fs::status(parent);
+            if (fs::is_directory(parent_status)) {
+                // TODO: Check permissions?  Try opening a temporary file?
+                state->note_error_message("(New file)");  // TODO: Make a non-error message fn.
+            } else {
+                // Maybe be some portability issues with native(), on Windows, idk.
+                return ui_result::error("directory does not exist: " + parent.native());
+            }
+        }
+    } else {
+        if (!fs::is_regular_file(status)) {
+            // Maybe be some portability issues with native(), on Windows, idk.
+            return ui_result::error("Tried opening non-regular file " + path.native());
+        }
+        ui_result ret = read_file(path, &data);
+        if (ret.errored()) {
+            return ret;
+        }
     }
     std::string name = buf_name_from_file_path(path);
 
@@ -559,7 +574,7 @@ ui_result open_file_into_detached_buffer(state *state, const std::string& dirty_
     buf.aft_stats_ = compute_stats(buf.aft_);
     *out = std::move(buf);
 
-    return ret;
+    return ui_result::success();
 }
 
 void apply_number_to_buf(state *state, buffer_id buf_id) {
