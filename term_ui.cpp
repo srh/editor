@@ -100,6 +100,12 @@ terminal_frame init_frame(const terminal_size& window) {
 void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
                        const window_size& window, const ui_window_ctx& ui, const buffer& buf,
                        std::span<render_coord> render_coords) {
+    if (window.cols == 0) {
+        // This window.cols check is important, for the invariant maintained that col <
+        // window.cols at the top of the while loop below.
+        return;
+    }
+
     terminal_frame& frame = *frame_ptr;
     // Some very necessary checks for memory safety.
     runtime_check(u32_add(window_topleft.row, window.rows) <= frame.window.rows,
@@ -151,7 +157,7 @@ void render_into_frame(terminal_frame *frame_ptr, terminal_coord window_topleft,
     };
     size_t render_coord_target = render_coords_end < render_coords.size() ? render_coords[render_coords_end].buf_pos : SIZE_MAX;
     while (row < window.rows && i < buf.size()) {
-        // col < window.cols.
+        // col < window.cols (in part because we exited early if window.cols == 0)
         while (i == render_coord_target) {
             render_coords[render_coords_end].rendered_pos = {UINT32_MAX, uint32_t(col)};
             ++render_coords_end;
