@@ -222,8 +222,7 @@ bool render_status_area_or_prompt(terminal_frame *frame, const state& state, win
                                   terminal_coord status_area_topleft, uint32_t status_area_width) {
     bool ret = state.status_prompt.has_value();
     if (!state.live_error_message.empty()) {
-        render_string(frame, {.row = status_area_topleft.row, .col = 0},
-                      status_area_width,
+        render_string(frame, status_area_topleft, status_area_width,
                       as_buffer_char_span(state.live_error_message), terminal_style::zero());
         return ret;
     }
