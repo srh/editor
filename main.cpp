@@ -780,6 +780,7 @@ undo_killring_handled process_keyprefix_in_buf(
                         return ctrl_x_b_keypress(state, active_buf);
                     case 'k':
                         return ctrl_x_k_keypress(state, active_buf);
+                        // TODO: It would be cool if we had a special mode that made C-x Left Left Left Right stay in "window adjusting mode" for arrow keys only.
                     case keypress::special_to_key_type(special_key::Left):
                         return ctrl_x_arrow_keypress(state, active_buf, ortho_direction::Left);
                     case keypress::special_to_key_type(special_key::Right):

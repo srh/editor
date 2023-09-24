@@ -874,13 +874,68 @@ undo_killring_handled split_vertically(state *state, buffer *active_buf) {
 }
 
 undo_killring_handled grow_window_size(state *state, buffer *active_buf, ortho_direction direction) {
+    // TODO: XXX: This is not a navigation action.
     undo_killring_handled ret = note_navigation_action(state, active_buf);
     if (!state->is_normal()) {
         return ret;
     }
 
-    (void)state, (void)direction;
-    return unimplemented_keypress();
+    // Important because we add/subtract 1 below.
+    renormalize_layout(&state->layout);
+
+    window_number winnum = state->layout.active_window;
+
+    size_t col_num, col_begin, col_end;
+    window_column(&state->layout, winnum, &col_num, &col_begin, &col_end);
+
+    const uint32_t MIN_COLUMN_SIZE = 1;
+    const uint32_t MIN_ROW_SIZE = 2;
+
+    switch (direction) {
+    case ortho_direction::Left:
+        if (col_num == 0) {
+            // TODO: UI logic (and duplicated strings) in this function.
+            state->note_error_message("Cannot grow left-most column leftward");
+        } else if (state->layout.column_datas[col_num - 1].relsize <= MIN_COLUMN_SIZE) {
+            state->note_error_message("Would make neighboring column smaller than minimum size");
+        } else {
+            --state->layout.column_datas[col_num - 1].relsize;
+            ++state->layout.column_datas[col_num].relsize;
+        }
+        break;
+    case ortho_direction::Right:
+        if (col_num == state->layout.column_datas.size() - 1) {
+            state->note_error_message("Cannot grow right-most column rightward");
+        } else if (state->layout.column_datas[col_num + 1].relsize <= MIN_COLUMN_SIZE) {
+            state->note_error_message("Would make neighboring column smaller than minimum size");
+        } else {
+            --state->layout.column_datas[col_num + 1].relsize;
+            ++state->layout.column_datas[col_num].relsize;
+        }
+        break;
+    case ortho_direction::Up:
+        if (winnum.value == col_begin) {
+            state->note_error_message("Cannot grow top-most row upward");
+        } else if (state->layout.row_relsizes[winnum.value - 1] <= MIN_ROW_SIZE) {
+            state->note_error_message("Would make neighboring row smaller than minimum size");
+        } else {
+            --state->layout.row_relsizes[winnum.value - 1];
+            ++state->layout.row_relsizes[winnum.value];
+        }
+        break;
+    case ortho_direction::Down:
+        if (winnum.value == col_end - 1) {
+            state->note_error_message("Cannot grow bottom-most row downward");
+        } else if (state->layout.row_relsizes[winnum.value + 1] <= MIN_ROW_SIZE) {
+            state->note_error_message("Would make neighboring row smaller than minimum size");
+        } else {
+            --state->layout.row_relsizes[winnum.value + 1];
+            ++state->layout.row_relsizes[winnum.value];
+        }
+        break;
+    }
+
+    return ret;
 }
 
 undo_killring_handled switch_to_next_window_action(state *state, buffer *active_buf) {
