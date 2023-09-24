@@ -536,6 +536,15 @@ undo_killring_handled buffer_switch_action(state *state, buffer *active_buf) {
 // Caller needs to call set_window on the buf, generally, or other ui-specific stuff.
 ui_result open_file_into_detached_buffer(state *state, const std::string& dirty_path, buffer *out) {
     fs::path path = dirty_path;
+    fs::file_status status = fs::status(path);
+    if (!fs::exists(status)) {
+        // Maybe be some portability issues with native(), on Windows, idk.
+        return ui_result::error("file does not exist: " + path.native());
+    }
+    if (!fs::is_regular_file(status)) {
+        // Maybe be some portability issues with native(), on Windows, idk.
+        return ui_result::error("Tried opening non-regular file " + path.native());
+    }
     buffer_string data;
     ui_result ret = read_file(path, &data);
     if (ret.errored()) {

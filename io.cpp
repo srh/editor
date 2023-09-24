@@ -39,20 +39,13 @@ void close_fd(int fd) {
 }
 
 ui_result read_file(const fs::path& path, qwi::buffer_string *out) {
-    fs::file_status status = fs::status(path);
-    if (!fs::exists(status)) {
-        // Maybe be some portability issues with native(), on Windows, idk.
-        return ui_result::error("file does not exist: " + path.native());
-    }
-    if (!fs::is_regular_file(status)) {
-        // Maybe be some portability issues with native(), on Windows, idk.
-        return ui_result::error("Tried opening non-regular file " + path.native());
-    }
-
     static_assert(sizeof(qwi::buffer_char) == 1);
     qwi::buffer_string ret;
     // TODO: Use system lib at some point (like, when we care, if ever).
     std::ifstream f{path, std::ios::binary};
+    if (f.fail()) {
+        return ui_result::error("error opening file " + path.native());
+    }
     f.seekg(0, std::ios::end);
     if (f.fail()) {
         return ui_result::error("error seeking to end of file " + path.native());
