@@ -764,6 +764,20 @@ void renormalize_column_widths(window_layout *layout) {
     }
 }
 
+void renormalize_layout(window_layout *layout) {
+    size_t col_begin = 0;
+    for (size_t i = 0, e = layout->column_datas.size(); i < e; ++i) {
+        const window_layout::col_data& elem = layout->column_datas[i];
+        size_t col_end = col_begin + elem.num_rows;
+
+        renormalize_column(layout, i, col_begin, col_end);
+        col_begin = col_end;
+    }
+    logic_check(col_begin == layout->windows.size(), "renormalize_layout");
+
+    renormalize_column_widths(layout);
+}
+
 // Does _everything_ about duplicating a window except it gives it a blank row size, and
 // doesn't adjust column_datas alignment.
 //
@@ -791,12 +805,16 @@ undo_killring_handled split_horizontally(state *state, buffer *active_buf) {
         return ret;
     }
 
+    renormalize_layout(&state->layout);
+
     const window_number active_winnum = state->layout.active_window;
 
     size_t col_num, col_begin, col_end;
     window_column(&state->layout, active_winnum, &col_num, &col_begin, &col_end);
 
-    renormalize_column(&state->layout, col_num, col_begin, col_end);
+    // We renormalize_layout above now.  But I want to leave this here so we think about it.
+    // renormalize_column(&state->layout, col_num, col_begin, col_end);
+
     uint32_t active_window_height = state->layout.row_relsizes.at(active_winnum.value);
     uint32_t new_window_height = active_window_height / 2;  // this one gets rounded down.
     uint32_t new_active_window_height = active_window_height - new_window_height;
@@ -825,7 +843,7 @@ undo_killring_handled split_vertically(state *state, buffer *active_buf) {
 
     const window_number active_winnum = state->layout.active_window;
 
-    renormalize_column_widths(&state->layout);
+    renormalize_layout(&state->layout);
 
     size_t col_num, col_begin, col_end;
     window_column(&state->layout, active_winnum, &col_num, &col_begin, &col_end);
@@ -861,8 +879,6 @@ undo_killring_handled grow_window_size(state *state, buffer *active_buf, ortho_d
         return ret;
     }
 
-
-  
     (void)state, (void)direction;
     return unimplemented_keypress();
 }
