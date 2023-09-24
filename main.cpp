@@ -457,12 +457,15 @@ undo_killring_handled tab_keypress(state *state, ui_window_ctx *ui, buffer *acti
     return character_keypress(state, ui, active_buf, '\t');
 }
 
-undo_killring_handled meta_f_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
-    move_forward_word(state->scratch(), ui, active_buf);
-    return note_navigation_action(state, active_buf);
-}
 undo_killring_handled meta_b_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
     move_backward_word(state->scratch(), ui, active_buf);
+    return note_navigation_action(state, active_buf);
+}
+undo_killring_handled meta_d_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    return delete_forward_word(state, ui, active_buf);
+}
+undo_killring_handled meta_f_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    move_forward_word(state->scratch(), ui, active_buf);
     return note_navigation_action(state, active_buf);
 }
 undo_killring_handled meta_h_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
@@ -472,8 +475,13 @@ undo_killring_handled meta_h_keypress(state *state, ui_window_ctx *ui, buffer *a
 undo_killring_handled meta_y_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
     return alt_yank_from_clipboard(state, ui, active_buf);
 }
-undo_killring_handled meta_d_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
-    return delete_forward_word(state, ui, active_buf);
+undo_killring_handled meta_lessthan_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    move_to_file_beginning(state->scratch(), ui, active_buf);
+    return note_navigation_action(state, active_buf);
+}
+undo_killring_handled meta_greaterthan_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
+    move_to_file_end(state->scratch(), ui, active_buf);
+    return note_navigation_action(state, active_buf);
 }
 undo_killring_handled meta_backspace_keypress(state *state, ui_window_ctx *ui, buffer *active_buf) {
     return delete_backward_word(state, ui, active_buf);
@@ -735,6 +743,8 @@ undo_killring_handled process_keyprefix_in_buf(
             case 'h': return meta_h_keypress(state, ui, active_buf);
             case 'w': return meta_w_keypress(state, ui, active_buf);
             case 'y': return meta_y_keypress(state, ui, active_buf);
+            case '<': return meta_lessthan_keypress(state, ui, active_buf);
+            case '>': return meta_greaterthan_keypress(state, ui, active_buf);
             case keypress::special_to_key_type(special_key::Backspace):
                 return meta_backspace_keypress(state, ui, active_buf);
             default:

@@ -13,9 +13,11 @@ void move_backward_word(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf);
 
 void move_up(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf);
 void move_down(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf);
-// TODO: Do these respect \n or visible line?
 void move_home(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf);
 void move_end(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf);
+
+void move_to_file_beginning(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf);
+void move_to_file_end(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf);
 
 }  // namespace qwi
 

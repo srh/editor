@@ -197,4 +197,14 @@ void move_end(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf) {
     move_right_by(scratch, ui, buf, distance);
 }
 
+void move_to_file_beginning(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf) {
+    size_t distance = get_ctx_cursor(ui, buf);
+    move_left_by(scratch, ui, buf, distance);
+}
+
+void move_to_file_end(scratch_frame *scratch, ui_window_ctx *ui, buffer *buf) {
+    size_t distance = buf->size() - get_ctx_cursor(ui, buf);
+    move_right_by(scratch, ui, buf, distance);
+}
+
 }  // namespace qwi
