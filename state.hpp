@@ -184,7 +184,7 @@ private:
     // False friends, that access bef and aft, but we'd like them to use the buf more abstractly.
     friend void move_right_by(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t count);
     friend void move_left_by(scratch_frame *scratch_frame, ui_window_ctx *ui, buffer *buf, size_t count);
-    friend void save_buf_to_married_file_and_mark_unmodified(buffer *buf);
+    friend ui_result save_buf_to_married_file_and_mark_unmodified(buffer *buf);
     friend ui_result open_file_into_detached_buffer(state *state, const std::string& dirty_path, buffer *out);
 
     static void stats_to_line_info(const region_stats& stats, size_t *line_out, size_t *col_out) {

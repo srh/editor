@@ -361,18 +361,23 @@ undo_killring_handled open_file_action(state *state, buffer *active_buf) {
     return ret;
 }
 
-void save_buf_to_married_file_and_mark_unmodified(buffer *buf) {
+[[nodiscard]] ui_result save_buf_to_married_file_and_mark_unmodified(buffer *buf) {
     // TODO: Display that save succeeded, somehow.
     logic_check(buf->married_file.has_value(), "save_buf_to_married_file with unmarried buf");
     std::ofstream fstream(*buf->married_file, std::ios::binary | std::ios::trunc);
+    if (fstream.fail()) {
+        return ui_result::error("error opening file " + *buf->married_file + " for write");
+    }
     // TODO: Write a temporary file and rename it.  Use pwrite.  Etc.
     fstream.write(as_chars(buf->bef_.data()), buf->bef_.size());
     fstream.write(as_chars(buf->aft_.data()), buf->aft_.size());
     fstream.close();
-    // TODO: Better error handling
-    runtime_check(!fstream.fail(), "error writing to file %s", buf->married_file->c_str());
+    if (fstream.fail()) {
+        return ui_result::error("error writing to file " + *buf->married_file);
+    }
 
     buf->non_modified_undo_node = buf->undo_info.current_node;
+    return ui_result::success();
 }
 
 std::string buf_name_from_file_path(const fs::path& path) {
@@ -390,7 +395,11 @@ prompt file_save_prompt(buffer_id promptBufId) {
                 buffer_id buf_id = state->active_window()->active_buf().first;
                 buffer *buf = state->lookup(buf_id);
                 buf->married_file = text;
-                save_buf_to_married_file_and_mark_unmodified(buf);
+                ui_result res = save_buf_to_married_file_and_mark_unmodified(buf);
+                if (res.errored()) {
+                    state->note_error(std::move(res));
+                    // fall through
+                }
                 buf->name_str = buf_name_from_file_path(fs::path(text));
                 buf->name_number = 0;
                 apply_number_to_buf(state, buf_id);
@@ -411,7 +420,10 @@ undo_killring_handled save_file_action(state *state, buffer *active_buf) {
     }
 
     if (active_buf->married_file.has_value()) {
-        save_buf_to_married_file_and_mark_unmodified(active_buf);
+        ui_result res = save_buf_to_married_file_and_mark_unmodified(active_buf);
+        if (res.errored()) {
+            state->note_error(std::move(res));
+        }
     } else {
         state->status_prompt = file_save_prompt(state->gen_buf_id());
     }
