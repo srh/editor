@@ -39,7 +39,12 @@ void close_fd(int fd) {
 }
 
 ui_result read_file(const fs::path& path, qwi::buffer_string *out) {
-    if (!fs::is_regular_file(path)) {
+    fs::file_status status = fs::status(path);
+    if (!fs::exists(status)) {
+        // Maybe be some portability issues with native(), on Windows, idk.
+        return ui_result::error("file does not exist: " + path.native());
+    }
+    if (!fs::is_regular_file(status)) {
         // Maybe be some portability issues with native(), on Windows, idk.
         return ui_result::error("Tried opening non-regular file " + path.native());
     }
