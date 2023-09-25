@@ -158,11 +158,9 @@ prompt buffer_close_prompt(buffer&& initialBuf) {
                 // We'll need to do this for every window.
                 auto range = state->win_range();
                 std::vector<bool> needs_new_target;  // Absolutely gross parallel vector.
-                bool any_need_new_target = false;
                 for (ui_window *w = range.first; w < range.second; ++w) {
                     bool win_needs_new_target = w->detach_if_attached(state->lookup(closed_id));
                     needs_new_target.push_back(win_needs_new_target);
-                    any_need_new_target |= win_needs_new_target;
                 }
 
                 state->buf_set.erase(closed_id);
