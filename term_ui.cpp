@@ -8,7 +8,6 @@
 #include "util.hpp"
 
 namespace ranges = std::ranges;
-namespace views = std::ranges::views;
 
 namespace qwi {
 
@@ -71,6 +70,13 @@ char_rendering compute_char_rendering(const buffer_char bch, size_t *line_col) {
     return ret;
 }
 
+template <class T>
+void resize_and_refill(std::vector<T> *vec, size_t new_size, T value) {
+    std::fill(vec->begin(), vec->begin() + std::min<size_t>(vec->size(), new_size),
+              value);
+    vec->resize(new_size, value);
+}
+
 void reinit_frame(terminal_frame *frame, const terminal_size& window) {
     // Reinitializes the frame, typically avoiding memory reallocation.
 
@@ -80,11 +86,8 @@ void reinit_frame(terminal_frame *frame, const terminal_size& window) {
     frame->window = window;
     frame->cursor = std::nullopt;
 
-    ranges::fill(views::take(frame->data, area), terminal_char{' '});
-    frame->data.resize(area, terminal_char{' '});
-
-    ranges::fill(views::take(frame->style_data, area), terminal_style::zero());
-    frame->style_data.resize(area, terminal_style::zero());
+    resize_and_refill(&frame->data, static_cast<size_t>(area), terminal_char{' '});
+    resize_and_refill(&frame->style_data, static_cast<size_t>(area), terminal_style::zero());
 
     frame->rendered_window_sizes.resize(0);
 }
