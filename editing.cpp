@@ -16,8 +16,8 @@ namespace qwi {
 atomic_undo_item make_reverse_action(const undo_history *history, insert_result&& i_res) {
     atomic_undo_item item = {
         .beg = i_res.new_cursor,
-        .text_inserted_ = buffer_string{},
         .text_deleted = std::move(i_res.insertedText),
+        .text_inserted = buffer_string{},
         .side = i_res.side,  // We inserted on left (right), hence we delete on left (right)
         .mark_adjustments = {},
         .before_node = history->unused_node_number(),
@@ -30,8 +30,8 @@ atomic_undo_item make_reverse_action(const undo_history *history, insert_result&
 atomic_undo_item make_reverse_action(const undo_history *history, delete_result&& d_res) {
     atomic_undo_item item = {
         .beg = d_res.new_cursor,
-        .text_inserted_ = std::move(d_res.deletedText),
         .text_deleted = buffer_string{},
+        .text_inserted = std::move(d_res.deletedText),
         .side = d_res.side,  // We deleted on left (right), hence we insert on left (right)
         .mark_adjustments = std::move(d_res.squeezed_marks),
         .before_node = history->unused_node_number(),
@@ -694,8 +694,8 @@ undo_killring_handled alt_yank_from_clipboard(state *state, ui_window_ctx *ui, b
         // Add the reverse action to undo history.
         atomic_undo_item item = {
             .beg = insres.new_cursor,
-            .text_inserted_ = std::move(delres.deletedText),
             .text_deleted = std::move(insres.insertedText),
+            .text_inserted = std::move(delres.deletedText),
             .side = Side::left,
             .mark_adjustments = std::move(delres.squeezed_marks),  // I think there won't be any (because switching window would reset the yank/alt-yank state), at least for now, fwiw.
             .before_node = buf->undo_info.unused_node_number(),

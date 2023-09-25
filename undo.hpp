@@ -17,8 +17,16 @@ struct atomic_undo_item {
     // The cursor _before_ we apply this undo action.  This departs from jsmacs, where
     // it's the cursor after the action, or something incoherent and broken.
     size_t beg = 0;
-    buffer_string text_inserted_{};
+
+    // We apply an undo item by moving cursor to `beg`, then deleting the text in
+    // `text_deleted` on the side of the cursor given by `side`.  (We can assert that the
+    // text is identical.)  Then we insert the text in `text_inserted` on the side of the
+    // cursor given by `side`.  (You might say we "replace" the text.)  (We also use
+    // mark_adjustments to update other windows' mid-range marks upon insertion, if
+    // applicable, and update the undo node number of the buffer (which is used for the
+    // file modification flag and other lawful purposes).)
     buffer_string text_deleted{};
+    buffer_string text_inserted{};
     Side side = Side::left;
 
     // TODO: At some point, when we have limited undo info, we'll also want to GC expired weak mark refs.

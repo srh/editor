@@ -37,7 +37,7 @@ void add_coalescence_break(undo_history *history) {
 bool item_has_effect(const atomic_undo_item& item) {
     // We consider non-empty but equal text_inserted and text_deleted strings to have an
     // "effect".
-    return !(item.text_inserted_.empty() && item.text_deleted.empty());
+    return !(item.text_inserted.empty() && item.text_deleted.empty());
 }
 
 void add_edit(undo_history *history, atomic_undo_item&& item) {
@@ -70,7 +70,7 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
                 break;
             case undo_history::char_coalescence::insert_char:
                 logic_check(back.side == Side::left && item.side == Side::left, "incompatible insert_char coalescence");
-                logic_check(back.text_inserted_.empty() && item.text_inserted_.empty(), "incompatible insert_char coalescence");
+                logic_check(back.text_inserted.empty() && item.text_inserted.empty(), "incompatible insert_char coalescence");
                 logic_check(back.beg == size_sub(item.beg, item.text_deleted.size()), "incompatible insert_char coalescence");
                 back.text_deleted += item.text_deleted;
                 back.beg = item.beg;
@@ -80,7 +80,7 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
             case undo_history::char_coalescence::delete_left: {
                 logic_check(back.side == Side::left && item.side == Side::left, "incompatible delete_left coalescence");
                 logic_check(back.text_deleted.empty() && item.text_deleted.empty(), "incompatible delete_left coalescence");
-                logic_check(size_add(item.beg, item.text_inserted_.size()) == back.beg, "incompatible delete_left coalescence");
+                logic_check(size_add(item.beg, item.text_inserted.size()) == back.beg, "incompatible delete_left coalescence");
 
                 // Mark adjustments are the value we _subtract_ from the end -- see
                 // atomic_undo or atomic_undo_item comments.  Let's say we had a left
@@ -89,14 +89,14 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
                 // the second deletion, and (-M, 0] for the M characters of the first
                 // deletion.  Of course, the values are subtracted, and are positive
                 // size_t values.
-                size_t prev_deletion = back.text_inserted_.size();
+                size_t prev_deletion = back.text_inserted.size();
                 for (auto& elem : item.mark_adjustments) {
                     elem.second += prev_deletion;
                 }
 
                 back.mark_adjustments.insert(back.mark_adjustments.end(), item.mark_adjustments.begin(), item.mark_adjustments.end());
 
-                back.text_inserted_ = std::move(item.text_inserted_) + back.text_inserted_;
+                back.text_inserted = std::move(item.text_inserted) + back.text_inserted;
 
                 back.beg = item.beg;
                 {
@@ -107,14 +107,14 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
                 logic_check(back.side == Side::right && item.side == Side::right, "incompatible delete_right coalescence");
                 logic_check(back.text_deleted.empty() && item.text_deleted.empty(), "incompatible delete_right coalescence");
                 logic_check(back.beg == item.beg, "incompatible delete_right coalescence");
-                size_t prev_deletion = back.text_inserted_.size();
+                size_t prev_deletion = back.text_inserted.size();
                 for (auto& elem : item.mark_adjustments) {
                     elem.second += prev_deletion;
                 }
 
                 back.mark_adjustments.insert(back.mark_adjustments.end(), item.mark_adjustments.begin(), item.mark_adjustments.end());
 
-                back.text_inserted_ += item.text_inserted_;
+                back.text_inserted += item.text_inserted;
                 {
                     return;
                 }
@@ -155,14 +155,14 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
     }
 
     insert_result i_res;
-    bool inserted = !item.text_inserted_.empty();
+    bool inserted = !item.text_inserted.empty();
     if (inserted) {
         // I hate that cursor_before_insert is repeating the logic inside the insert functions.
         size_t cursor_before_insert = get_ctx_cursor(ui, buf);
         switch (item.side) {
         case Side::left: {
-            const size_t num_inserted = item.text_inserted_.size();
-            i_res = insert_chars(scratch, ui, buf, item.text_inserted_.data(), num_inserted, false);
+            const size_t num_inserted = item.text_inserted.size();
+            i_res = insert_chars(scratch, ui, buf, item.text_inserted.data(), num_inserted, false);
             for (const std::pair<weak_mark_id, size_t>& elem : item.mark_adjustments) {
                 if (elem.first.index == ui->cursor_mark.index) {
                     continue;
@@ -175,7 +175,7 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
 
         } break;
         case Side::right:
-            i_res = insert_chars_right(scratch, ui, buf, item.text_inserted_.data(), item.text_inserted_.size());
+            i_res = insert_chars_right(scratch, ui, buf, item.text_inserted.data(), item.text_inserted.size());
 
             for (const std::pair<weak_mark_id, size_t>& elem : item.mark_adjustments) {
                 if (elem.first.index == ui->cursor_mark.index) {
@@ -196,8 +196,8 @@ void add_coalescent_edit(undo_history *history, atomic_undo_item&& item, undo_hi
     logic_checkg(inserted ? get_ctx_cursor(ui, buf) == i_res.new_cursor : deleted ? get_ctx_cursor(ui, buf) == d_res.new_cursor : true);
     atomic_undo_item ret = {
         .beg = get_ctx_cursor(ui, buf),
-        .text_inserted_ = deleted ? std::move(d_res.deletedText) : buffer_string{},
         .text_deleted = inserted ? std::move(i_res.insertedText) : buffer_string{},
+        .text_inserted = deleted ? std::move(d_res.deletedText) : buffer_string{},
         .side = item.side,  // or d_res.side, or i_res.side, all the same value
         .mark_adjustments = std::move(d_res.squeezed_marks),
 
