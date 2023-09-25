@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <string>
+
 #define NO_COPY(typ) typ(const typ&) = delete; void operator=(const typ&) = delete
 
 struct runtime_check_failure { };
